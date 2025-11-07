@@ -28,7 +28,7 @@ jobs:
         # Database configuration
         POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
         POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'sprache_password' }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
         POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
         

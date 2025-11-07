@@ -10,8 +10,8 @@ Navigate to your repository Settings → Secrets and variables → Actions → S
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `BOT_TOKEN` | Telegram Bot Token from @BotFather | `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz` |
-| `OPENAI_API_KEY` | OpenAI API Key | `sk-...` |
+| `BOT_TOKEN` | Telegram Bot Token from @BotFather | `1234567890:ABCD-fake_example_token_here` |
+| `OPENAI_API_KEY` | OpenAI API Key | `sk-proj-example123...` |
 | `POSTGRES_PASSWORD` | PostgreSQL database password | `your_secure_password` |
 | `SSH_PRIVATE_KEY` | SSH private key for server access | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
 | `SSH_HOST` | Server hostname or IP address | `example.com` or `192.168.1.100` |
@@ -107,6 +107,7 @@ If deployment fails with SSH errors:
 2. Ensure the `SSH_PRIVATE_KEY` is the complete private key
 3. Check that the public key is in `~/.ssh/authorized_keys` on the server
 4. Verify firewall rules allow SSH connections from GitHub Actions IPs
+5. **Security Note**: The workflow uses `ssh-keyscan` for convenience, but for enhanced security, consider manually adding your server's SSH host key to the workflow or using GitHub's secrets to store the host key fingerprint
 
 ### Environment Variable Issues
 

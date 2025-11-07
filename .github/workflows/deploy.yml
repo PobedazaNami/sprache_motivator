@@ -51,6 +51,9 @@ jobs:
         mkdir -p ~/.ssh
         echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
+        
+        # Add SSH host key verification with warning
+        echo "Adding SSH host key (ensure this matches your server's key)"
         ssh-keyscan -p ${SSH_PORT} -H ${SSH_HOST} >> ~/.ssh/known_hosts
         
         # Create .env file content
@@ -74,8 +77,20 @@ jobs:
         # Deploy to server
         ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
         
-        # Copy files to server
-        scp -i ~/.ssh/deploy_key -P ${SSH_PORT} -r ./* ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+        # Copy files to server (excluding sensitive files)
+        rsync -av --delete \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='.env*' \
+          --exclude='*.pyc' \
+          --exclude='__pycache__' \
+          --exclude='.pytest_cache' \
+          --exclude='logs/*' \
+          --exclude='.gitignore' \
+          -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}" \
+          ./ ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+        
+        # Copy .env file separately
         scp -i ~/.ssh/deploy_key -P ${SSH_PORT} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
         
         # Run docker-compose on server
