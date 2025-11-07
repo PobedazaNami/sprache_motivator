@@ -134,11 +134,17 @@ async def send_training_task(bot, user_id: int):
 
 @router.message(F.text)
 async def check_training_answer(message: Message):
-    """Check if message is an answer to training task"""
+    """
+    Check if message is an answer to training task.
+    
+    This handler is registered last and will only process messages
+    when the user has an active training session. It returns early
+    if no training state is found, minimizing overhead for regular messages.
+    """
     from bot.services.redis_service import redis_service
     
+    # Early return if not in training mode - minimal overhead
     state = await redis_service.get_user_state(message.from_user.id)
-    
     if not state or state.get("state") != "awaiting_training_answer":
         return
     

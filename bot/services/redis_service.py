@@ -24,8 +24,9 @@ class RedisService:
     
     def _generate_cache_key(self, source_text: str, source_lang: str, target_lang: str) -> str:
         """Generate a hash-based cache key to handle long texts"""
-        # Create a hash of the source text for consistent, short keys
-        text_hash = hashlib.sha256(source_text.encode('utf-8')).hexdigest()[:16]
+        # Create a full hash of the source text for consistent, unique keys
+        # Using full SHA256 hash (64 chars) to prevent collisions
+        text_hash = hashlib.sha256(source_text.encode('utf-8')).hexdigest()
         return f"translation:{source_lang}:{target_lang}:{text_hash}"
     
     async def get_cached_translation(self, source_text: str, source_lang: str, target_lang: str) -> Optional[str]:

@@ -83,12 +83,13 @@ async def main():
     bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
     
-    # Register handlers
+    # Register handlers (order matters - more specific handlers first)
     dp.include_router(start.router)
     dp.include_router(translator.router)
-    dp.include_router(trainer.router)
     dp.include_router(settings_handler.router)
     dp.include_router(admin.router)
+    # Trainer router last because it has a catch-all text handler
+    dp.include_router(trainer.router)
     
     # Start scheduler
     logger.info("Starting scheduler...")

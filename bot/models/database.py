@@ -142,5 +142,20 @@ async def init_db():
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Get an async database session.
+    
+    This is an async context manager that yields a database session.
+    It should be used with 'async with' statement for proper session
+    management and automatic cleanup:
+    
+    Example:
+        async with async_session_maker() as session:
+            # Use session here
+            result = await session.execute(query)
+    
+    Yields:
+        AsyncSession: Database session that will be automatically closed
+    """
     async with async_session_maker() as session:
         yield session

@@ -128,14 +128,17 @@ EXPLANATION: [explanation in {interface_lang}]"""
         
         result = response.choices[0].message.content.strip()
         
-        # Parse response
-        first_line = result.split("\n")[0].upper()
-        is_correct = "CORRECT" in first_line and "INCORRECT" not in first_line
+        # Parse response with robust status checking
+        lines = result.split("\n")
+        status_line = lines[0].strip().upper() if lines else ""
         
-        translation_line = [line for line in result.split("\n") if "TRANSLATION:" in line]
+        # Check for exact status patterns to avoid false positives
+        is_correct = status_line.startswith("STATUS:") and "CORRECT" in status_line and "INCORRECT" not in status_line
+        
+        translation_line = [line for line in lines if "TRANSLATION:" in line]
         correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
         
-        explanation_line = [line for line in result.split("\n") if "EXPLANATION:" in line]
+        explanation_line = [line for line in lines if "EXPLANATION:" in line]
         explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
         
         return is_correct, correct_translation, explanation
