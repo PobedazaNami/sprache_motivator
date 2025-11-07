@@ -1,0 +1,201 @@
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+from bot.models.database import UserStatus, DifficultyLevel, async_session_maker
+from bot.services.database_service import UserService, TrainingService
+from bot.services.translation_service import translation_service
+from bot.locales.texts import get_text
+from bot.utils.keyboards import get_trainer_keyboard, get_main_menu_keyboard
+
+
+router = Router()
+
+
+class TrainerStates(StatesGroup):
+    waiting_for_answer = State()
+
+
+@router.message(F.text.in_([
+    "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер"
+]))
+async def trainer_menu(message: Message):
+    """Show daily trainer menu"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        
+        if user.status != UserStatus.APPROVED:
+            return
+        
+        lang = user.interface_language.value
+        
+        if user.daily_trainer_enabled:
+            text = get_text(lang, "trainer_started")
+        else:
+            text = get_text(lang, "translator_mode")
+        
+        await message.answer(text, reply_markup=get_trainer_keyboard(user))
+
+
+@router.callback_query(F.data == "trainer_start")
+async def start_trainer(callback: CallbackQuery):
+    """Start daily trainer"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        lang = user.interface_language.value
+        
+        # Enable trainer
+        await UserService.update_user(session, user, daily_trainer_enabled=True)
+        
+        await callback.message.edit_text(
+            get_text(lang, "trainer_started"),
+            reply_markup=get_trainer_keyboard(user)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_stop")
+async def stop_trainer(callback: CallbackQuery):
+    """Stop daily trainer"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        lang = user.interface_language.value
+        
+        # Disable trainer
+        await UserService.update_user(session, user, daily_trainer_enabled=False)
+        
+        await callback.message.edit_text(
+            get_text(lang, "trainer_stopped"),
+            reply_markup=get_trainer_keyboard(user)
+        )
+    
+    await callback.answer()
+
+
+async def send_training_task(bot, user_id: int):
+    """Send a training task to user (called by scheduler)"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, user_id)
+        
+        if not user.daily_trainer_enabled or user.status != UserStatus.APPROVED:
+            return
+        
+        lang = user.interface_language.value
+        learning_lang = user.learning_language.value
+        difficulty = user.difficulty_level or DifficultyLevel.A2
+        
+        # Generate sentence
+        sentence = await translation_service.generate_sentence(
+            difficulty.value,
+            learning_lang,
+            lang
+        )
+        
+        # Get expected translation
+        expected_translation, _ = await translation_service.translate(
+            sentence,
+            lang,
+            learning_lang,
+            None  # Don't count tokens for system-generated tasks
+        )
+        
+        # Create training session
+        training = await TrainingService.create_session(
+            session,
+            user.id,
+            sentence,
+            expected_translation,
+            difficulty
+        )
+        
+        # Send task to user
+        await bot.send_message(
+            user_id,
+            get_text(lang, "trainer_task", sentence=sentence)
+        )
+        
+        # Store training session ID in Redis for answer processing
+        from bot.services.redis_service import redis_service
+        await redis_service.set_user_state(
+            user_id,
+            "awaiting_training_answer",
+            {"training_id": training.id}
+        )
+
+
+@router.message(F.text)
+async def check_training_answer(message: Message):
+    """Check if message is an answer to training task"""
+    from bot.services.redis_service import redis_service
+    
+    state = await redis_service.get_user_state(message.from_user.id)
+    
+    if not state or state.get("state") != "awaiting_training_answer":
+        return
+    
+    training_id = state.get("data", {}).get("training_id")
+    if not training_id:
+        return
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        lang = user.interface_language.value
+        learning_lang = user.learning_language.value
+        
+        # Get training session
+        from sqlalchemy import select
+        from bot.models.database import TrainingSession
+        
+        result = await session.execute(
+            select(TrainingSession).where(TrainingSession.id == training_id)
+        )
+        training = result.scalar_one_or_none()
+        
+        if not training:
+            await redis_service.clear_user_state(message.from_user.id)
+            return
+        
+        user_answer = message.text
+        
+        # Check translation
+        is_correct, correct_translation, explanation = await translation_service.check_translation(
+            training.sentence,
+            user_answer,
+            learning_lang,
+            lang
+        )
+        
+        # Update training session
+        await TrainingService.update_session(
+            session,
+            training_id,
+            user_answer,
+            is_correct,
+            explanation
+        )
+        
+        # Update user stats
+        user.total_answers += 1
+        if is_correct:
+            user.correct_answers += 1
+        await session.commit()
+        
+        # Increment activity
+        await UserService.increment_activity(session, user, 2 if is_correct else 1)
+        
+        # Send feedback
+        if is_correct:
+            await message.answer(get_text(lang, "correct_answer"))
+        else:
+            await message.answer(
+                get_text(lang, "incorrect_answer",
+                        correct=correct_translation,
+                        explanation=explanation or "")
+            )
+        
+        # Clear state
+        await redis_service.clear_user_state(message.from_user.id)
