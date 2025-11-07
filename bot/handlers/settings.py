@@ -92,9 +92,13 @@ async def update_interface_lang(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         await UserService.update_user(session, user, interface_language=interface_lang)
         
-        lang = user.interface_language.value
+        # Use the new language code for messages
+        lang = lang_code
         
         await callback.message.edit_text(get_text(lang, "settings_updated"))
+        
+        # Refresh user to get updated state
+        await session.refresh(user)
         
         # Show updated main menu
         await callback.message.answer(

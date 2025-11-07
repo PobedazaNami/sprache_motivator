@@ -34,7 +34,7 @@ async def trainer_menu(message: Message):
         if user.daily_trainer_enabled:
             text = get_text(lang, "trainer_started")
         else:
-            text = "🎯 " + get_text(lang, "btn_daily_trainer") + "\n\n" + get_text(lang, "select_difficulty")
+            text = get_text(lang, "trainer_menu")
         
         await message.answer(text, reply_markup=get_trainer_keyboard(user))
 

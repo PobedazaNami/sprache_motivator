@@ -1,6 +1,7 @@
 import redis.asyncio as redis
 from typing import Optional
 import json
+import hashlib
 from bot.config import settings
 
 
@@ -21,14 +22,20 @@ class RedisService:
         if self.redis:
             await self.redis.close()
     
+    def _generate_cache_key(self, source_text: str, source_lang: str, target_lang: str) -> str:
+        """Generate a hash-based cache key to handle long texts"""
+        # Create a hash of the source text for consistent, short keys
+        text_hash = hashlib.sha256(source_text.encode('utf-8')).hexdigest()[:16]
+        return f"translation:{source_lang}:{target_lang}:{text_hash}"
+    
     async def get_cached_translation(self, source_text: str, source_lang: str, target_lang: str) -> Optional[str]:
         """Get cached translation"""
-        key = f"translation:{source_lang}:{target_lang}:{source_text}"
+        key = self._generate_cache_key(source_text, source_lang, target_lang)
         return await self.redis.get(key)
     
     async def cache_translation(self, source_text: str, source_lang: str, target_lang: str, translation: str):
         """Cache translation"""
-        key = f"translation:{source_lang}:{target_lang}:{source_text}"
+        key = self._generate_cache_key(source_text, source_lang, target_lang)
         await self.redis.setex(key, settings.CACHE_TTL_SECONDS, translation)
     
     async def get_user_tokens_today(self, user_id: int) -> int:

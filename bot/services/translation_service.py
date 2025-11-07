@@ -129,7 +129,8 @@ EXPLANATION: [explanation in {interface_lang}]"""
         result = response.choices[0].message.content.strip()
         
         # Parse response
-        is_correct = "CORRECT" in result.split("\n")[0].upper() and "INCORRECT" not in result.split("\n")[0].upper()
+        first_line = result.split("\n")[0].upper()
+        is_correct = "CORRECT" in first_line and "INCORRECT" not in first_line
         
         translation_line = [line for line in result.split("\n") if "TRANSLATION:" in line]
         correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
