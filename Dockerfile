@@ -1,19 +1,58 @@
-FROM python:3.11-slim
+# Stage 1: Install dependencies
+FROM node:lts-alpine AS installer
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+# Copy package files
+COPY package*.json ./
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
 
-# Copy application code
-COPY . .
+# Stage 2: Build TypeScript
+FROM node:lts-alpine AS builder
 
-# Run database migrations and start bot
-CMD ["sh", "-c", "alembic upgrade head && python -m bot.main"]
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install all dependencies (including dev)
+RUN npm ci
+
+# Copy source code
+COPY src ./src
+
+# Build TypeScript
+RUN npm run build
+
+# Stage 3: Runtime
+FROM node:lts-alpine AS runtime
+
+WORKDIR /app
+
+# Copy production dependencies from installer
+COPY --from=installer /app/node_modules ./node_modules
+
+# Copy built files from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Change ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port (not required for Telegram bot, but good practice)
+EXPOSE 3000
+
+# Start the bot
+CMD ["npm", "start"]
+

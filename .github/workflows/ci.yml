@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Generate .env from secrets and vars
+      run: |
+        cat > .env << EOF
+        TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+        REDIS_URL=redis://localhost:6379
+        REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+        TRANSLATION_MODEL=${{ vars.TRANSLATION_MODEL || 'gpt-3.5-turbo' }}
+        DEFAULT_INTERFACE_LANG=${{ vars.DEFAULT_INTERFACE_LANG || 'uk' }}
+        EOF
+
+    - name: Build
+      run: npm run build
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Test
+      run: npm test
+
+    - name: Secret scanning with Gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
