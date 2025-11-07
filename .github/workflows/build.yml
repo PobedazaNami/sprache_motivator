@@ -1,0 +1,118 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      actions: write
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate required secrets
+      run: |
+        MISSING_SECRETS=()
+        
+        if [ -z "${{ secrets.BOT_TOKEN }}" ]; then
+          MISSING_SECRETS+=("BOT_TOKEN")
+        fi
+        
+        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+          MISSING_SECRETS+=("OPENAI_API_KEY")
+        fi
+        
+        if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ]; then
+          MISSING_SECRETS+=("POSTGRES_PASSWORD")
+        fi
+        
+        if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+          echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
+          echo "Please configure these secrets in your repository settings."
+          exit 1
+        fi
+        
+        echo "✅ All required secrets are configured"
+    
+    - name: Create .env file from GitHub secrets and variables
+      env:
+        # Bot configuration from GitHub secrets/variables
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ADMIN_IDS: ${{ vars.ADMIN_IDS }}
+        
+        # Database configuration
+        POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
+        POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
+        POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
+        
+        # Redis configuration
+        REDIS_HOST: ${{ vars.REDIS_HOST || 'redis' }}
+        REDIS_PORT: ${{ vars.REDIS_PORT || '6379' }}
+        
+        # Bot configuration
+        MAX_CONCURRENT_USERS: ${{ vars.MAX_CONCURRENT_USERS || '100' }}
+        DAILY_TRAINER_TIMES: ${{ vars.DAILY_TRAINER_TIMES || '08:00,14:00,20:00' }}
+        MAX_TOKENS_PER_USER_DAILY: ${{ vars.MAX_TOKENS_PER_USER_DAILY || '10000' }}
+        CACHE_TTL_SECONDS: ${{ vars.CACHE_TTL_SECONDS || '2592000' }}
+      
+      run: |
+        cat > .env << EOF
+        BOT_TOKEN=${BOT_TOKEN}
+        OPENAI_API_KEY=${OPENAI_API_KEY}
+        ADMIN_IDS=${ADMIN_IDS}
+        POSTGRES_DB=${POSTGRES_DB}
+        POSTGRES_USER=${POSTGRES_USER}
+        POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        POSTGRES_HOST=${POSTGRES_HOST}
+        POSTGRES_PORT=${POSTGRES_PORT}
+        REDIS_HOST=${REDIS_HOST}
+        REDIS_PORT=${REDIS_PORT}
+        MAX_CONCURRENT_USERS=${MAX_CONCURRENT_USERS}
+        DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES}
+        MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY}
+        CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS}
+        EOF
+    
+    - name: Build Docker image
+      run: |
+        docker-compose build
+    
+    - name: Create deployment package
+      run: |
+        tar -czf sprache-motivator-deployment.tar.gz \
+          docker-compose.yml \
+          Dockerfile \
+          .env \
+          bot \
+          alembic \
+          alembic.ini \
+          requirements.txt
+    
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v4
+      with:
+        name: sprache-motivator-deployment
+        path: sprache-motivator-deployment.tar.gz
+        retention-days: 30
+    
+    - name: Verify .env file was created
+      run: |
+        if [ -f .env ]; then
+          echo "✅ .env file created successfully"
+          echo "Variables loaded:"
+          cat .env | sed 's/=.*/=***/' # Hide values for security
+        else
+          echo "❌ .env file was not created"
+          exit 1
+        fi

@@ -81,7 +81,9 @@ bot/
 - Telegram Bot Token (from @BotFather)
 - OpenAI API Key
 
-### Setup
+**For automated deployment using GitHub Actions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
+
+### Local Setup
 
 1. Clone the repository:
 ```bash
