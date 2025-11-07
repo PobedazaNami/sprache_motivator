@@ -76,7 +76,7 @@ jobs:
         scp -i ~/.ssh/deploy_key -P ${SSH_PORT} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
         
         # Run docker-compose on server
-        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
+        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << ENDSSH
           cd ${DEPLOY_PATH}
           docker-compose down
           docker-compose pull
