@@ -30,10 +30,11 @@ async def trainer_menu(message: Message):
         
         lang = user.interface_language.value
         
+        # Show current trainer status
         if user.daily_trainer_enabled:
             text = get_text(lang, "trainer_started")
         else:
-            text = get_text(lang, "translator_mode")
+            text = "🎯 " + get_text(lang, "btn_daily_trainer") + "\n\n" + get_text(lang, "select_difficulty")
         
         await message.answer(text, reply_markup=get_trainer_keyboard(user))
 
@@ -48,6 +49,8 @@ async def start_trainer(callback: CallbackQuery):
         
         # Enable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=True)
+        # Refresh user to get updated state
+        await session.refresh(user)
         
         await callback.message.edit_text(
             get_text(lang, "trainer_started"),
@@ -67,6 +70,8 @@ async def stop_trainer(callback: CallbackQuery):
         
         # Disable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=False)
+        # Refresh user to get updated state
+        await session.refresh(user)
         
         await callback.message.edit_text(
             get_text(lang, "trainer_stopped"),
