@@ -13,7 +13,43 @@ jobs:
       contents: read
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    
+    - name: Validate required secrets
+      run: |
+        MISSING_SECRETS=()
+        
+        if [ -z "${{ secrets.BOT_TOKEN }}" ]; then
+          MISSING_SECRETS+=("BOT_TOKEN")
+        fi
+        
+        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+          MISSING_SECRETS+=("OPENAI_API_KEY")
+        fi
+        
+        if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ]; then
+          MISSING_SECRETS+=("POSTGRES_PASSWORD")
+        fi
+        
+        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+          MISSING_SECRETS+=("SSH_PRIVATE_KEY")
+        fi
+        
+        if [ -z "${{ secrets.SSH_HOST }}" ]; then
+          MISSING_SECRETS+=("SSH_HOST")
+        fi
+        
+        if [ -z "${{ secrets.SSH_USER }}" ]; then
+          MISSING_SECRETS+=("SSH_USER")
+        fi
+        
+        if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+          echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
+          echo "Please configure these secrets in your repository settings."
+          exit 1
+        fi
+        
+        echo "✅ All required secrets are configured"
     
     - name: Deploy to server
       env:
