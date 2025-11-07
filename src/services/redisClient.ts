@@ -18,7 +18,7 @@ export function createRedisClient(): Redis {
     },
   };
 
-  // Parse Redis URL and add password if provided
+  // Add password to options if provided
   if (config.REDIS_PASSWORD) {
     options.password = config.REDIS_PASSWORD;
   }

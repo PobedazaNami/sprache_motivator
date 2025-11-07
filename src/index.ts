@@ -16,9 +16,13 @@ async function main(): Promise<void> {
     const bot = createBot();
 
     // Register /ping command
-    bot.command('ping', (ctx) => {
+    bot.command('ping', async (ctx) => {
       logger.debug(`Ping command received from user ${ctx.from?.id || 'unknown'}`);
-      void ctx.reply('pong');
+      try {
+        await ctx.reply('pong');
+      } catch (err) {
+        logger.error('Failed to send ping response:', err);
+      }
     });
 
     // Start the bot

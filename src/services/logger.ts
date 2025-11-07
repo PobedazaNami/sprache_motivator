@@ -36,7 +36,7 @@ class Logger {
 
   warn(message: string, ...args: unknown[]): void {
     if (this.shouldLog(LogLevel.WARN)) {
-      console.error(this.formatMessage(LogLevel.WARN, message), ...args);
+      console.warn(this.formatMessage(LogLevel.WARN, message), ...args);
     }
   }
 

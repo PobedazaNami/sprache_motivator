@@ -12,7 +12,7 @@
     "plugin:@typescript-eslint/recommended-requiring-type-checking"
   ],
   "rules": {
-    "no-console": ["warn", { "allow": ["info", "debug", "error"] }],
+    "no-console": ["warn", { "allow": ["info", "debug", "error", "warn"] }],
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/no-explicit-any": "error",
