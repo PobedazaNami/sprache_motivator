@@ -1,16 +1,6 @@
-# Stage 1: Install dependencies
-FROM node:lts-alpine AS installer
+# Multi-stage build for Node.js TypeScript bot
 
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
-
-# Stage 2: Build TypeScript
+# Stage 1: Build
 FROM node:lts-alpine AS builder
 
 WORKDIR /app
@@ -19,8 +9,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install all dependencies (including dev)
-RUN npm ci
+# Install all dependencies with increased timeout
+RUN npm install --fetch-timeout=600000 --fetch-retries=5
 
 # Copy source code
 COPY src ./src
@@ -28,17 +18,21 @@ COPY src ./src
 # Build TypeScript
 RUN npm run build
 
-# Stage 3: Runtime
+# Stage 2: Runtime
 FROM node:lts-alpine AS runtime
 
 WORKDIR /app
 
-# Copy production dependencies from installer
-COPY --from=installer /app/node_modules ./node_modules
+ENV NODE_ENV=production
+
+# Copy package files
+COPY package*.json ./
+
+# Copy node_modules from builder (we'll use all deps for now to avoid npm install issues)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
