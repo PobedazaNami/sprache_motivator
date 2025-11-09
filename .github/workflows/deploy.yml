@@ -8,131 +8,102 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     permissions:
       contents: read
-    
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Validate required secrets
-      run: |
-        MISSING_SECRETS=()
-        
-        if [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
-          MISSING_SECRETS+=("TELEGRAM_BOT_TOKEN")
-        fi
-        
-        if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
-          MISSING_SECRETS+=("OPENAI_API_KEY")
-        fi
-        
-        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-          MISSING_SECRETS+=("SSH_PRIVATE_KEY")
-        fi
-        
-        if [ -z "${{ secrets.SSH_HOST }}" ]; then
-          MISSING_SECRETS+=("SSH_HOST")
-        fi
-        
-        if [ -z "${{ secrets.SSH_USER }}" ]; then
-          MISSING_SECRETS+=("SSH_USER")
-        fi
-        
-        if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
-          echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
-          echo "Please configure these secrets in your repository settings."
-          exit 1
-        fi
-        
-        echo "✅ All required secrets are configured"
-    
-    - name: Deploy to server
-      env:
-        # Bot configuration from GitHub secrets/variables
-        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        ADMIN_IDS: ${{ vars.ADMIN_IDS || '123456789' }}
-        
-        # Database configuration from GitHub variables
-        POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
-        POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'sprache_password' }}
-        POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
-        POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
-        
-        # Redis configuration from GitHub variables
-        REDIS_HOST: ${{ vars.REDIS_HOST || 'redis' }}
-        REDIS_PORT: ${{ vars.REDIS_PORT || '6379' }}
-        
-        # Bot configuration from GitHub variables
-        MAX_CONCURRENT_USERS: ${{ vars.MAX_CONCURRENT_USERS || '100' }}
-        DAILY_TRAINER_TIMES: ${{ vars.DAILY_TRAINER_TIMES || '08:00,14:00,20:00' }}
-        MAX_TOKENS_PER_USER_DAILY: ${{ vars.MAX_TOKENS_PER_USER_DAILY || '10000' }}
-        CACHE_TTL_SECONDS: ${{ vars.CACHE_TTL_SECONDS || '2592000' }}
-        
-        # Server SSH configuration from GitHub secrets
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY || '' }}
-        SSH_HOST: ${{ secrets.SSH_HOST || '49.13.219.223' }}
-        SSH_USER: ${{ secrets.SSH_USER || 'root' }}
-        SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-        DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/sprache_motivator' }}
-      
-      run: |
-        # Setup SSH
-        mkdir -p ~/.ssh
-        echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        
-        # Add SSH host key verification with warning
-        echo "Adding SSH host key (ensure this matches your server's key)"
-        ssh-keyscan -p ${SSH_PORT} -H ${SSH_HOST} >> ~/.ssh/known_hosts
-        
-        # Create .env file content
-        cat > .env.tmp << EOF
-        BOT_TOKEN=${BOT_TOKEN}
-        OPENAI_API_KEY=${OPENAI_API_KEY}
-        ADMIN_IDS=${ADMIN_IDS}
-        POSTGRES_DB=${POSTGRES_DB}
-        POSTGRES_USER=${POSTGRES_USER}
-        POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-        POSTGRES_HOST=${POSTGRES_HOST}
-        POSTGRES_PORT=${POSTGRES_PORT}
-        REDIS_HOST=${REDIS_HOST}
-        REDIS_PORT=${REDIS_PORT}
-        MAX_CONCURRENT_USERS=${MAX_CONCURRENT_USERS}
-        DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES}
-        MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY}
-        CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS}
-        EOF
-        
-        # Deploy to server
-        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
-        
-        # Copy files to server (excluding sensitive files)
-        rsync -av --delete \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='.env*' \
-          --exclude='*.pyc' \
-          --exclude='__pycache__' \
-          --exclude='.pytest_cache' \
-          --exclude='logs/*' \
-          --exclude='.gitignore' \
-          -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}" \
-          ./ ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
-        
-        # Copy .env file separately
-        scp -i ~/.ssh/deploy_key -P ${SSH_PORT} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
-        
-        # Run docker-compose on server
-        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << ENDSSH
-          cd ${DEPLOY_PATH}
-          docker-compose down
-          docker-compose pull
-          docker-compose up -d --build
-          docker-compose logs --tail=50
-        ENDSSH
-        
-        # Cleanup
-        rm -f ~/.ssh/deploy_key .env.tmp
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate required secrets
+        run: |
+          MISSING=()
+          test -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" || MISSING+=(TELEGRAM_BOT_TOKEN)
+          test -n "${{ secrets.OPENAI_API_KEY }}" || MISSING+=(OPENAI_API_KEY)
+          test -n "${{ secrets.SSH_PRIVATE_KEY }}" || MISSING+=(SSH_PRIVATE_KEY)
+          test -n "${{ secrets.SSH_HOST }}" || MISSING+=(SSH_HOST)
+          test -n "${{ secrets.SSH_USER }}" || MISSING+=(SSH_USER)
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "Missing required secrets: ${MISSING[*]}"; exit 1; fi
+          echo "All required secrets present"
+
+      - name: Deploy to server
+        run: |
+          set -euo pipefail
+          # Assign variables from GitHub contexts
+          BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}'
+          OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}'
+          # Static defaults (adjust in repo vars later if needed)
+          ADMIN_IDS='123456789'
+          POSTGRES_DB='sprache_bot'
+          POSTGRES_USER='sprache_user'
+          POSTGRES_PASSWORD='sprache_password'
+          POSTGRES_HOST='postgres'
+          POSTGRES_PORT='5432'
+          REDIS_HOST='redis'
+          REDIS_PORT='6379'
+          MAX_CONCURRENT_USERS='100'
+          DAILY_TRAINER_TIMES='08:00,14:00,20:00'
+          MAX_TOKENS_PER_USER_DAILY='10000'
+          CACHE_TTL_SECONDS='2592000'
+          SSH_PRIVATE_KEY='${{ secrets.SSH_PRIVATE_KEY }}'
+          SSH_HOST='49.13.219.223'
+          SSH_USER='root'
+          SSH_PORT='22'
+          DEPLOY_PATH='/opt/sprache_motivator'
+
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${SSH_PORT:-22} -H ${SSH_HOST} >> ~/.ssh/known_hosts
+
+          if [ -f requirements.txt ]; then
+            echo "Local requirements.txt sha256:"; (sha256sum requirements.txt || shasum -a 256 requirements.txt) || true
+          fi
+
+          : > .env.tmp
+          echo "BOT_TOKEN=${BOT_TOKEN}" >> .env.tmp
+          echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env.tmp
+          echo "ADMIN_IDS=${ADMIN_IDS:-123456789}" >> .env.tmp
+          echo "POSTGRES_DB=${POSTGRES_DB:-sprache_bot}" >> .env.tmp
+          echo "POSTGRES_USER=${POSTGRES_USER:-sprache_user}" >> .env.tmp
+          echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sprache_password}" >> .env.tmp
+          echo "POSTGRES_HOST=${POSTGRES_HOST:-postgres}" >> .env.tmp
+          echo "POSTGRES_PORT=${POSTGRES_PORT:-5432}" >> .env.tmp
+          echo "REDIS_HOST=${REDIS_HOST:-redis}" >> .env.tmp
+          echo "REDIS_PORT=${REDIS_PORT:-6379}" >> .env.tmp
+          echo "MAX_CONCURRENT_USERS=${MAX_CONCURRENT_USERS:-100}" >> .env.tmp
+          echo "DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES:-08:00,14:00,20:00}" >> .env.tmp
+          echo "MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY:-10000}" >> .env.tmp
+          echo "CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-2592000}" >> .env.tmp
+
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
+
+          rsync -avz --delete --checksum \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env*' \
+            --exclude='*.pyc' \
+            --exclude='__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='logs/*' \
+            --exclude='.gitignore' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22}" \
+            ./ ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+
+          scp -i ~/.ssh/deploy_key -P ${SSH_PORT:-22} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
+
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "grep -i '^openai' ${DEPLOY_PATH}/requirements.txt || echo 'openai entry not found'; (sha256sum ${DEPLOY_PATH}/requirements.txt || shasum -a 256 ${DEPLOY_PATH}/requirements.txt || true) 2>/dev/null"
+
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} << 'ENDSSH'
+            set -euo pipefail
+            cd /opt/sprache_motivator
+            if command -v docker-compose >/dev/null 2>&1; then COMPOSE="docker-compose"; else COMPOSE="docker compose"; fi
+            $COMPOSE down || true
+            $COMPOSE build --no-cache bot
+            $COMPOSE up -d
+            $COMPOSE ps
+            $COMPOSE logs --tail=80 bot || true
+          ENDSSH
+
+          rm -f ~/.ssh/deploy_key .env.tmp
