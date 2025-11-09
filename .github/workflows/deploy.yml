@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           # Assign variables from GitHub contexts
-          BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
           OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
           # Static defaults (adjust in repo vars later if needed)
           ADMIN_IDS='123456789'
@@ -62,7 +62,7 @@ jobs:
           fi
 
           : > .env.tmp
-          echo "BOT_TOKEN=${BOT_TOKEN}" >> .env.tmp
+          echo "BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" >> .env.tmp
           echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env.tmp
           echo "ADMIN_IDS=${ADMIN_IDS:-123456789}" >> .env.tmp
           echo "POSTGRES_DB=${POSTGRES_DB:-sprache_bot}" >> .env.tmp
