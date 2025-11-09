@@ -25,7 +25,7 @@ def test_config_properties():
     # Test redis_url property
     redis_url = settings.redis_url
     assert isinstance(redis_url, str)
-    assert 'redis://' in redis_url
+    assert redis_url.startswith('redis://')
     
     # Test admin_id_list property
     admin_ids = settings.admin_id_list
