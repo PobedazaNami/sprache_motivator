@@ -89,14 +89,9 @@ async def approve_user(callback: CallbackQuery):
         admin = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = admin.interface_language.value
         
-        # Get user to approve
-        from sqlalchemy import select
-        from bot.models.database import User
-        
-        result = await session.execute(select(User).where(User.id == user_id))
-        user_to_approve = result.scalar_one_or_none()
-        
-        if user_to_approve:
+        # Get user to approve (Mongo)
+        user_to_approve = await UserService.get_or_create_user(session, user_id)
+        if user_to_approve.status != UserStatus.APPROVED:
             await UserService.update_user(session, user_to_approve, status=UserStatus.APPROVED)
             
             # Notify user
@@ -128,14 +123,9 @@ async def reject_user(callback: CallbackQuery):
         admin = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = admin.interface_language.value
         
-        # Get user to reject
-        from sqlalchemy import select
-        from bot.models.database import User
-        
-        result = await session.execute(select(User).where(User.id == user_id))
-        user_to_reject = result.scalar_one_or_none()
-        
-        if user_to_reject:
+        # Get user to reject (Mongo)
+        user_to_reject = await UserService.get_or_create_user(session, user_id)
+        if user_to_reject.status != UserStatus.REJECTED:
             await UserService.update_user(session, user_to_reject, status=UserStatus.REJECTED)
             
             # Notify user

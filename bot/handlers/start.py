@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
-from sqlalchemy.ext.asyncio import AsyncSession
+## Removed SQLAlchemy AsyncSession (migrated to MongoDB)
 
 from bot.models.database import UserStatus, InterfaceLanguage, async_session_maker
 from bot.services.database_service import UserService
@@ -27,7 +27,6 @@ async def cmd_start(message: Message):
         # Auto-approve on /start if this user is an admin but still pending
         if user.status == UserStatus.PENDING and message.from_user.id in settings.admin_id_list:
             await UserService.update_user(session, user, status=UserStatus.APPROVED)
-            await session.refresh(user)
 
         # If user is new or pending (non-admin), show language selection
         if user.status == UserStatus.PENDING:
@@ -72,7 +71,6 @@ async def select_language(callback: CallbackQuery):
                 interface_language=interface_lang,
                 status=UserStatus.APPROVED
             )
-            await session.refresh(user)
         else:
             # Regular user - just update language
             await UserService.update_user(session, user, interface_language=interface_lang)

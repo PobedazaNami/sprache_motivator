@@ -1,7 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from bot.locales.texts import get_text
-from bot.models.database import User, UserStatus
+from typing import Any
 
 
 def get_language_selection_keyboard() -> InlineKeyboardMarkup:
@@ -13,7 +13,7 @@ def get_language_selection_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_main_menu_keyboard(user: User) -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     """Main menu keyboard based on user language"""
     lang = user.interface_language.value
     builder = ReplyKeyboardBuilder()
@@ -95,7 +95,7 @@ def get_translator_keyboard(lang: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_trainer_keyboard(user: User) -> InlineKeyboardMarkup:
+def get_trainer_keyboard(user: Any) -> InlineKeyboardMarkup:
     """Keyboard for daily trainer"""
     lang = user.interface_language.value
     builder = InlineKeyboardBuilder()

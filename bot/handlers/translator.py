@@ -75,7 +75,6 @@ async def process_translation(message: Message, state: FSMContext):
             # Increment activity and translation count
             await UserService.increment_activity(session, user, 1)
             user.translations_count += 1
-            await session.commit()
             
             # Show translation
             result_text = f"{get_text(lang, 'translation_result')}\n\n{translation}"
@@ -121,7 +120,7 @@ async def save_word(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text(lang, "word_saved"), show_alert=True)
         
         # Increment activity
-        await UserService.increment_activity(session, user, 1)
+    await UserService.increment_activity(session, user, 1)
     
     # Continue in translator mode
     await state.set_state(TranslatorStates.waiting_for_text)

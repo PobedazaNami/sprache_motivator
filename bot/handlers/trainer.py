@@ -48,12 +48,8 @@ async def start_trainer(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         
         lang = user.interface_language.value
-        
         # Enable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=True)
-        # Refresh user to get updated state
-        await session.refresh(user)
-        
         await callback.message.edit_text(
             get_text(lang, "trainer_started"),
             reply_markup=get_trainer_keyboard(user)
@@ -69,12 +65,8 @@ async def stop_trainer(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         
         lang = user.interface_language.value
-        
         # Disable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=False)
-        # Refresh user to get updated state
-        await session.refresh(user)
-        
         await callback.message.edit_text(
             get_text(lang, "trainer_stopped"),
             reply_markup=get_trainer_keyboard(user)
@@ -291,14 +283,9 @@ async def check_training_answer(message: Message):
         learning_lang = user.learning_language.value
         
         # Get training session
-        from sqlalchemy import select
-        from bot.models.database import TrainingSession
-        
-        result = await session.execute(
-            select(TrainingSession).where(TrainingSession.id == training_id)
-        )
-        training = result.scalar_one_or_none()
-        
+        # Fetch training session from Mongo
+        training_col = mongo_service.db().training_sessions
+        training = await training_col.find_one({"_id": training_id})
         if not training:
             await redis_service.clear_user_state(message.from_user.id)
             return
@@ -307,7 +294,7 @@ async def check_training_answer(message: Message):
         
         # Check translation with quality assessment
         is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
-            training.sentence,
+            training["sentence"],
             user_answer,
             learning_lang,
             lang
@@ -334,7 +321,7 @@ async def check_training_answer(message: Message):
         user.total_answers += 1
         if is_correct:
             user.correct_answers += 1
-        await session.commit()
+        await UserService.update_user(session, user, total_answers=user.total_answers, correct_answers=user.correct_answers)
         
         # Increment activity
         await UserService.increment_activity(session, user, 2 if is_correct else 1)

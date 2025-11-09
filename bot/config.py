@@ -9,19 +9,12 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     
-    # Database
-    POSTGRES_DB: str = "sprache_bot"
-    POSTGRES_USER: str = "sprache_user"
-    POSTGRES_PASSWORD: str = "sprache_password"
-    POSTGRES_HOST: str = "postgres"
-    POSTGRES_PORT: int = 5432
+    # MongoDB (required)
+    MONGODB_URI: str  # mongodb+srv://user:pass@cluster/dbname
     
     # Redis
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
-
-    # Optional MongoDB (if provided, some services can use it)
-    MONGODB_URI: str | None = None  # mongodb+srv://user:pass@cluster/dbname
     
     # Admin
     ADMIN_IDS: str = ""
@@ -35,16 +28,8 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 2592000  # 30 days
     
     @property
-    def database_url(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-    
-    @property
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
-
-    @property
-    def mongo_enabled(self) -> bool:
-        return bool(self.MONGODB_URI)
     
     @property
     def admin_id_list(self) -> List[int]:

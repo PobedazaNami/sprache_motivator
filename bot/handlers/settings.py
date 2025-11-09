@@ -97,9 +97,6 @@ async def update_interface_lang(callback: CallbackQuery):
         
         await callback.message.edit_text(get_text(lang, "settings_updated"))
         
-        # Refresh user to get updated state
-        await session.refresh(user)
-        
         # Show updated main menu
         await callback.message.answer(
             get_text(lang, "main_menu"),
