@@ -1,16 +1,19 @@
-name: Deploy to Server
+name: Build and Package
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     
     permissions:
       contents: read
+      actions: write
     
     steps:
     - uses: actions/checkout@v4
@@ -31,18 +34,6 @@ jobs:
           MISSING_SECRETS+=("POSTGRES_PASSWORD")
         fi
         
-        if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-          MISSING_SECRETS+=("SSH_PRIVATE_KEY")
-        fi
-        
-        if [ -z "${{ secrets.SSH_HOST }}" ]; then
-          MISSING_SECRETS+=("SSH_HOST")
-        fi
-        
-        if [ -z "${{ secrets.SSH_USER }}" ]; then
-          MISSING_SECRETS+=("SSH_USER")
-        fi
-        
         if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
           echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
           echo "Please configure these secrets in your repository settings."
@@ -51,49 +42,32 @@ jobs:
         
         echo "✅ All required secrets are configured"
     
-    - name: Deploy to server
+    - name: Create .env file from GitHub secrets and variables
       env:
         # Bot configuration from GitHub secrets/variables
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ADMIN_IDS: ${{ vars.ADMIN_IDS }}
         
-        # Database configuration from GitHub variables
+        # Database configuration
         POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
         POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
         POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
         POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
         
-        # Redis configuration from GitHub variables
+        # Redis configuration
         REDIS_HOST: ${{ vars.REDIS_HOST || 'redis' }}
         REDIS_PORT: ${{ vars.REDIS_PORT || '6379' }}
         
-        # Bot configuration from GitHub variables
+        # Bot configuration
         MAX_CONCURRENT_USERS: ${{ vars.MAX_CONCURRENT_USERS || '100' }}
         DAILY_TRAINER_TIMES: ${{ vars.DAILY_TRAINER_TIMES || '08:00,14:00,20:00' }}
         MAX_TOKENS_PER_USER_DAILY: ${{ vars.MAX_TOKENS_PER_USER_DAILY || '10000' }}
         CACHE_TTL_SECONDS: ${{ vars.CACHE_TTL_SECONDS || '2592000' }}
-        
-        # Server SSH configuration from GitHub secrets
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SSH_HOST: ${{ secrets.SSH_HOST }}
-        SSH_USER: ${{ secrets.SSH_USER }}
-        SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-        DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/sprache_motivator' }}
       
       run: |
-        # Setup SSH
-        mkdir -p ~/.ssh
-        echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
-        
-        # Add SSH host key verification with warning
-        echo "Adding SSH host key (ensure this matches your server's key)"
-        ssh-keyscan -p ${SSH_PORT} -H ${SSH_HOST} >> ~/.ssh/known_hosts
-        
-        # Create .env file content
-        cat > .env.tmp << EOF
+        cat > .env << EOF
         BOT_TOKEN=${BOT_TOKEN}
         OPENAI_API_KEY=${OPENAI_API_KEY}
         ADMIN_IDS=${ADMIN_IDS}
@@ -109,34 +83,36 @@ jobs:
         MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY}
         CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS}
         EOF
-        
-        # Deploy to server
-        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
-        
-        # Copy files to server (excluding sensitive files)
-        rsync -av --delete \
-          --exclude='.git' \
-          --exclude='.github' \
-          --exclude='.env*' \
-          --exclude='*.pyc' \
-          --exclude='__pycache__' \
-          --exclude='.pytest_cache' \
-          --exclude='logs/*' \
-          --exclude='.gitignore' \
-          -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT}" \
-          ./ ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
-        
-        # Copy .env file separately
-        scp -i ~/.ssh/deploy_key -P ${SSH_PORT} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
-        
-        # Run docker-compose on server
-        ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} << ENDSSH
-          cd ${DEPLOY_PATH}
-          docker-compose down
-          docker-compose pull
-          docker-compose up -d --build
-          docker-compose logs --tail=50
-        ENDSSH
-        
-        # Cleanup
-        rm -f ~/.ssh/deploy_key .env.tmp
+    
+    - name: Build Docker image
+      run: |
+        docker-compose build
+    
+    - name: Create deployment package
+      run: |
+        tar -czf sprache-motivator-deployment.tar.gz \
+          docker-compose.yml \
+          Dockerfile \
+          .env \
+          bot \
+          alembic \
+          alembic.ini \
+          requirements.txt
+    
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v4
+      with:
+        name: sprache-motivator-deployment
+        path: sprache-motivator-deployment.tar.gz
+        retention-days: 30
+    
+    - name: Verify .env file was created
+      run: |
+        if [ -f .env ]; then
+          echo "✅ .env file created successfully"
+          echo "Variables loaded:"
+          cat .env | sed 's/=.*/=***/' # Hide values for security
+        else
+          echo "❌ .env file was not created"
+          exit 1
+        fi
