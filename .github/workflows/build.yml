@@ -25,19 +25,14 @@ jobs:
           cat > .env << EOF
           BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          ADMIN_IDS=123456789
-          POSTGRES_DB=sprache_bot
-          POSTGRES_USER=sprache_user
-          POSTGRES_PASSWORD=sprache_password
-          POSTGRES_HOST=postgres
-          POSTGRES_PORT=5432
+          ADMIN_IDS=662790795
+          MONGODB_URI=mongodb://localhost:27017/sprache_motivator
           REDIS_HOST=redis
           REDIS_PORT=6379
           MAX_CONCURRENT_USERS=100
           DAILY_TRAINER_TIMES=08:00,14:00,20:00
           MAX_TOKENS_PER_USER_DAILY=10000
           CACHE_TTL_SECONDS=2592000
-          # Optional: add MONGODB_URI here if needed
           EOF
           echo "Created .env (masked):"; sed 's/=.*/=***/' .env
 
@@ -47,7 +42,7 @@ jobs:
       - name: Package artifacts
         run: |
           tar -czf sprache-motivator-deployment.tar.gz \
-            docker-compose.yml Dockerfile .env bot alembic alembic.ini requirements.txt
+            docker-compose.yml Dockerfile .env bot requirements.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
