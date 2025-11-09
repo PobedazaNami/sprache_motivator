@@ -22,17 +22,15 @@ jobs:
       run: |
         MISSING_SECRETS=()
         
-        if [ -z "${{ secrets.BOT_TOKEN }}" ]; then
-          MISSING_SECRETS+=("BOT_TOKEN")
+        # Using TELEGRAM_BOT_TOKEN instead of legacy BOT_TOKEN
+        if [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
+          MISSING_SECRETS+=("TELEGRAM_BOT_TOKEN")
         fi
         
         if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
           MISSING_SECRETS+=("OPENAI_API_KEY")
         fi
-        
-        if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ]; then
-          MISSING_SECRETS+=("POSTGRES_PASSWORD")
-        fi
+        # POSTGRES_PASSWORD is optional; default will be used if absent
         
         if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
           echo "❌ Missing required secrets: ${MISSING_SECRETS[*]}"
@@ -45,14 +43,14 @@ jobs:
     - name: Create .env file from GitHub secrets and variables
       env:
         # Bot configuration from GitHub secrets/variables
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ADMIN_IDS: ${{ vars.ADMIN_IDS }}
         
         # Database configuration
         POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
         POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'sprache_password' }}
         POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
         POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
         
