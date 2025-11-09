@@ -11,7 +11,8 @@ alembic==1.13.1
 APScheduler==3.10.4
 
 # Optional MongoDB support
-motor==3.4.0
+motor==3.6.0
+pymongo==4.10.1
 
 # Development dependencies
 pytest==7.4.3
