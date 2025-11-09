@@ -37,7 +37,7 @@ jobs:
           # Admin ID for @reeziat
           ADMIN_IDS='662790795'
           # MongoDB URI (use secret if provided, otherwise use default)
-          MONGODB_URI="${{ secrets.MONGODB_URI }}"
+          MONGODB_URI="${{ secrets.MongoDB }}"
           MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017/sprache_motivator}"
           REDIS_HOST='redis'
           REDIS_PORT='6379'
