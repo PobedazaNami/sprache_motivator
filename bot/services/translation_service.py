@@ -95,10 +95,10 @@ class TranslationService:
         user_translation: str, 
         expected_lang: str,
         interface_lang: str
-    ) -> Tuple[bool, str, str]:
+    ) -> Tuple[bool, str, str, int]:
         """
         Check if user's translation is correct
-        Returns: (is_correct, correct_translation, explanation)
+        Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
         prompt = f"""Compare these two translations and determine if they are semantically equivalent:
 
@@ -109,11 +109,13 @@ Target language: {expected_lang}
 Respond in {interface_lang} with:
 1. "CORRECT" or "INCORRECT"
 2. The correct translation
-3. Brief grammatical explanation if incorrect
+3. Quality percentage (0-100%) - evaluate grammar, vocabulary, word order, natural phrasing
+4. Brief grammatical explanation
 
 Format your response as:
 STATUS: [CORRECT/INCORRECT]
 TRANSLATION: [correct translation]
+QUALITY: [0-100]
 EXPLANATION: [explanation in {interface_lang}]"""
         
         response = await self.client.chat.completions.create(
@@ -138,10 +140,21 @@ EXPLANATION: [explanation in {interface_lang}]"""
         translation_line = [line for line in lines if "TRANSLATION:" in line]
         correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
         
+        quality_line = [line for line in lines if "QUALITY:" in line]
+        quality_percentage = 100 if is_correct else 0
+        if quality_line:
+            try:
+                quality_str = quality_line[0].replace("QUALITY:", "").strip()
+                # Extract just the number from strings like "85%" or "85"
+                quality_percentage = int(''.join(filter(str.isdigit, quality_str)))
+                quality_percentage = max(0, min(100, quality_percentage))  # Clamp to 0-100
+            except (ValueError, IndexError):
+                quality_percentage = 100 if is_correct else 50
+        
         explanation_line = [line for line in lines if "EXPLANATION:" in line]
         explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
         
-        return is_correct, correct_translation, explanation
+        return is_correct, correct_translation, explanation, quality_percentage
 
 
 translation_service = TranslationService()

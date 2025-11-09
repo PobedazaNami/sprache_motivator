@@ -65,6 +65,12 @@ class User(Base):
     allow_broadcasts = Column(Boolean, default=True)
     daily_trainer_enabled = Column(Boolean, default=False)
     
+    # Trainer settings (новые поля)
+    trainer_start_time = Column(String(5), default="09:00")  # HH:MM format, Kyiv timezone
+    trainer_end_time = Column(String(5), default="21:00")    # HH:MM format, Kyiv timezone
+    trainer_messages_per_day = Column(Integer, default=3)    # 1-10 messages per day
+    trainer_timezone = Column(String(50), default="Europe/Kiev")
+    
     # Statistics
     activity_score = Column(Integer, default=0)
     translations_count = Column(Integer, default=0)
@@ -116,11 +122,47 @@ class TrainingSession(Base):
     user_translation = Column(Text)
     is_correct = Column(Boolean)
     explanation = Column(Text)
+    quality_percentage = Column(Integer)  # 0-100% качество перевода от ИИ
     
     difficulty_level = Column(SQLEnum(DifficultyLevel), nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     answered_at = Column(DateTime(timezone=True))
+
+
+class DailyStats(Base):
+    """Ежедневная статистика пользователя"""
+    __tablename__ = "daily_stats"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(DateTime(timezone=True), nullable=False, index=True)  # Дата статистики
+    
+    total_tasks = Column(Integer, default=0)  # Всего заданий
+    completed_tasks = Column(Integer, default=0)  # Выполнено заданий
+    average_quality = Column(Integer, default=0)  # Средний процент качества (0-100)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = (
+        # Уникальный индекс: один пользователь - одна запись на день
+        {'sqlite_autoincrement': True},
+    )
+
+
+class WeeklyStats(Base):
+    """Еженедельная статистика пользователя"""
+    __tablename__ = "weekly_stats"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    week_start = Column(DateTime(timezone=True), nullable=False, index=True)  # Начало недели (понедельник)
+    
+    total_tasks = Column(Integer, default=0)
+    completed_tasks = Column(Integer, default=0)
+    average_quality = Column(Integer, default=0)  # Средний процент за неделю
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Broadcast(Base):

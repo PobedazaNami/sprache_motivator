@@ -172,21 +172,29 @@ async def check_training_answer(message: Message):
         
         user_answer = message.text
         
-        # Check translation
-        is_correct, correct_translation, explanation = await translation_service.check_translation(
+        # Check translation with quality assessment
+        is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
             training.sentence,
             user_answer,
             learning_lang,
             lang
         )
         
-        # Update training session
+        # Update training session with quality
         await TrainingService.update_session(
             session,
             training_id,
             user_answer,
             is_correct,
-            explanation
+            explanation,
+            quality_percentage
+        )
+        
+        # Update daily stats
+        await TrainingService.update_daily_stats(
+            session,
+            user.id,
+            quality_percentage
         )
         
         # Update user stats
@@ -198,14 +206,16 @@ async def check_training_answer(message: Message):
         # Increment activity
         await UserService.increment_activity(session, user, 2 if is_correct else 1)
         
-        # Send feedback
+        # Send feedback with quality percentage
         if is_correct:
-            await message.answer(get_text(lang, "correct_answer"))
+            feedback = get_text(lang, "correct_answer_with_quality", quality=quality_percentage)
+            await message.answer(feedback)
         else:
             await message.answer(
                 get_text(lang, "incorrect_answer",
                         correct=correct_translation,
-                        explanation=explanation or "")
+                        explanation=explanation or "",
+                        quality=quality_percentage)
             )
         
         # Clear state

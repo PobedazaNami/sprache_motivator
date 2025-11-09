@@ -182,8 +182,9 @@ class TrainingService:
     
     @staticmethod
     async def update_session(session: AsyncSession, training_id: int, 
-                            user_translation: str, is_correct: bool, explanation: str = None):
-        """Update training session with user's answer"""
+                            user_translation: str, is_correct: bool, explanation: str = None,
+                            quality_percentage: int = None):
+        """Update training session with user's answer and quality"""
         await session.execute(
             update(TrainingSession)
             .where(TrainingSession.id == training_id)
@@ -191,9 +192,47 @@ class TrainingService:
                 user_translation=user_translation,
                 is_correct=is_correct,
                 explanation=explanation,
+                quality_percentage=quality_percentage,
                 answered_at=datetime.now()
             )
         )
+        await session.commit()
+    
+    @staticmethod
+    async def update_daily_stats(session: AsyncSession, user_id: int, quality_percentage: int):
+        """Update daily statistics for user"""
+        from datetime import datetime, timezone
+        from bot.models.database import DailyStats
+        
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Get or create today's stats
+        result = await session.execute(
+            select(DailyStats).where(
+                DailyStats.user_id == user_id,
+                DailyStats.date == today
+            )
+        )
+        stats = result.scalar_one_or_none()
+        
+        if not stats:
+            stats = DailyStats(
+                user_id=user_id,
+                date=today,
+                total_tasks=0,
+                completed_tasks=0,
+                average_quality=0
+            )
+            session.add(stats)
+        
+        # Update stats
+        stats.total_tasks += 1
+        stats.completed_tasks += 1
+        
+        # Recalculate average quality
+        old_total = stats.average_quality * (stats.completed_tasks - 1)
+        stats.average_quality = int((old_total + quality_percentage) / stats.completed_tasks)
+        
         await session.commit()
     
     @staticmethod
