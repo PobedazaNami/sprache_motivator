@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
 ## Removed SQLAlchemy AsyncSession (migrated to MongoDB)
 
 from bot.models.database import UserStatus, InterfaceLanguage, async_session_maker
@@ -14,8 +15,11 @@ router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
     """Handle /start command"""
+    # Clear any active state
+    await state.clear()
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(
             session,
@@ -108,3 +112,25 @@ async def select_language(callback: CallbackQuery):
             )
     
     await callback.answer()
+
+
+@router.message(F.text.in_([
+    "🔙 Главное меню", "🔙 Головне меню"
+]))
+async def show_main_menu(message: Message, state: FSMContext):
+    """Return to main menu and clear state"""
+    # Clear any active state
+    await state.clear()
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        
+        if user.status != UserStatus.APPROVED:
+            return
+        
+        lang = user.interface_language.value
+        await message.answer(
+            get_text(lang, "main_menu"),
+            reply_markup=get_main_menu_keyboard(user)
+        )
+

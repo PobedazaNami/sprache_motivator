@@ -24,6 +24,9 @@ class TranslatorStates(StatesGroup):
 ]))
 async def translator_mode(message: Message, state: FSMContext):
     """Activate translator mode"""
+    # Clear any previous state
+    await state.clear()
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         
@@ -36,7 +39,16 @@ async def translator_mode(message: Message, state: FSMContext):
         await state.update_data(user_id=user.id, lang=lang, learning_lang=user.learning_language.value)
 
 
-@router.message(TranslatorStates.waiting_for_text)
+@router.message(
+    TranslatorStates.waiting_for_text,
+    ~F.text.in_([
+        "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер",
+        "⚙️ Настройки", "⚙️ Налаштування",
+        "📊 Статистика", "📊 Статистика",
+        "💾 Сохранённые слова", "💾 Збережені слова",
+        "🔙 Главное меню", "🔙 Головне меню"
+    ])
+)
 async def process_translation(message: Message, state: FSMContext):
     """Process translation request"""
     data = await state.get_data()

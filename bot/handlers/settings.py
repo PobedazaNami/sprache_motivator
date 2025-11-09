@@ -1,5 +1,6 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
 
 from bot.models.database import UserStatus, InterfaceLanguage, LearningLanguage, DifficultyLevel, async_session_maker
 from bot.services.database_service import UserService
@@ -19,8 +20,11 @@ router = Router()
 @router.message(F.text.in_([
     "⚙️ Настройки", "⚙️ Налаштування"
 ]))
-async def settings_menu(message: Message):
+async def settings_menu(message: Message, state: FSMContext):
     """Show settings menu"""
+    # Clear any previous state
+    await state.clear()
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         

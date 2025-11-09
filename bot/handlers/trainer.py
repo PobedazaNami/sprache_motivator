@@ -22,8 +22,11 @@ class TrainerStates(StatesGroup):
 @router.message(F.text.in_([
     "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер"
 ]))
-async def trainer_menu(message: Message):
+async def trainer_menu(message: Message, state: FSMContext):
     """Show daily trainer menu"""
+    # Clear any previous state (like translator mode)
+    await state.clear()
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         
