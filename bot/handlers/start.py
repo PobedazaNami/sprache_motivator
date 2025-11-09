@@ -24,8 +24,12 @@ async def cmd_start(message: Message):
             message.from_user.first_name,
             message.from_user.last_name
         )
-        
-        # If user is new or pending, show language selection
+        # Auto-approve on /start if this user is an admin but still pending
+        if user.status == UserStatus.PENDING and message.from_user.id in settings.admin_id_list:
+            await UserService.update_user(session, user, status=UserStatus.APPROVED)
+            await session.refresh(user)
+
+        # If user is new or pending (non-admin), show language selection
         if user.status == UserStatus.PENDING:
             # Get user's name (username or first name)
             user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name or "друже"
