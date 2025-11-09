@@ -83,9 +83,14 @@ class UserService:
     @staticmethod
     async def get_or_create_user(session, telegram_id: int, username: str = None,
                                  first_name: str = None, last_name: str = None) -> UserModel:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         col = await UserService._collection()
         doc = await col.find_one({"telegram_id": telegram_id})
         is_admin = telegram_id in settings.admin_id_list
+        
+        logger.info(f"User {telegram_id} check: is_admin={is_admin}, admin_list={settings.admin_id_list}")
         
         if not doc:
             doc = {
@@ -117,7 +122,9 @@ class UserService:
             doc["_id"] = res.inserted_id
         else:
             # If admin but status is not approved, auto-approve now
+            logger.info(f"Existing user {telegram_id}: is_admin={is_admin}, current_status={doc.get('status')}")
             if is_admin and doc.get("status") != UserStatus.APPROVED.value:
+                logger.info(f"Auto-approving admin user {telegram_id}")
                 await col.update_one(
                     {"telegram_id": telegram_id},
                     {"$set": {"status": UserStatus.APPROVED.value, "updated_at": _now()}}

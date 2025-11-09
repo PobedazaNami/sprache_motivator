@@ -26,6 +26,7 @@ async def main():
     """Main bot function"""
     # Initialize database
     logger.info("Initializing database...")
+    logger.info(f"Admin IDs configured: {settings.admin_id_list}")
     await init_db()
     
     # Initialize Redis
