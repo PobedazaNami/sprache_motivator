@@ -19,16 +19,12 @@ jobs:
       run: |
         MISSING_SECRETS=()
         
-        if [ -z "${{ secrets.BOT_TOKEN }}" ]; then
-          MISSING_SECRETS+=("BOT_TOKEN")
+        if [ -z "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
+          MISSING_SECRETS+=("TELEGRAM_BOT_TOKEN")
         fi
         
         if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
           MISSING_SECRETS+=("OPENAI_API_KEY")
-        fi
-        
-        if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ]; then
-          MISSING_SECRETS+=("POSTGRES_PASSWORD")
         fi
         
         if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
@@ -54,14 +50,14 @@ jobs:
     - name: Deploy to server
       env:
         # Bot configuration from GitHub secrets/variables
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        ADMIN_IDS: ${{ vars.ADMIN_IDS }}
+        ADMIN_IDS: ${{ vars.ADMIN_IDS || '123456789' }}
         
         # Database configuration from GitHub variables
         POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sprache_bot' }}
         POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sprache_user' }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'sprache_password' }}
         POSTGRES_HOST: ${{ vars.POSTGRES_HOST || 'postgres' }}
         POSTGRES_PORT: ${{ vars.POSTGRES_PORT || '5432' }}
         
@@ -76,9 +72,9 @@ jobs:
         CACHE_TTL_SECONDS: ${{ vars.CACHE_TTL_SECONDS || '2592000' }}
         
         # Server SSH configuration from GitHub secrets
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SSH_HOST: ${{ secrets.SSH_HOST }}
-        SSH_USER: ${{ secrets.SSH_USER }}
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY || '' }}
+        SSH_HOST: ${{ secrets.SSH_HOST || '49.13.219.223' }}
+        SSH_USER: ${{ secrets.SSH_USER || 'root' }}
         SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/sprache_motivator' }}
       
