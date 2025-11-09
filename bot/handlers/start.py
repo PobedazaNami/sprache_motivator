@@ -60,14 +60,22 @@ async def select_language(callback: CallbackQuery):
             session,
             callback.from_user.id
         )
-        # If admin somehow still pending, approve here as well
-        if user.status == UserStatus.PENDING and callback.from_user.id in settings.admin_id_list:
-            await UserService.update_user(session, user, status=UserStatus.APPROVED)
-            await session.refresh(user)
         
         # Update interface language
         interface_lang = InterfaceLanguage.UKRAINIAN if lang_code == "uk" else InterfaceLanguage.RUSSIAN
-        await UserService.update_user(session, user, interface_language=interface_lang)
+        
+        # If admin, approve immediately
+        if callback.from_user.id in settings.admin_id_list:
+            await UserService.update_user(
+                session, 
+                user, 
+                interface_language=interface_lang,
+                status=UserStatus.APPROVED
+            )
+            await session.refresh(user)
+        else:
+            # Regular user - just update language
+            await UserService.update_user(session, user, interface_language=interface_lang)
         
         # Show pending approval message or main menu
         if user.status == UserStatus.PENDING:
