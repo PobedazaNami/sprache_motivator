@@ -15,5 +15,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Run database migrations and start bot
-CMD ["sh", "-c", "alembic upgrade head && python -m bot.main"]
+# Start bot (migrations removed to avoid MissingGreenlet error)
+CMD ["python", "-m", "bot.main"]
