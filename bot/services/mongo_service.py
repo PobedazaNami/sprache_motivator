@@ -22,7 +22,8 @@ async def init() -> bool:
         return False
     _client = AsyncIOMotorClient(settings.MONGODB_URI)
     # If no database name specified in URI, use default 'sprache_motivator'
-    db_name = _client.get_default_database().name if _client.get_default_database() else "sprache_motivator"
+    default_db = _client.get_default_database()
+    db_name = default_db.name if default_db is not None else "sprache_motivator"
     _db = _client[db_name]
     # Create indexes (idempotent)
     await _db.daily_stats.create_index([("user_id", 1), ("date", 1)], unique=True)
