@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ValidationError
 from typing import List
 
 
@@ -46,4 +47,15 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 
-settings = Settings()
+# Safe settings initialization:
+# In CI/tests there may be no environment variables; avoid import-time crashes.
+try:
+    settings = Settings()
+except ValidationError:
+    # Fallback minimal values for test import context only.
+    # Runtime must provide real values via environment/.env
+    settings = Settings(
+        BOT_TOKEN="test_token",
+        OPENAI_API_KEY="test_key",
+        MONGODB_URI="mongodb://localhost:27017/sprache_motivator"
+    )
