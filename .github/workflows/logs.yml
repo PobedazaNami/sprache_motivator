@@ -1,0 +1,43 @@
+name: Fetch Server Logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      tail:
+        description: Lines to tail from bot logs
+        required: false
+        default: '200'
+
+jobs:
+  fetch-logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate SSH secrets
+        run: |
+          MISSING=()
+          test -n "${{ secrets.SSH_PRIVATE_KEY }}" || MISSING+=(SSH_PRIVATE_KEY)
+          test -n "${{ secrets.SSH_HOST }}" || MISSING+=(SSH_HOST)
+          test -n "${{ secrets.SSH_USER }}" || MISSING+=(SSH_USER)
+          if [ ${#MISSING[@]} -gt 0 ]; then echo "Missing secrets: ${MISSING[*]}"; exit 1; fi
+          echo "SSH secrets present"
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p 22 -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Fetch Docker and bot logs
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: 22
+          DEPLOY_PATH: /opt/sprache_motivator
+          TAIL: ${{ github.event.inputs.tail }}
+        run: |
+          set -euo pipefail
+          echo "Collecting logs from $SSH_HOST..."
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "bash -lc 'cd ${DEPLOY_PATH} && /usr/bin/docker compose ps && echo && /usr/bin/docker compose images || true'"
+          echo "--- Bot logs (last ${TAIL:-200} lines) ---"
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} "bash -lc 'cd ${DEPLOY_PATH} && /usr/bin/docker compose logs --tail=${TAIL:-200} bot || true'"

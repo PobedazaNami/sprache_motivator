@@ -69,7 +69,7 @@ class SchedulerService:
             # Get all users with enabled trainer
             users = await UserService.get_users_with_trainer_enabled(session)
             
-            now_kyiv = datetime.now(ZoneInfo('Europe/Kiev'))
+            now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
             current_time = now_kyiv.time()
             current_date = now_kyiv.date()
             
