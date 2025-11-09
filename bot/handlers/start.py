@@ -27,8 +27,11 @@ async def cmd_start(message: Message):
         
         # If user is new or pending, show language selection
         if user.status == UserStatus.PENDING:
+            # Get user's name (username or first name)
+            user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name or "друже"
+            welcome_text = f"👋 Вітаємо, {user_name}, в Sprache Motivator!\n\nОберіть мову інтерфейсу:"
             await message.answer(
-                get_text("ru", "welcome"),
+                welcome_text,
                 reply_markup=get_language_selection_keyboard()
             )
         elif user.status == UserStatus.REJECTED:

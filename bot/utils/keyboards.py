@@ -8,7 +8,7 @@ def get_language_selection_keyboard() -> InlineKeyboardMarkup:
     """Keyboard for selecting interface language"""
     builder = InlineKeyboardBuilder()
     builder.button(text="🇺🇦 Українська", callback_data="lang_uk")
-    builder.button(text="🇷🇺 Русский", callback_data="lang_ru")
+    builder.button(text="Русский", callback_data="lang_ru")
     builder.adjust(2)
     return builder.as_markup()
 
