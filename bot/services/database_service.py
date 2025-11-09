@@ -22,11 +22,14 @@ class UserService:
         user = result.scalar_one_or_none()
         
         if not user:
+            # Auto-approve admins
+            is_admin = telegram_id in settings.admin_id_list
             user = User(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
+                status=UserStatus.APPROVED if is_admin else UserStatus.PENDING
             )
             session.add(user)
             await session.commit()
