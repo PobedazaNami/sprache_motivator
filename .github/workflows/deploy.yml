@@ -34,8 +34,8 @@ jobs:
           # Assign variables from GitHub contexts
           TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
           OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-          # Static defaults (adjust in repo vars later if needed)
-          ADMIN_IDS='123456789'
+          # Admin ID (adjust in repo vars later if needed)
+          ADMIN_IDS='662790795'
           POSTGRES_DB='sprache_bot'
           POSTGRES_USER='sprache_user'
           # Use secret if provided, else default
@@ -99,6 +99,6 @@ jobs:
 
           ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "grep -i '^openai' ${DEPLOY_PATH}/requirements.txt || echo 'openai entry not found'; (sha256sum ${DEPLOY_PATH}/requirements.txt || shasum -a 256 ${DEPLOY_PATH}/requirements.txt || true) 2>/dev/null"
 
-          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "bash -c 'set -euo pipefail && cd /opt/sprache_motivator && /usr/bin/docker compose down || true && /usr/bin/docker compose build --no-cache bot && /usr/bin/docker compose up -d && /usr/bin/docker compose ps && /usr/bin/docker compose logs --tail=80 bot || true'"
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "bash -c 'set -euo pipefail && cd /opt/sprache_motivator && /usr/bin/docker compose down || true && /usr/bin/docker compose build --no-cache bot && /usr/bin/docker compose up -d && echo \n--- docker compose ps ---\n && /usr/bin/docker compose ps && echo \n--- bot logs (last 300 lines) ---\n && /usr/bin/docker compose logs --tail=300 bot || true'"
 
           rm -f ~/.ssh/deploy_key .env.tmp
