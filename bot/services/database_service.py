@@ -85,8 +85,9 @@ class UserService:
                                  first_name: str = None, last_name: str = None) -> UserModel:
         col = await UserService._collection()
         doc = await col.find_one({"telegram_id": telegram_id})
+        is_admin = telegram_id in settings.admin_id_list
+        
         if not doc:
-            is_admin = telegram_id in settings.admin_id_list
             doc = {
                 "telegram_id": telegram_id,
                 "username": username,
@@ -114,6 +115,15 @@ class UserService:
             }
             res = await col.insert_one(doc)
             doc["_id"] = res.inserted_id
+        else:
+            # If admin but status is not approved, auto-approve now
+            if is_admin and doc.get("status") != UserStatus.APPROVED.value:
+                await col.update_one(
+                    {"telegram_id": telegram_id},
+                    {"$set": {"status": UserStatus.APPROVED.value, "updated_at": _now()}}
+                )
+                doc["status"] = UserStatus.APPROVED.value
+        
         return UserModel(doc)
 
     @staticmethod
