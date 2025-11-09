@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Redis
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
+
+    # Optional MongoDB (if provided, some services can use it)
+    MONGODB_URI: str | None = None  # mongodb+srv://user:pass@cluster/dbname
     
     # Admin
     ADMIN_IDS: str = ""
@@ -38,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
+
+    @property
+    def mongo_enabled(self) -> bool:
+        return bool(self.MONGODB_URI)
     
     @property
     def admin_id_list(self) -> List[int]:

@@ -26,6 +26,7 @@ jobs:
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "Missing required secrets: ${MISSING[*]}"; exit 1; fi
           echo "All required secrets present"
+          # MongoDB is optional; if configured it will be passed through during deploy
 
       - name: Deploy to server
         run: |
@@ -37,6 +38,8 @@ jobs:
           ADMIN_IDS='123456789'
           POSTGRES_DB='sprache_bot'
           POSTGRES_USER='sprache_user'
+          # Use secret if provided, else default
+          # POSTGRES_PASSWORD optional: rely on default if secret absent
           POSTGRES_PASSWORD='sprache_password'
           POSTGRES_HOST='postgres'
           POSTGRES_PORT='5432'
@@ -47,8 +50,8 @@ jobs:
           MAX_TOKENS_PER_USER_DAILY='10000'
           CACHE_TTL_SECONDS='2592000'
           SSH_PRIVATE_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
-          SSH_HOST='49.13.219.223'
-          SSH_USER='root'
+          SSH_HOST='${{ secrets.SSH_HOST }}'
+          SSH_USER='${{ secrets.SSH_USER }}'
           SSH_PORT='22'
           DEPLOY_PATH='/opt/sprache_motivator'
 
@@ -76,6 +79,7 @@ jobs:
           echo "DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES:-08:00,14:00,20:00}" >> .env.tmp
           echo "MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY:-10000}" >> .env.tmp
           echo "CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-2592000}" >> .env.tmp
+          # Optional MongoDB URI can be added manually on server .env if needed
 
           ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
 

@@ -8,6 +8,8 @@ from bot.services.database_service import UserService, TrainingService
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
 from bot.utils.keyboards import get_trainer_keyboard, get_main_menu_keyboard
+from bot.config import settings
+from bot.services import mongo_service
 
 
 router = Router()
@@ -241,6 +243,12 @@ async def send_training_task(bot, user_id: int):
             expected_translation,
             difficulty
         )
+        # Optional mirror to Mongo
+        if settings.mongo_enabled and mongo_service.is_ready():
+            try:
+                await mongo_service.store_training_session(user.id, sentence, expected_translation, difficulty.value)
+            except Exception:
+                pass
         
         # Send task to user
         await bot.send_message(

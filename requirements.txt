@@ -10,6 +10,9 @@ sqlalchemy==2.0.23
 alembic==1.13.1
 APScheduler==3.10.4
 
+# Optional MongoDB support
+motor==3.4.0
+
 # Development dependencies
 pytest==7.4.3
 pytest-asyncio==0.21.1

@@ -11,6 +11,7 @@ from bot.services.database_service import UserService
 from bot.services.scheduler_service import scheduler_service
 from bot.handlers import start, translator, trainer, settings as settings_handler, admin
 from bot.models.database import UserStatus
+from bot.services import mongo_service
 
 
 # Configure logging
@@ -30,6 +31,18 @@ async def main():
     # Initialize Redis
     logger.info("Connecting to Redis...")
     await redis_service.connect()
+
+    # Optional MongoDB initialization
+    if settings.mongo_enabled:
+        logger.info("Initializing MongoDB (optional)...")
+        try:
+            initialized = await mongo_service.init()
+            if initialized:
+                logger.info("MongoDB initialized successfully")
+            else:
+                logger.warning("MongoDB URI present but initialization returned False")
+        except Exception as e:
+            logger.error(f"MongoDB initialization failed: {e}")
     
     # Create bot and dispatcher
     bot = Bot(token=settings.BOT_TOKEN)
@@ -56,6 +69,7 @@ async def main():
         logger.info("Shutting down...")
         scheduler_service.scheduler.shutdown()
         await redis_service.disconnect()
+        # Mongo does not require explicit close; relying on motor's internal cleanup.
         await bot.session.close()
 
 

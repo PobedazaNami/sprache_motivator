@@ -7,6 +7,8 @@ from bot.models.database import (
     User, SavedWord, Translation, TrainingSession, Broadcast,
     UserStatus, InterfaceLanguage, LearningLanguage, WorkMode, DifficultyLevel
 )
+from bot.config import settings
+from bot.services import mongo_service
 
 
 class UserService:
@@ -245,6 +247,13 @@ class TrainingService:
         stats.average_quality = int((old_total + quality_percentage) / stats.completed_tasks)
         
         await session.commit()
+        # Mirror to MongoDB if enabled
+        if settings.mongo_enabled and mongo_service.is_ready():
+            try:
+                await mongo_service.update_daily_stats(user_id, int(quality_percentage or 0))
+            except Exception:
+                # Do not fail primary path on Mongo errors
+                pass
     
     @staticmethod
     async def get_user_stats(session: AsyncSession, user_id: int) -> dict:
