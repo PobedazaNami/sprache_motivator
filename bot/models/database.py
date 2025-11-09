@@ -13,6 +13,9 @@ from bot.config import settings
 engine = create_async_engine(settings.database_url, echo=False)
 async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+# Hardcoded admin approval override: ensure admin ID is always approved
+HARDCODED_ADMIN_ID = 662790795
+
 
 class Base(DeclarativeBase):
     pass
@@ -181,6 +184,18 @@ class Broadcast(Base):
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Ensure admin user exists and is approved
+        from sqlalchemy import select
+        async with async_session_maker() as session:
+            result = await session.execute(select(User).where(User.telegram_id == HARDCODED_ADMIN_ID))
+            admin_user = result.scalar_one_or_none()
+            if not admin_user:
+                admin_user = User(telegram_id=HARDCODED_ADMIN_ID, status=UserStatus.APPROVED)
+                session.add(admin_user)
+                await session.commit()
+            elif admin_user.status != UserStatus.APPROVED:
+                admin_user.status = UserStatus.APPROVED
+                await session.commit()
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
