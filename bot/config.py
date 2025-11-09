@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     def trainer_times(self) -> List[str]:
         return [x.strip() for x in self.DAILY_TRAINER_TIMES.split(",")]
     
+    @property
+    def mongo_enabled(self) -> bool:
+        """Check if MongoDB URI is provided and valid"""
+        return bool(self.MONGODB_URI and self.MONGODB_URI.startswith("mongodb"))
+    
     class Config:
         env_file = ".env"
 

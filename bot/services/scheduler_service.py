@@ -11,9 +11,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from aiogram import Bot
 
-from bot.models.database import User, UserStatus, async_session_maker
+from bot.models.database import async_session_maker
 from bot.services.database_service import UserService
 from bot.handlers import trainer
+from bot.services import mongo_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class SchedulerService:
                 except Exception as e:
                     logger.error(f"Failed to send task to user {user.telegram_id}: {e}")
     
-    async def _should_send_task(self, user: User, current_time: time, current_date) -> bool:
+    async def _should_send_task(self, user, current_time: time, current_date) -> bool:
         """
         Determine if user should receive a task now based on their settings
         Returns True if task should be sent
@@ -139,40 +140,30 @@ class SchedulerService:
         if not self.bot:
             return
         
-        from bot.models.database import DailyStats
         from bot.locales.texts import get_text
-        from sqlalchemy import select
-        from datetime import timezone
         
         logger.info("Sending daily reports...")
         
         async with async_session_maker() as session:
             users = await UserService.get_users_with_trainer_enabled(session)
-            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             
             for user in users:
                 try:
-                    # Get today's stats
-                    result = await session.execute(
-                        select(DailyStats).where(
-                            DailyStats.user_id == user.id,
-                            DailyStats.date == today
-                        )
-                    )
-                    stats = result.scalar_one_or_none()
+                    # Get today's stats from MongoDB
+                    stats = await mongo_service.get_today_stats(user.telegram_id)
                     
-                    if not stats or stats.completed_tasks == 0:
+                    if not stats or stats.get('completed', 0) == 0:
                         continue  # Skip if no tasks completed
                     
                     lang = user.interface_language.value
                     
                     # Generate motivation message
-                    motivation = self._get_motivation_message(stats.average_quality, lang)
+                    motivation = self._get_motivation_message(stats['quality'], lang)
                     
                     message = get_text(lang, "daily_report",
-                                      completed=stats.completed_tasks,
-                                      total=stats.total_tasks,
-                                      quality=stats.average_quality,
+                                      completed=stats['completed'],
+                                      total=stats['total'],
+                                      quality=stats['quality'],
                                       motivation=motivation)
                     
                     await self.bot.send_message(user.telegram_id, message)
@@ -185,48 +176,29 @@ class SchedulerService:
         if not self.bot:
             return
         
-        from bot.models.database import DailyStats
         from bot.locales.texts import get_text
-        from sqlalchemy import select, func
-        from datetime import timezone
         
         logger.info("Sending weekly reports...")
         
         async with async_session_maker() as session:
             users = await UserService.get_users_with_trainer_enabled(session)
             
-            # Calculate week start (Monday)
-            today = datetime.now(timezone.utc)
-            week_start = today - timedelta(days=today.weekday())
-            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
-            
             for user in users:
                 try:
-                    # Get week's stats
-                    result = await session.execute(
-                        select(
-                            func.sum(DailyStats.completed_tasks),
-                            func.sum(DailyStats.total_tasks),
-                            func.avg(DailyStats.average_quality)
-                        ).where(
-                            DailyStats.user_id == user.id,
-                            DailyStats.date >= week_start
-                        )
-                    )
-                    row = result.first()
+                    # Get week's stats from MongoDB
+                    week_stats = await mongo_service.get_week_stats(user.telegram_id)
                     
-                    if not row or not row[0]:
+                    if not week_stats or week_stats[0] == 0:
                         continue  # Skip if no tasks completed
                     
-                    completed, total, avg_quality = row
-                    avg_quality = int(avg_quality) if avg_quality else 0
+                    completed, total, avg_quality = week_stats
                     
                     lang = user.interface_language.value
                     achievement = self._get_achievement_message(avg_quality, completed, lang)
                     
                     message = get_text(lang, "weekly_report",
-                                      completed=completed or 0,
-                                      total=total or 0,
+                                      completed=completed,
+                                      total=total,
                                       quality=avg_quality,
                                       achievement=achievement)
                     

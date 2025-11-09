@@ -48,3 +48,9 @@ def async_session_maker():
         async def __aexit__(self, exc_type, exc, tb):
             return False
     return _Dummy()
+
+
+async def init_db():
+    """Initialize MongoDB database connection"""
+    from bot.services import mongo_service
+    await mongo_service.init()
