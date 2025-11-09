@@ -53,7 +53,8 @@ class TestConfig:
         settings = Settings(
             BOT_TOKEN="test_token",
             OPENAI_API_KEY="test_key",
-            ADMIN_IDS="123,456"
+            ADMIN_IDS="123,456",
+            MONGODB_URI="mongodb://localhost:27017/sprache_motivator"
         )
         assert settings.BOT_TOKEN == "test_token"
         assert settings.OPENAI_API_KEY == "test_key"
@@ -64,7 +65,8 @@ class TestConfig:
         settings = Settings(
             BOT_TOKEN="test",
             OPENAI_API_KEY="test",
-            ADMIN_IDS="123,456,789"
+            ADMIN_IDS="123,456,789",
+            MONGODB_URI="mongodb://localhost:27017/sprache_motivator"
         )
         assert settings.admin_id_list == [123, 456, 789]
     
@@ -74,24 +76,20 @@ class TestConfig:
         settings = Settings(
             BOT_TOKEN="test",
             OPENAI_API_KEY="test",
-            DAILY_TRAINER_TIMES="09:00,15:00,21:00"
+            DAILY_TRAINER_TIMES="09:00,15:00,21:00",
+            MONGODB_URI="mongodb://localhost:27017/sprache_motivator"
         )
         assert settings.trainer_times == ["09:00", "15:00", "21:00"]
-    
-    def test_database_url_generation(self):
-        """Test database URL generation"""
+
+    def test_mongodb_uri_presence(self):
+        """MongoDB URI is required and preserved in settings"""
         from bot.config import Settings
         settings = Settings(
             BOT_TOKEN="test",
             OPENAI_API_KEY="test",
-            POSTGRES_USER="user",
-            POSTGRES_PASSWORD="pass",
-            POSTGRES_HOST="localhost",
-            POSTGRES_PORT=5432,
-            POSTGRES_DB="testdb"
+            MONGODB_URI="mongodb://localhost:27017/sprache_motivator"
         )
-        expected = "postgresql+asyncpg://user:pass@localhost:5432/testdb"
-        assert settings.database_url == expected
+        assert settings.MONGODB_URI.startswith("mongodb")
 
 
 class TestModels:

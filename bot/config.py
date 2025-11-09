@@ -9,16 +9,9 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str
     
-    # MongoDB (optional for tests; required in production)
+    # MongoDB (required)
     # Example: mongodb+srv://user:pass@cluster/dbname
-    MONGODB_URI: str | None = None
-
-    # Keep legacy Postgres settings for test compatibility (project runtime uses MongoDB)
-    POSTGRES_DB: str = "sprache_bot"
-    POSTGRES_USER: str = "sprache_user"
-    POSTGRES_PASSWORD: str = "sprache_password"
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
+    MONGODB_URI: str
     
     # Redis
     REDIS_HOST: str = "redis"
@@ -35,14 +28,6 @@ class Settings(BaseSettings):
     MAX_TOKENS_PER_USER_DAILY: int = 10000
     CACHE_TTL_SECONDS: int = 2592000  # 30 days
     
-    @property
-    def database_url(self) -> str:
-        """Legacy Postgres URL kept for unit tests only."""
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
-
     @property
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
