@@ -105,7 +105,43 @@ def get_trainer_keyboard(user: User) -> InlineKeyboardMarkup:
     else:
         builder.button(text=get_text(lang, "btn_start_trainer"), callback_data="trainer_start")
     
+    # Настройки тренажера
+    builder.button(text=get_text(lang, "btn_trainer_settings"), callback_data="trainer_settings")
+    
+    builder.adjust(1, 1)
+    return builder.as_markup()
+
+
+def get_trainer_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for trainer settings"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_set_time_period"), callback_data="trainer_set_time")
+    builder.button(text=get_text(lang, "btn_set_message_count"), callback_data="trainer_set_count")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_back")
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_time_period_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting time period"""
+    builder = InlineKeyboardBuilder()
+    # Предустановленные периоды
+    builder.button(text="🌅 06:00 - 12:00", callback_data="time_06_12")
+    builder.button(text="☀️ 09:00 - 18:00", callback_data="time_09_18")
+    builder.button(text="🌆  12:00 - 20:00", callback_data="time_12_20")
+    builder.button(text="🌙 15:00 - 23:00", callback_data="time_15_23")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
+    builder.adjust(2, 2, 1)
+    return builder.as_markup()
+
+
+def get_message_count_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting message count per day"""
+    builder = InlineKeyboardBuilder()
+    for i in range(1, 11):
+        builder.button(text=f"{i}", callback_data=f"count_{i}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
+    builder.adjust(5, 5, 1)
     return builder.as_markup()
 
 

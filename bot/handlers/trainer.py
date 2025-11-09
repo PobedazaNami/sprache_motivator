@@ -81,6 +81,131 @@ async def stop_trainer(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "trainer_settings")
+async def show_trainer_settings(callback: CallbackQuery):
+    """Show trainer settings menu"""
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        text = get_text(lang, "trainer_settings_menu",
+                       start=user.trainer_start_time or "09:00",
+                       end=user.trainer_end_time or "21:00",
+                       count=user.trainer_messages_per_day or 3)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_back")
+async def back_to_trainer_menu(callback: CallbackQuery):
+    """Return to trainer main menu"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        if user.daily_trainer_enabled:
+            text = get_text(lang, "trainer_started")
+        else:
+            text = get_text(lang, "trainer_menu")
+        
+        await callback.message.edit_text(text, reply_markup=get_trainer_keyboard(user))
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_set_time")
+async def show_time_selection(callback: CallbackQuery):
+    """Show time period selection"""
+    from bot.utils.keyboards import get_time_period_keyboard
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_time_period"),
+            reply_markup=get_time_period_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("time_"))
+async def set_time_period(callback: CallbackQuery):
+    """Set training time period"""
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    # Parse time from callback data: time_09_18 -> 09:00, 18:00
+    parts = callback.data.split("_")
+    start_hour = parts[1]
+    end_hour = parts[2]
+    start_time = f"{start_hour}:00"
+    end_time = f"{end_hour}:00"
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Update user settings
+        await UserService.update_user(session, user, 
+                                      trainer_start_time=start_time,
+                                      trainer_end_time=end_time)
+        
+        await callback.message.edit_text(
+            get_text(lang, "time_period_updated", start=start_time, end=end_time),
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_set_count")
+async def show_count_selection(callback: CallbackQuery):
+    """Show message count selection"""
+    from bot.utils.keyboards import get_message_count_keyboard
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_message_count"),
+            reply_markup=get_message_count_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("count_"))
+async def set_message_count(callback: CallbackQuery):
+    """Set daily message count"""
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    # Parse count from callback data: count_5 -> 5
+    count = int(callback.data.split("_")[1])
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Update user settings
+        await UserService.update_user(session, user, trainer_messages_per_day=count)
+        
+        await callback.message.edit_text(
+            get_text(lang, "message_count_updated", count=count),
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
 async def send_training_task(bot, user_id: int):
     """Send a training task to user (called by scheduler)"""
     async with async_session_maker() as session:
