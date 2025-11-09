@@ -71,6 +71,17 @@ class UserService:
         }
     
     @staticmethod
+    async def get_users_with_trainer_enabled(session: AsyncSession) -> List[User]:
+        """Get all users with trainer enabled"""
+        result = await session.execute(
+            select(User).where(
+                User.status == UserStatus.APPROVED,
+                User.daily_trainer_enabled == True
+            )
+        )
+        return result.scalars().all()
+    
+    @staticmethod
     async def get_top_users(session: AsyncSession, limit: int = 10) -> List[User]:
         """Get top users by activity score"""
         result = await session.execute(

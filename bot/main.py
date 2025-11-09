@@ -8,6 +8,7 @@ from bot.config import settings
 from bot.models.database import init_db, async_session_maker
 from bot.services.redis_service import redis_service
 from bot.services.database_service import UserService
+from bot.services.scheduler_service import scheduler_service
 from bot.handlers import start, translator, trainer, settings as settings_handler, admin
 from bot.models.database import UserStatus
 
@@ -18,55 +19,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-async def send_daily_tasks(bot: Bot):
-    """Send daily training tasks to all users with trainer enabled"""
-    logger.info("Sending daily training tasks...")
-    
-    async with async_session_maker() as session:
-        from sqlalchemy import select
-        from bot.models.database import User
-        
-        result = await session.execute(
-            select(User).where(
-                User.status == UserStatus.APPROVED,
-                User.daily_trainer_enabled == True
-            )
-        )
-        users = result.scalars().all()
-        
-        for user in users:
-            try:
-                await trainer.send_training_task(bot, user.telegram_id)
-                await asyncio.sleep(0.1)  # Avoid hitting rate limits
-            except Exception as e:
-                logger.error(f"Failed to send task to user {user.telegram_id}: {e}")
-        
-        logger.info(f"Sent training tasks to {len(users)} users")
-
-
-async def schedule_daily_tasks(bot: Bot):
-    """Schedule daily tasks at configured times"""
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from apscheduler.triggers.cron import CronTrigger
-    
-    scheduler = AsyncIOScheduler()
-    
-    # Schedule tasks at configured times
-    for time_str in settings.trainer_times:
-        hour, minute = map(int, time_str.split(":"))
-        scheduler.add_job(
-            send_daily_tasks,
-            CronTrigger(hour=hour, minute=minute),
-            args=[bot],
-            id=f"daily_task_{time_str}",
-            replace_existing=True
-        )
-        logger.info(f"Scheduled daily task at {time_str}")
-    
-    scheduler.start()
-    return scheduler
 
 
 async def main():
@@ -91,9 +43,10 @@ async def main():
     # Trainer router last because it has a catch-all text handler
     dp.include_router(trainer.router)
     
-    # Start scheduler
-    logger.info("Starting scheduler...")
-    scheduler = await schedule_daily_tasks(bot)
+    # Start new scheduler service with individual user scheduling
+    logger.info("Starting scheduler service...")
+    scheduler_service.set_bot(bot)
+    await scheduler_service.start()
     
     try:
         logger.info("Bot started!")
@@ -101,7 +54,7 @@ async def main():
     finally:
         # Cleanup
         logger.info("Shutting down...")
-        scheduler.shutdown()
+        scheduler_service.scheduler.shutdown()
         await redis_service.disconnect()
         await bot.session.close()
 
