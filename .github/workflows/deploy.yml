@@ -31,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
           # Assign variables from GitHub contexts
-          BOT_TOKEN='${{ secrets.TELEGRAM_BOT_TOKEN }}'
-          OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}'
+          BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
           # Static defaults (adjust in repo vars later if needed)
           ADMIN_IDS='123456789'
           POSTGRES_DB='sprache_bot'
@@ -46,7 +46,7 @@ jobs:
           DAILY_TRAINER_TIMES='08:00,14:00,20:00'
           MAX_TOKENS_PER_USER_DAILY='10000'
           CACHE_TTL_SECONDS='2592000'
-          SSH_PRIVATE_KEY='${{ secrets.SSH_PRIVATE_KEY }}'
+          SSH_PRIVATE_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
           SSH_HOST='49.13.219.223'
           SSH_USER='root'
           SSH_PORT='22'
