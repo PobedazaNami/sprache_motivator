@@ -68,6 +68,14 @@ class TranslationService:
     
     async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str) -> str:
         """Generate a sentence for daily trainer"""
+        # Map language codes to full names for clarity
+        lang_names = {
+            "uk": "Ukrainian",
+            "ru": "Russian", 
+            "en": "English",
+            "de": "German"
+        }
+        
         difficulty_descriptions = {
             "A2": "elementary level (A2)",
             "B1": "intermediate level (B1)",
@@ -75,7 +83,9 @@ class TranslationService:
             "A2-B2": "mixed difficulty between A2 and B2"
         }
         
-        prompt = f"Generate a simple sentence in {interface_lang} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
+        interface_lang_name = lang_names.get(interface_lang, interface_lang)
+        
+        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -100,32 +110,50 @@ class TranslationService:
         Check if user's translation is correct
         Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
-        prompt = f"""Compare these two translations and determine if they are semantically equivalent:
+        # Map language codes to full names for clarity
+        lang_names = {
+            "uk": "Ukrainian",
+            "ru": "Russian", 
+            "en": "English",
+            "de": "German"
+        }
+        
+        interface_lang_name = lang_names.get(interface_lang, interface_lang)
+        expected_lang_name = lang_names.get(expected_lang, expected_lang)
+        
+        prompt = f"""You are a strict language teacher checking a translation exercise.
 
-Original sentence: {original}
-User's translation: {user_translation}
-Target language: {expected_lang}
+Original sentence (to be translated): {original}
+User's translation attempt: {user_translation}
+Expected target language: {expected_lang_name}
 
-Respond in {interface_lang} with:
-1. "CORRECT" or "INCORRECT"
-2. The correct translation
-3. Quality percentage (0-100%) - evaluate grammar, vocabulary, word order, natural phrasing
-4. Brief grammatical explanation
+Your task:
+1. First check if the user's answer is even attempting to translate the original sentence or if it's completely off-topic/irrelevant
+2. If off-topic (e.g., single random word, unrelated sentence), mark as INCORRECT with quality 0-20%
+3. If on-topic, evaluate the translation quality based on:
+   - Semantic accuracy (does it convey the same meaning?)
+   - Grammar correctness
+   - Vocabulary appropriateness
+   - Natural phrasing in {expected_lang_name}
+4. Provide the correct translation of the ORIGINAL sentence
+5. Give explanation about the ORIGINAL sentence and how to translate it correctly (NOT about the user's wrong answer)
 
-Format your response as:
+IMPORTANT: Write ALL explanations in {interface_lang_name} language.
+
+Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [correct translation]
+TRANSLATION: [correct translation of the original sentence in {expected_lang_name}]
 QUALITY: [0-100]
-EXPLANATION: [explanation in {interface_lang}]"""
+EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation]"""
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a language teacher checking translations."},
+                {"role": "system", "content": f"You are a strict language teacher. Always respond in {interface_lang_name} for explanations."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=300
+            max_tokens=400
         )
         
         result = response.choices[0].message.content.strip()
@@ -153,6 +181,19 @@ EXPLANATION: [explanation in {interface_lang}]"""
         
         explanation_line = [line for line in lines if "EXPLANATION:" in line]
         explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
+        
+        # If no explanation was found, collect remaining lines as explanation
+        if not explanation:
+            explanation_started = False
+            explanation_parts = []
+            for line in lines:
+                if "EXPLANATION:" in line:
+                    explanation_started = True
+                    explanation_parts.append(line.replace("EXPLANATION:", "").strip())
+                elif explanation_started:
+                    explanation_parts.append(line.strip())
+            if explanation_parts:
+                explanation = " ".join(explanation_parts)
         
         return is_correct, correct_translation, explanation, quality_percentage
 
