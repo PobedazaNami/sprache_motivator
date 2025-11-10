@@ -115,6 +115,16 @@ async def select_language(callback: CallbackQuery):
 
 
 @router.message(F.text.in_([
+    "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер"
+]))
+async def switch_to_trainer(message: Message, state: FSMContext):
+    """Switch to trainer mode (high priority handler)"""
+    # Import here to avoid circular dependency
+    from bot.handlers.trainer import trainer_menu
+    await trainer_menu(message, state)
+
+
+@router.message(F.text.in_([
     "🔙 Главное меню", "🔙 Головне меню"
 ]))
 async def show_main_menu(message: Message, state: FSMContext):
