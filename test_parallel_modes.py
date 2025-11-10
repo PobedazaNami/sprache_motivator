@@ -40,12 +40,16 @@ async def test_translator_checks_training_state():
             "state": "awaiting_training_answer",
             "data": {"training_id": "507f1f77bcf86cd799439011"}
         })
+        mock_redis.set = AsyncMock()  # Mock the set method
         
         # Call the handler
         await process_translation(message, state)
         
         # Verify that state was cleared (to let trainer handle it)
         state.clear.assert_called_once()
+        
+        # Verify that translator state was saved
+        mock_redis.set.assert_called_once()
         
         # Verify that translation was NOT processed
         message.answer.assert_not_called()
@@ -142,6 +146,103 @@ async def test_trainer_handler_processes_with_cleared_state():
             "data": {"training_id": "507f1f77bcf86cd799439011"}
         })
         mock_redis.clear_user_state = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # No saved translator state
+        mock_redis.set = AsyncMock()
+        
+        # Mock MongoDB training session
+        from bson import ObjectId
+        training_id = ObjectId("507f1f77bcf86cd799439011")
+        mock_training_col = MagicMock()
+        mock_training_col.find_one = AsyncMock(return_value={
+            "_id": training_id,
+            "sentence": "Test sentence",
+            "expected_translation": "Тестове речення"
+        })
+        mock_mongo.db = MagicMock(return_value=MagicMock(
+            training_sessions=mock_training_col
+        ))
+        
+        # Mock user
+        mock_user = MagicMock()
+        mock_user.id = 1
+        mock_user.interface_language.value = "uk"
+        mock_user.learning_language.value = "en"
+        mock_user.total_answers = 0
+        mock_user.correct_answers = 0
+        mock_user_service.get_or_create_user = AsyncMock(return_value=mock_user)
+        mock_user_service.update_user = AsyncMock()
+        mock_user_service.increment_activity = AsyncMock()
+        
+        # Mock translation check
+        mock_translation.check_translation = AsyncMock(return_value=(True, "Correct", "Good!", 95))
+        
+        # Mock training service
+        mock_training_service.update_session = AsyncMock()
+        mock_training_service.update_daily_stats = AsyncMock()
+        
+        # Mock session
+        mock_session_instance = AsyncMock()
+        mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
+        mock_session_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_session.return_value = mock_session_instance
+        
+        # Mock FSM context
+        state = MagicMock(spec=FSMContext)
+        state.set_state = AsyncMock()
+        state.update_data = AsyncMock()
+        
+        # Call the handler
+        await check_training_answer(message, state)
+        
+        # Verify training answer was processed
+        mock_training_service.update_session.assert_called_once()
+        mock_redis.clear_user_state.assert_called_once_with(12345)
+        message.answer.assert_called_once()
+    
+    print("✓ Trainer handler processes answers correctly regardless of FSM state")
+
+
+@pytest.mark.asyncio
+async def test_translator_state_restored_after_training():
+    """Test that translator state is restored after training answer is submitted."""
+    from bot.handlers.trainer import check_training_answer
+    
+    # Mock message
+    message = MagicMock(spec=Message)
+    message.from_user = MagicMock(spec=User)
+    message.from_user.id = 12345
+    message.text = "My training answer"
+    message.answer = AsyncMock()
+    
+    # Mock FSM context
+    state = MagicMock(spec=FSMContext)
+    state.set_state = AsyncMock()
+    state.update_data = AsyncMock()
+    
+    # Mock Redis with active training session and saved translator state
+    with patch('bot.services.redis_service.redis_service') as mock_redis, \
+         patch('bot.handlers.trainer.async_session_maker') as mock_session, \
+         patch('bot.handlers.trainer.mongo_service') as mock_mongo, \
+         patch('bot.handlers.trainer.translation_service') as mock_translation, \
+         patch('bot.handlers.trainer.UserService') as mock_user_service, \
+         patch('bot.handlers.trainer.TrainingService') as mock_training_service:
+        
+        # Active training session in Redis
+        mock_redis.get_user_state = AsyncMock(return_value={
+            "state": "awaiting_training_answer",
+            "data": {"training_id": "507f1f77bcf86cd799439011"}
+        })
+        mock_redis.clear_user_state = AsyncMock()
+        
+        # Saved translator state
+        import json
+        saved_state = json.dumps({
+            "lang": "uk",
+            "learning_lang": "en",
+            "user_id": 1
+        })
+        mock_redis.get = AsyncMock(return_value=saved_state)
+        mock_redis.set = AsyncMock()
         
         # Mock MongoDB training session
         from bson import ObjectId
@@ -181,14 +282,17 @@ async def test_trainer_handler_processes_with_cleared_state():
         mock_session.return_value = mock_session_instance
         
         # Call the handler
-        await check_training_answer(message)
+        await check_training_answer(message, state)
         
         # Verify training answer was processed
         mock_training_service.update_session.assert_called_once()
         mock_redis.clear_user_state.assert_called_once_with(12345)
         message.answer.assert_called_once()
+        
+        # Verify saved state was retrieved (attempt to restore)
+        mock_redis.get.assert_called()
     
-    print("✓ Trainer handler processes answers correctly regardless of FSM state")
+    print("✓ Trainer processes answer and attempts to restore translator state")
 
 
 if __name__ == "__main__":

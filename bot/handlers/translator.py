@@ -58,7 +58,15 @@ async def process_translation(message: Message, state: FSMContext):
     training_state = await redis_service.get_user_state(message.from_user.id)
     if training_state and training_state.get("state") == "awaiting_training_answer":
         # User has active training session - let trainer handler process this
-        # Clear translator state to allow trainer to handle the message
+        # Save current translator state to Redis for restoration after training
+        import json
+        current_data = await state.get_data()
+        await redis_service.set(
+            f"saved_translator_state:{message.from_user.id}",
+            json.dumps(current_data),
+            ex=3600  # 1 hour expiry
+        )
+        # Clear translator FSM state to allow trainer to handle the message
         await state.clear()
         return
     

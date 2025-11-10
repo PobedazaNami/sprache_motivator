@@ -262,7 +262,7 @@ async def send_training_task(bot, user_id: int):
 
 
 @router.message(F.text)
-async def check_training_answer(message: Message):
+async def check_training_answer(message: Message, state: FSMContext):
     """
     Check if message is an answer to training task.
     
@@ -350,5 +350,25 @@ async def check_training_answer(message: Message):
                         quality=quality_percentage)
             )
         
-        # Clear state
+        # Clear training state
         await redis_service.clear_user_state(message.from_user.id)
+        
+        # Restore translator state if it was saved
+        saved_state_key = f"saved_translator_state:{message.from_user.id}"
+        saved_state = await redis_service.get(saved_state_key)
+        if saved_state and saved_state != "{}":
+            try:
+                # Import here to avoid circular dependency
+                from bot.handlers.translator import TranslatorStates
+                import json
+                
+                # Restore the translator state using the FSM context passed to this handler
+                saved_data = json.loads(saved_state)
+                await state.set_state(TranslatorStates.waiting_for_text)
+                await state.update_data(**saved_data)
+                
+                # Clear the saved state
+                await redis_service.set(saved_state_key, "{}", ex=1)
+            except Exception:
+                # If restoration fails, user can re-enter translator mode manually
+                pass
