@@ -135,6 +135,105 @@ class SchedulerService:
         end_minutes = end.hour * 60 + end.minute
         return end_minutes - start_minutes
     
+    async def get_daily_progress(self, user) -> tuple[int, int]:
+        """
+        Get user's daily progress
+        Returns (tasks_sent_today, total_tasks_per_day)
+        """
+        from bot.services.redis_service import redis_service
+        
+        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
+        current_date = now_kyiv.date()
+        
+        tasks_today_key = f"tasks_today:{user.id}:{current_date}"
+        tasks_sent = await redis_service.get(tasks_today_key)
+        tasks_sent = int(tasks_sent) if tasks_sent else 0
+        
+        messages_per_day = user.trainer_messages_per_day or 3
+        
+        return tasks_sent, messages_per_day
+    
+    async def calculate_next_task_time(self, user) -> tuple[datetime | None, str]:
+        """
+        Calculate when the next task will be sent to the user
+        Returns (next_task_datetime, formatted_countdown_string)
+        If no more tasks today, returns (None, message_about_tomorrow)
+        """
+        from bot.services.redis_service import redis_service
+        
+        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
+        current_time = now_kyiv.time()
+        current_date = now_kyiv.date()
+        
+        # Get user settings
+        start_time = time.fromisoformat(user.trainer_start_time or "09:00")
+        end_time = time.fromisoformat(user.trainer_end_time or "21:00")
+        messages_per_day = user.trainer_messages_per_day or 3
+        
+        # Get tasks sent today
+        tasks_today_key = f"tasks_today:{user.id}:{current_date}"
+        tasks_sent = await redis_service.get(tasks_today_key)
+        tasks_sent = int(tasks_sent) if tasks_sent else 0
+        
+        # Check if all tasks for today are complete
+        if tasks_sent >= messages_per_day:
+            # Next task is tomorrow at start time
+            tomorrow = now_kyiv + timedelta(days=1)
+            next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+            time_diff = next_task_dt - now_kyiv
+            hours = int(time_diff.total_seconds() // 3600)
+            minutes = int((time_diff.total_seconds() % 3600) // 60)
+            return next_task_dt, f"{hours}ч {minutes}мин"
+        
+        # Calculate time slots
+        window_minutes = self._time_diff_minutes(start_time, end_time)
+        slot_size = window_minutes // messages_per_day
+        
+        # Get current slot
+        last_slot_key = f"last_slot:{user.id}:{current_date}"
+        last_slot = await redis_service.get(last_slot_key)
+        last_slot = int(last_slot) if last_slot else -1
+        
+        # Calculate next slot start time
+        next_slot = last_slot + 1
+        
+        # If we haven't started today yet
+        if current_time < start_time:
+            # Next task is at start time
+            next_task_dt = datetime.combine(current_date, start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+        else:
+            # Calculate the start time of the next slot
+            next_slot_start_minutes = start_time.hour * 60 + start_time.minute + (next_slot * slot_size)
+            next_slot_hour = next_slot_start_minutes // 60
+            next_slot_minute = next_slot_start_minutes % 60
+            
+            # Create next task time
+            if next_slot_hour < 24:
+                next_slot_time = time(hour=next_slot_hour, minute=next_slot_minute)
+                next_task_dt = datetime.combine(current_date, next_slot_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                
+                # If this time has already passed or is beyond end_time, next task is tomorrow
+                if next_task_dt <= now_kyiv or next_slot_time > end_time:
+                    tomorrow = now_kyiv + timedelta(days=1)
+                    next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+            else:
+                # Next task is tomorrow
+                tomorrow = now_kyiv + timedelta(days=1)
+                next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+        
+        # Calculate time difference
+        time_diff = next_task_dt - now_kyiv
+        hours = int(time_diff.total_seconds() // 3600)
+        minutes = int((time_diff.total_seconds() % 3600) // 60)
+        
+        # Format countdown string
+        if hours > 0:
+            countdown = f"{hours}ч {minutes}мин"
+        else:
+            countdown = f"{minutes}мин"
+        
+        return next_task_dt, countdown
+    
     async def _send_daily_reports(self):
         """Send daily statistics to all active users"""
         if not self.bot:

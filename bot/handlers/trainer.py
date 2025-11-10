@@ -37,7 +37,18 @@ async def trainer_menu(message: Message, state: FSMContext):
         
         # Show current trainer status
         if user.daily_trainer_enabled:
-            text = get_text(lang, "trainer_started")
+            # Get progress and countdown information
+            from bot.services.scheduler_service import scheduler_service
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            
+            # Build status message with progress and countdown
+            base_text = get_text(lang, "trainer_started")
+            status_text = get_text(lang, "trainer_status", 
+                                  completed=tasks_sent, 
+                                  total=total_tasks, 
+                                  countdown=countdown)
+            text = f"{base_text}\n\n{status_text}"
         else:
             text = get_text(lang, "trainer_menu")
         
@@ -53,8 +64,22 @@ async def start_trainer(callback: CallbackQuery):
         lang = user.interface_language.value
         # Enable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=True)
+        
+        # Get progress and countdown information
+        from bot.services.scheduler_service import scheduler_service
+        tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+        _, countdown = await scheduler_service.calculate_next_task_time(user)
+        
+        # Build status message with progress and countdown
+        base_text = get_text(lang, "trainer_started")
+        status_text = get_text(lang, "trainer_status", 
+                              completed=tasks_sent, 
+                              total=total_tasks, 
+                              countdown=countdown)
+        text = f"{base_text}\n\n{status_text}"
+        
         await callback.message.edit_text(
-            get_text(lang, "trainer_started"),
+            text,
             reply_markup=get_trainer_keyboard(user)
         )
     
@@ -108,7 +133,18 @@ async def back_to_trainer_menu(callback: CallbackQuery):
         lang = user.interface_language.value
         
         if user.daily_trainer_enabled:
-            text = get_text(lang, "trainer_started")
+            # Get progress and countdown information
+            from bot.services.scheduler_service import scheduler_service
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            
+            # Build status message with progress and countdown
+            base_text = get_text(lang, "trainer_started")
+            status_text = get_text(lang, "trainer_status", 
+                                  completed=tasks_sent, 
+                                  total=total_tasks, 
+                                  countdown=countdown)
+            text = f"{base_text}\n\n{status_text}"
         else:
             text = get_text(lang, "trainer_menu")
         
@@ -215,6 +251,10 @@ async def send_training_task(bot, user_id: int):
         learning_lang = user.learning_language.value
         difficulty = user.difficulty_level or DifficultyLevel.A2
         
+        # Get current progress (after the task counter was incremented by scheduler)
+        from bot.services.scheduler_service import scheduler_service
+        tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+        
         # Generate sentence
         sentence = await translation_service.generate_sentence(
             difficulty.value,
@@ -245,10 +285,13 @@ async def send_training_task(bot, user_id: int):
             except Exception:
                 pass
         
-        # Send task to user
+        # Send task to user with progress information
         await bot.send_message(
             user_id,
-            get_text(lang, "trainer_task", sentence=sentence)
+            get_text(lang, "trainer_task_with_progress", 
+                    current=tasks_sent, 
+                    total=total_tasks, 
+                    sentence=sentence)
         )
         
         # Store training session ID in Redis for answer processing
