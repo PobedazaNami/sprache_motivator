@@ -253,10 +253,11 @@ async def send_training_task(bot, user_id: int):
         
         # Store training session ID in Redis for answer processing
         from bot.services.redis_service import redis_service
+        # Convert ObjectId to string for JSON serialization
         await redis_service.set_user_state(
             user_id,
             "awaiting_training_answer",
-            {"training_id": training.id}
+            {"training_id": str(training["_id"])}
         )
 
 
@@ -276,8 +277,16 @@ async def check_training_answer(message: Message):
     if not state or state.get("state") != "awaiting_training_answer":
         return
     
-    training_id = state.get("data", {}).get("training_id")
-    if not training_id:
+    training_id_str = state.get("data", {}).get("training_id")
+    if not training_id_str:
+        return
+    
+    # Convert string back to ObjectId
+    from bson import ObjectId
+    try:
+        training_id = ObjectId(training_id_str)
+    except Exception:
+        await redis_service.clear_user_state(message.from_user.id)
         return
     
     async with async_session_maker() as session:

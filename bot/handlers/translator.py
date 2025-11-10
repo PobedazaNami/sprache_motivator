@@ -42,6 +42,7 @@ async def translator_mode(message: Message, state: FSMContext):
 @router.message(
     TranslatorStates.waiting_for_text,
     ~F.text.in_([
+        "📖 Переводчик", "📖 Перекладач",
         "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер",
         "⚙️ Настройки", "⚙️ Налаштування",
         "📊 Статистика", "📊 Статистика",
@@ -68,9 +69,11 @@ async def process_translation(message: Message, state: FSMContext):
             is_cyrillic = any('\u0400' <= c <= '\u04FF' for c in text)
             
             if is_cyrillic:
+                # Cyrillic text (Ukrainian/Russian): translate to learning language
                 source_lang = lang
                 target_lang = learning_lang
             else:
+                # Non-Cyrillic text (English/German): translate to interface language
                 source_lang = learning_lang
                 target_lang = lang
             
