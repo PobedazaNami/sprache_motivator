@@ -37,7 +37,7 @@ jobs:
           echo "Created .env (masked):"; sed 's/=.*/=***/' .env
 
       - name: Build Docker image
-        run: docker-compose build
+        run: docker compose build
 
       - name: Package artifacts
         run: |
