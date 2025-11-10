@@ -121,7 +121,7 @@ class TranslationService:
         interface_lang_name = lang_names.get(interface_lang, interface_lang)
         expected_lang_name = lang_names.get(expected_lang, expected_lang)
         
-        prompt = f"""You are a strict language teacher checking a translation exercise.
+        prompt = f"""You are a language teacher checking a translation exercise.
 
 Original sentence (to be translated): {original}
 User's translation attempt: {user_translation}
@@ -132,17 +132,21 @@ Your task:
 2. If off-topic (e.g., single random word, unrelated sentence), mark as INCORRECT with quality 0-20%
 3. If on-topic, evaluate the translation quality based on:
    - Semantic accuracy (does it convey the same meaning?)
-   - Grammar correctness
+   - Grammar correctness (minor errors should not severely impact quality)
    - Vocabulary appropriateness
    - Natural phrasing in {expected_lang_name}
-4. Provide the correct translation of the ORIGINAL sentence
-5. Give explanation about the ORIGINAL sentence and how to translate it correctly (NOT about the user's wrong answer)
+4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
+5. Give explanation about the ORIGINAL sentence and how to translate it correctly
 
-IMPORTANT: Write ALL explanations in {interface_lang_name} language.
+IMPORTANT: 
+- Write ALL explanations in {interface_lang_name} language
+- The TRANSLATION field must ALWAYS contain the actual correct translation in {expected_lang_name}, NEVER words like "Incorrect" or "Correct"
+- Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
+- Only give very low quality scores (0-30%) for completely wrong or off-topic answers
 
 Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [correct translation of the original sentence in {expected_lang_name}]
+TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word]
 QUALITY: [0-100]
 EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation]"""
         
@@ -167,6 +171,23 @@ EXPLANATION: [explanation in {interface_lang_name} about the original sentence a
         
         translation_line = [line for line in lines if "TRANSLATION:" in line]
         correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
+        
+        # Validate that correct_translation is actually a translation, not a status word
+        # If it contains words like "Incorrect", "Correct", "Wrong", etc., try to extract from explanation
+        invalid_translation_words = ["incorrect", "correct", "wrong", "right", "error"]
+        if correct_translation.lower() in invalid_translation_words or len(correct_translation) < 3:
+            # Try to extract actual translation from the explanation or re-translate
+            try:
+                # Use the translate method to get a proper translation
+                correct_translation, _ = await self.translate(
+                    original,
+                    interface_lang,
+                    expected_lang,
+                    None  # Don't count tokens
+                )
+            except Exception:
+                # If that fails, use user's translation as fallback
+                correct_translation = user_translation
         
         quality_line = [line for line in lines if "QUALITY:" in line]
         quality_percentage = 100 if is_correct else 0
