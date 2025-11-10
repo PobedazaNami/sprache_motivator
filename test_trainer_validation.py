@@ -30,6 +30,30 @@ def test_prompt_improvement():
     print("✓ Prompt improvements are in place")
 
 
+def test_generate_sentence_language_mapping():
+    """Test that generate_sentence uses proper language names."""
+    with open('bot/services/translation_service.py', 'r') as f:
+        content = f.read()
+    
+    # Find the generate_sentence function
+    assert 'async def generate_sentence' in content, \
+        "generate_sentence function should exist"
+    
+    # Check that language mapping is present in generate_sentence
+    assert content.count('lang_names = {') >= 2, \
+        "Language name mapping should be in both check_translation and generate_sentence"
+    
+    # Verify Ukrainian is mapped
+    assert content.count('"uk": "Ukrainian"') >= 2, \
+        "Ukrainian language mapping should be present"
+    
+    # Verify Russian is mapped
+    assert content.count('"ru": "Russian"') >= 2, \
+        "Russian language mapping should be present"
+    
+    print("✓ Language mapping is present in generate_sentence")
+
+
 @pytest.mark.asyncio
 async def test_check_translation_off_topic_answer():
     """Test that completely off-topic answers are rejected with low quality."""

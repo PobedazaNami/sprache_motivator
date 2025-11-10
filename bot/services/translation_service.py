@@ -68,6 +68,14 @@ class TranslationService:
     
     async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str) -> str:
         """Generate a sentence for daily trainer"""
+        # Map language codes to full names for clarity
+        lang_names = {
+            "uk": "Ukrainian",
+            "ru": "Russian", 
+            "en": "English",
+            "de": "German"
+        }
+        
         difficulty_descriptions = {
             "A2": "elementary level (A2)",
             "B1": "intermediate level (B1)",
@@ -75,7 +83,9 @@ class TranslationService:
             "A2-B2": "mixed difficulty between A2 and B2"
         }
         
-        prompt = f"Generate a simple sentence in {interface_lang} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
+        interface_lang_name = lang_names.get(interface_lang, interface_lang)
+        
+        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
