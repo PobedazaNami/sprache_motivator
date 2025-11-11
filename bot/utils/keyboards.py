@@ -56,7 +56,7 @@ def get_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     
     builder.button(text=get_text(lang, "interface_lang"), callback_data="settings_interface_lang")
     builder.button(text=get_text(lang, "learning_lang"), callback_data="settings_learning_lang")
-    builder.button(text=get_text(lang, "difficulty"), callback_data="settings_difficulty")
+    # Difficulty level removed - now handled through topic selection in trainer settings
     builder.button(text=get_text(lang, "btn_back"), callback_data="settings_back")
     
     builder.adjust(1)

@@ -199,6 +199,7 @@ async def show_time_selection(callback: CallbackQuery):
 async def set_time_period(callback: CallbackQuery):
     """Set training time period"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.scheduler_service import scheduler_service
     
     # Parse time from callback data: time_09_18 -> 09:00, 18:00
     parts = callback.data.split("_")
@@ -216,8 +217,19 @@ async def set_time_period(callback: CallbackQuery):
                                       trainer_start_time=start_time,
                                       trainer_end_time=end_time)
         
+        # Fetch fresh user data with updated settings
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        # Get updated progress
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+        else:
+            progress_info = ""
+        
         await callback.message.edit_text(
-            get_text(lang, "time_period_updated", start=start_time, end=end_time),
+            get_text(lang, "time_period_updated", start=start_time, end=end_time) + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
@@ -245,6 +257,7 @@ async def show_count_selection(callback: CallbackQuery):
 async def set_message_count(callback: CallbackQuery):
     """Set daily message count"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.scheduler_service import scheduler_service
     
     # Parse count from callback data: count_5 -> 5
     count = int(callback.data.split("_")[1])
@@ -256,8 +269,19 @@ async def set_message_count(callback: CallbackQuery):
         # Update user settings
         await UserService.update_user(session, user, trainer_messages_per_day=count)
         
+        # Fetch fresh user data with updated settings
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        # Get updated progress
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+        else:
+            progress_info = ""
+        
         await callback.message.edit_text(
-            get_text(lang, "message_count_updated", count=count),
+            get_text(lang, "message_count_updated", count=count) + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
@@ -325,8 +349,20 @@ async def set_topic(callback: CallbackQuery):
             # Store the specific level in Redis for random selection
             await redis_service.set(f"random_topic_level:{user.id}", level, ex=None)
             
+            # Fetch fresh user data with updated settings
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            
+            # Get updated progress
+            from bot.services.scheduler_service import scheduler_service
+            if user.daily_trainer_enabled:
+                tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+                _, countdown = await scheduler_service.calculate_next_task_time(user)
+                progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+            else:
+                progress_info = ""
+            
             await callback.message.edit_text(
-                get_text(lang, "topic_updated"),
+                get_text(lang, "topic_updated") + progress_info,
                 reply_markup=get_trainer_settings_keyboard(lang)
             )
         
@@ -350,8 +386,20 @@ async def set_topic(callback: CallbackQuery):
         # Clear any level-specific random setting
         await redis_service.delete(f"random_topic_level:{user.id}")
         
+        # Fetch fresh user data with updated settings
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        # Get updated progress
+        from bot.services.scheduler_service import scheduler_service
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+        else:
+            progress_info = ""
+        
         await callback.message.edit_text(
-            get_text(lang, "topic_updated"),
+            get_text(lang, "topic_updated") + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
