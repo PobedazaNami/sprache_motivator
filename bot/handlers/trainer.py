@@ -212,15 +212,12 @@ async def set_time_period(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Update user settings
+        # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, 
                                       trainer_start_time=start_time,
                                       trainer_end_time=end_time)
         
-        # Fetch fresh user data with updated settings
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        
-        # Get updated progress
+        # Get updated progress using the already-updated user object
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
             _, countdown = await scheduler_service.calculate_next_task_time(user)
@@ -266,13 +263,10 @@ async def set_message_count(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Update user settings
+        # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, trainer_messages_per_day=count)
         
-        # Fetch fresh user data with updated settings
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        
-        # Get updated progress
+        # Get updated progress using the already-updated user object
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
             _, countdown = await scheduler_service.calculate_next_task_time(user)
@@ -343,16 +337,13 @@ async def set_topic(callback: CallbackQuery):
             user = await UserService.get_or_create_user(session, callback.from_user.id)
             lang = user.interface_language.value
             
-            # Set topic to random in user settings
+            # Set topic to random in user settings (this updates both the object in memory and the database)
             await UserService.update_user(session, user, trainer_topic=TrainerTopic.RANDOM)
             
             # Store the specific level in Redis for random selection
             await redis_service.set(f"random_topic_level:{user.id}", level, ex=None)
             
-            # Fetch fresh user data with updated settings
-            user = await UserService.get_or_create_user(session, callback.from_user.id)
-            
-            # Get updated progress
+            # Get updated progress using the already-updated user object
             from bot.services.scheduler_service import scheduler_service
             if user.daily_trainer_enabled:
                 tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
@@ -380,16 +371,13 @@ async def set_topic(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Update user settings
+        # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, trainer_topic=topic)
         
         # Clear any level-specific random setting
         await redis_service.delete(f"random_topic_level:{user.id}")
         
-        # Fetch fresh user data with updated settings
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        
-        # Get updated progress
+        # Get updated progress using the already-updated user object
         from bot.services.scheduler_service import scheduler_service
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
