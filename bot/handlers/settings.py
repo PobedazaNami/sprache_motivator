@@ -36,7 +36,7 @@ async def settings_menu(message: Message, state: FSMContext):
         text = get_text(lang, "settings_menu")
         text += f"\n• {get_text(lang, 'interface_lang')}: {user.interface_language.value.upper()}"
         text += f"\n• {get_text(lang, 'learning_lang')}: {user.learning_language.value.upper()}"
-        text += f"\n• {get_text(lang, 'difficulty')}: {user.difficulty_level.value if user.difficulty_level else 'A2'}"
+        # Difficulty level removed - now handled through topic selection in trainer settings
         
         # Add trial/subscription status
         text += "\n\n"
@@ -88,14 +88,17 @@ async def select_learning_lang(callback: CallbackQuery):
 
 @router.callback_query(F.data == "settings_difficulty")
 async def select_difficulty(callback: CallbackQuery):
-    """Show difficulty selection"""
+    """Show difficulty selection - redirects to trainer topic selection"""
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
+        # Difficulty is now handled through topic selection in trainer settings
+        redirect_msg = "⚠️ Рівень складності тепер налаштовується через вибір теми в тренажері." if lang == "uk" else "⚠️ Уровень сложности теперь настраивается через выбор темы в тренажере."
+        
         await callback.message.edit_text(
-            get_text(lang, "select_difficulty"),
-            reply_markup=get_difficulty_keyboard(lang)
+            redirect_msg,
+            reply_markup=get_settings_keyboard(lang)
         )
     
     await callback.answer()
@@ -144,7 +147,7 @@ async def update_learning_lang(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("set_difficulty_"))
 async def update_difficulty(callback: CallbackQuery):
-    """Update difficulty level"""
+    """Update difficulty level - kept for backward compatibility"""
     difficulty_code = callback.data.split("_")[2]
     difficulty_map = {
         "A2": DifficultyLevel.A2,
@@ -160,7 +163,13 @@ async def update_difficulty(callback: CallbackQuery):
         
         lang = user.interface_language.value
         
-        await callback.message.edit_text(get_text(lang, "settings_updated"))
+        # Notify that difficulty is now handled through topic selection
+        msg = get_text(lang, "settings_updated") + "\n\n" + (
+            "💡 Підказка: Рівень складності тепер налаштовується через вибір теми в тренажері." 
+            if lang == "uk" else 
+            "💡 Подсказка: Уровень сложности теперь настраивается через выбор темы в тренажере."
+        )
+        await callback.message.edit_text(msg)
     
     await callback.answer()
 
