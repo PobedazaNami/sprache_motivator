@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 from bot.models.database import (
-    UserStatus, InterfaceLanguage, LearningLanguage, WorkMode, DifficultyLevel
+    UserStatus, InterfaceLanguage, LearningLanguage, WorkMode, DifficultyLevel, TrainerTopic
 )
 from bot.config import settings
 from bot.services import mongo_service
@@ -44,6 +44,7 @@ class UserModel:
         self.trainer_end_time = doc.get("trainer_end_time", "21:00")
         self.trainer_messages_per_day = doc.get("trainer_messages_per_day", 3)
         self.trainer_timezone = doc.get("trainer_timezone", "Europe/Kiev")
+        self.trainer_topic = TrainerTopic(doc.get("trainer_topic", TrainerTopic.RANDOM.value))
         self.activity_score = doc.get("activity_score", 0)
         self.translations_count = doc.get("translations_count", 0)
         self.correct_answers = doc.get("correct_answers", 0)
@@ -64,6 +65,7 @@ class UserModel:
             "trainer_end_time": self.trainer_end_time,
             "trainer_messages_per_day": self.trainer_messages_per_day,
             "trainer_timezone": self.trainer_timezone,
+            "trainer_topic": self.trainer_topic.value,
             "activity_score": self.activity_score,
             "translations_count": self.translations_count,
             "correct_answers": self.correct_answers,
@@ -109,6 +111,7 @@ class UserService:
                 "trainer_end_time": "21:00",
                 "trainer_messages_per_day": 3,
                 "trainer_timezone": "Europe/Kiev",
+                "trainer_topic": TrainerTopic.RANDOM.value,
                 "activity_score": 0,
                 "translations_count": 0,
                 "correct_answers": 0,
@@ -146,6 +149,8 @@ class UserService:
                 user.learning_language = v
             elif k == "difficulty_level" and isinstance(v, DifficultyLevel):
                 user.difficulty_level = v
+            elif k == "trainer_topic" and isinstance(v, TrainerTopic):
+                user.trainer_topic = v
             else:
                 setattr(user, k, v)
         user.updated_at = _now()

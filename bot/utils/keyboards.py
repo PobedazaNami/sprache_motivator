@@ -117,6 +117,7 @@ def get_trainer_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text(lang, "btn_set_time_period"), callback_data="trainer_set_time")
     builder.button(text=get_text(lang, "btn_set_message_count"), callback_data="trainer_set_count")
+    builder.button(text=get_text(lang, "btn_set_topic"), callback_data="trainer_set_topic")
     builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_back")
     builder.adjust(1)
     return builder.as_markup()
@@ -160,4 +161,36 @@ def get_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="✅ Yes", callback_data="broadcast_confirm_yes")
     builder.button(text="❌ No", callback_data="broadcast_confirm_no")
     builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_topic_level_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting topic level category"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_topic_level_a2"), callback_data="topic_level_a2")
+    builder.button(text=get_text(lang, "btn_topic_level_b1"), callback_data="topic_level_b1")
+    builder.button(text=get_text(lang, "btn_topic_level_b2"), callback_data="topic_level_b2")
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data="set_topic_random")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
+    builder.adjust(3, 1, 1)
+    return builder.as_markup()
+
+
+def get_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting specific topic within a level"""
+    from bot.models.database import TrainerTopic, TOPIC_METADATA
+    
+    builder = InlineKeyboardBuilder()
+    
+    # Filter topics by level
+    for topic in TrainerTopic:
+        if topic == TrainerTopic.RANDOM:
+            continue
+        metadata = TOPIC_METADATA.get(topic)
+        if metadata and metadata["level"] == level:
+            topic_text = get_text(lang, f"topic_{topic.value}")
+            builder.button(text=topic_text, callback_data=f"set_topic_{topic.value}")
+    
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_set_topic")
+    builder.adjust(1)
     return builder.as_markup()

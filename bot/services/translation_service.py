@@ -66,8 +66,11 @@ class TranslationService:
         
         return translation, tokens_used
     
-    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str) -> str:
+    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str, topic=None) -> str:
         """Generate a sentence for daily trainer"""
+        from bot.models.database import TrainerTopic, TOPIC_METADATA
+        import random
+        
         # Map language codes to full names for clarity
         lang_names = {
             "uk": "Ukrainian",
@@ -83,9 +86,55 @@ class TranslationService:
             "A2-B2": "mixed difficulty between A2 and B2"
         }
         
+        # Topic descriptions for prompts
+        topic_descriptions = {
+            TrainerTopic.PERSONAL_INFO: "personal information and introduction (name, age, origin, profession)",
+            TrainerTopic.FAMILY_FRIENDS: "family and friends (relationships, character, connections)",
+            TrainerTopic.HOME_DAILY: "home and daily life (housing, neighbors, household chores, daily habits)",
+            TrainerTopic.LEISURE_HOBBIES: "leisure and hobbies (sports, hobbies, free time, meetings)",
+            TrainerTopic.SHOPPING_MONEY: "shopping and money (purchases, stores, prices, goods)",
+            TrainerTopic.FOOD_DRINK: "food and drink (eating, restaurants, favorite dishes)",
+            TrainerTopic.HEALTH_DOCTOR: "health and doctor visits (illness, doctor appointments, medicine)",
+            TrainerTopic.TRANSPORT: "traffic and transport (bus, train, road, tickets)",
+            TrainerTopic.TRAVEL_VACATION: "travel and vacation (trips, holidays, hotels, excursions)",
+            TrainerTopic.WEATHER_SEASONS: "weather and seasons (weather, seasons, clothing)",
+            TrainerTopic.SCHOOL_LEARNING: "school and learning (studying, language courses, exams)",
+            TrainerTopic.CELEBRATIONS: "celebrations and holidays (holidays, traditions, congratulations)",
+            TrainerTopic.WORK_CAREER: "work and career (job, profession, working conditions)",
+            TrainerTopic.JOB_APPLICATION: "job application and CV (interview, resume, job search)",
+            TrainerTopic.RESIDENCE_NEIGHBORHOOD: "residence and neighborhood (life in city/village, neighbors)",
+            TrainerTopic.LEISURE_MEDIA: "leisure and media (cinema, television, internet, social media)",
+            TrainerTopic.FOOD_NUTRITION: "food, drink and nutrition (eating habits, diet, health)",
+            TrainerTopic.TRAVEL_TRAFFIC: "travel and traffic (journeys, transport, impressions)",
+            TrainerTopic.ENVIRONMENT_NATURE: "environment and nature (ecology, waste, recycling)",
+            TrainerTopic.SOCIETY_COEXISTENCE: "society and coexistence (helping others, respect, rules)",
+            TrainerTopic.HEALTH_LIFESTYLE: "health and lifestyle (sports, stress, healthy living)",
+            TrainerTopic.FASHION_CLOTHING: "fashion and clothing (style, shopping, appearance)",
+            TrainerTopic.TECHNOLOGY_DIGITALIZATION: "technology and digitalization (impact of technology, internet, online work)",
+            TrainerTopic.MEDIA_ADVERTISING: "media, advertising and consumption (advertising, manipulation, social media)",
+            TrainerTopic.FUTURE_DREAMS: "future and dreams (goals, career, self-development)",
+            TrainerTopic.SOCIAL_PROBLEMS: "social problems (poverty, unemployment, housing, discrimination)",
+            TrainerTopic.CULTURE_IDENTITY: "culture and identity (cultural differences, traditions, integration)",
+            TrainerTopic.SCIENCE_INNOVATION: "science and innovation (inventions, artificial intelligence, medicine)",
+            TrainerTopic.ENVIRONMENT_CLIMATE: "environment and climate change (climate, global warming, solutions)",
+            TrainerTopic.FUTURE_WORK: "work of the future (automation, remote work, work-life balance)",
+        }
+        
         interface_lang_name = lang_names.get(interface_lang, interface_lang)
         
-        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
+        # Handle topic selection
+        topic_instruction = ""
+        if topic and topic != TrainerTopic.RANDOM:
+            topic_desc = topic_descriptions.get(topic, "general topic")
+            topic_instruction = f" about the topic: {topic_desc}"
+        elif not topic or topic == TrainerTopic.RANDOM:
+            # Select random topic
+            available_topics = [t for t in TrainerTopic if t != TrainerTopic.RANDOM]
+            random_topic = random.choice(available_topics)
+            topic_desc = topic_descriptions.get(random_topic, "general topic")
+            topic_instruction = f" about the topic: {topic_desc}"
+        
+        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",

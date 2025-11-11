@@ -62,6 +62,52 @@ LOCALES = {
         "select_message_count": "🔢 Скільки завдань ви хочете отримувати на день?\n\nРекомендовано: 3-5 завдань",
         "time_period_updated": "✅ Період оновлено: {start} - {end}",
         "message_count_updated": "✅ Кількість повідомлень: {count} на день",
+        "select_topic": "📚 Оберіть тему для завдань тренажера:",
+        "topic_updated": "✅ Тема оновлена!",
+        "btn_set_topic": "📚 Вибрати тему",
+        "btn_topic_level_a2": "🟢 A2 (1-12)",
+        "btn_topic_level_b1": "🟡 B1 (13-22)",
+        "btn_topic_level_b2": "🔵 B2 (23-30)",
+        "btn_random_topic": "🎲 Випадкова тема",
+        
+        # Topics - A2
+        "topic_personal_info": "1. Persönliche Informationen und Vorstellung",
+        "topic_family_friends": "2. Familie und Freunde",
+        "topic_home_daily": "3. Wohnung und Alltag",
+        "topic_leisure_hobbies": "4. Freizeit und Hobbys",
+        "topic_shopping_money": "5. Einkaufen und Geld",
+        "topic_food_drink": "6. Essen und Trinken",
+        "topic_health_doctor": "7. Gesundheit und Arztbesuch",
+        "topic_transport": "8. Verkehr und Transport",
+        "topic_travel_vacation": "9. Reisen und Urlaub",
+        "topic_weather_seasons": "10. Wetter und Jahreszeiten",
+        "topic_school_learning": "11. Schule und Lernen",
+        "topic_celebrations": "12. Feste und Feiertage",
+        
+        # Topics - B1
+        "topic_work_career": "13. Arbeit und Beruf",
+        "topic_job_application": "14. Bewerbung und Lebenslauf",
+        "topic_residence_neighborhood": "15. Wohnort und Nachbarschaft",
+        "topic_leisure_media": "16. Freizeit und Medien",
+        "topic_food_nutrition": "17. Essen, Trinken und Ernährung",
+        "topic_travel_traffic": "18. Reisen und Verkehr",
+        "topic_environment_nature": "19. Umwelt und Natur",
+        "topic_society_coexistence": "20. Gesellschaft und Zusammenleben",
+        "topic_health_lifestyle": "21. Gesundheit und Lebensstil",
+        "topic_fashion_clothing": "22. Mode und Kleidung",
+        
+        # Topics - B2
+        "topic_technology_digitalization": "23. Technologie und Digitalisierung",
+        "topic_media_advertising": "24. Medien, Werbung und Konsum",
+        "topic_future_dreams": "25. Zukunft und Träume",
+        "topic_social_problems": "26. Gesellschaftliche Probleme",
+        "topic_culture_identity": "27. Kultur und Identität",
+        "topic_science_innovation": "28. Wissenschaft und Innovation",
+        "topic_environment_climate": "29. Umwelt und Klimawandel",
+        "topic_future_work": "30. Arbeit der Zukunft",
+        
+        # Special
+        "topic_random": "🎲 Випадкова тема",
         
         # Support
         "support_message": "💬 Техпідтримка\n\nЯкщо у вас виникли питання або проблеми, зв'яжіться з нами: @reeziat",
@@ -156,6 +202,52 @@ LOCALES = {
         "select_message_count": "🔢 Сколько заданий вы хотите получать в день?\n\nРекомендуется: 3-5 заданий",
         "time_period_updated": "✅ Период обновлён: {start} - {end}",
         "message_count_updated": "✅ Количество сообщений: {count} в день",
+        "select_topic": "📚 Выберите тему для заданий тренажёра:",
+        "topic_updated": "✅ Тема обновлена!",
+        "btn_set_topic": "📚 Выбрать тему",
+        "btn_topic_level_a2": "🟢 A2 (1-12)",
+        "btn_topic_level_b1": "🟡 B1 (13-22)",
+        "btn_topic_level_b2": "🔵 B2 (23-30)",
+        "btn_random_topic": "🎲 Случайная тема",
+        
+        # Topics - A2
+        "topic_personal_info": "1. Persönliche Informationen und Vorstellung",
+        "topic_family_friends": "2. Familie und Freunde",
+        "topic_home_daily": "3. Wohnung und Alltag",
+        "topic_leisure_hobbies": "4. Freizeit und Hobbys",
+        "topic_shopping_money": "5. Einkaufen und Geld",
+        "topic_food_drink": "6. Essen und Trinken",
+        "topic_health_doctor": "7. Gesundheit und Arztbesuch",
+        "topic_transport": "8. Verkehr und Transport",
+        "topic_travel_vacation": "9. Reisen und Urlaub",
+        "topic_weather_seasons": "10. Wetter und Jahreszeiten",
+        "topic_school_learning": "11. Schule und Lernen",
+        "topic_celebrations": "12. Feste und Feiertage",
+        
+        # Topics - B1
+        "topic_work_career": "13. Arbeit und Beruf",
+        "topic_job_application": "14. Bewerbung und Lebenslauf",
+        "topic_residence_neighborhood": "15. Wohnort und Nachbarschaft",
+        "topic_leisure_media": "16. Freizeit und Medien",
+        "topic_food_nutrition": "17. Essen, Trinken und Ernährung",
+        "topic_travel_traffic": "18. Reisen und Verkehr",
+        "topic_environment_nature": "19. Umwelt und Natur",
+        "topic_society_coexistence": "20. Gesellschaft und Zusammenleben",
+        "topic_health_lifestyle": "21. Gesundheit und Lebensstil",
+        "topic_fashion_clothing": "22. Mode und Kleidung",
+        
+        # Topics - B2
+        "topic_technology_digitalization": "23. Technologie und Digitalisierung",
+        "topic_media_advertising": "24. Medien, Werbung und Konsum",
+        "topic_future_dreams": "25. Zukunft und Träume",
+        "topic_social_problems": "26. Gesellschaftliche Probleme",
+        "topic_culture_identity": "27. Kultur und Identität",
+        "topic_science_innovation": "28. Wissenschaft und Innovation",
+        "topic_environment_climate": "29. Umwelt und Klimawandel",
+        "topic_future_work": "30. Arbeit der Zukunft",
+        
+        # Special
+        "topic_random": "🎲 Случайная тема",
         
         # Support
         "support_message": "💬 Техподдержка\n\nЕсли у вас возникли вопросы или проблемы, свяжитесь с нами: @reeziat",
