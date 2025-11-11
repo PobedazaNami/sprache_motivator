@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.models.database import UserStatus, DifficultyLevel, async_session_maker
+from bot.models.database import UserStatus, DifficultyLevel, TrainerTopic, async_session_maker
 from bot.services.database_service import UserService, TrainingService
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
@@ -129,10 +129,15 @@ async def show_trainer_settings(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
+        # Get topic name for display
+        topic = user.trainer_topic or TrainerTopic.RANDOM
+        topic_text = get_text(lang, f"topic_{topic.value}")
+        
         text = get_text(lang, "trainer_settings_menu",
                        start=user.trainer_start_time or "09:00",
                        end=user.trainer_end_time or "21:00",
-                       count=user.trainer_messages_per_day or 3)
+                       count=user.trainer_messages_per_day or 3,
+                       topic=topic_text)
         
         await callback.message.edit_text(
             text,
@@ -256,6 +261,73 @@ async def set_message_count(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "trainer_set_topic")
+async def show_topic_selection(callback: CallbackQuery):
+    """Show topic level selection"""
+    from bot.utils.keyboards import get_topic_level_keyboard
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_topic"),
+            reply_markup=get_topic_level_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("topic_level_"))
+async def show_topic_list(callback: CallbackQuery):
+    """Show topics for selected level"""
+    from bot.utils.keyboards import get_topic_selection_keyboard
+    
+    # Parse level from callback data: topic_level_a2 -> a2
+    level = callback.data.split("_")[2].upper()
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_topic"),
+            reply_markup=get_topic_selection_keyboard(lang, level)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("set_topic_"))
+async def set_topic(callback: CallbackQuery):
+    """Set trainer topic"""
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    # Parse topic from callback data: set_topic_personal_info -> personal_info
+    topic_value = callback.data.replace("set_topic_", "")
+    
+    try:
+        topic = TrainerTopic(topic_value)
+    except ValueError:
+        # Invalid topic, ignore
+        await callback.answer()
+        return
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Update user settings
+        await UserService.update_user(session, user, trainer_topic=topic)
+        
+        await callback.message.edit_text(
+            get_text(lang, "topic_updated"),
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
 async def send_training_task(bot, user_id: int):
     """Send a training task to user (called by scheduler)"""
     async with async_session_maker() as session:
@@ -267,6 +339,7 @@ async def send_training_task(bot, user_id: int):
         lang = user.interface_language.value
         learning_lang = user.learning_language.value
         difficulty = user.difficulty_level or DifficultyLevel.A2
+        topic = user.trainer_topic or TrainerTopic.RANDOM
         
         # Get current progress (after the task counter was incremented by scheduler)
         from bot.services.scheduler_service import scheduler_service
@@ -276,7 +349,8 @@ async def send_training_task(bot, user_id: int):
         sentence = await translation_service.generate_sentence(
             difficulty.value,
             learning_lang,
-            lang
+            lang,
+            topic
         )
         
         # Get expected translation
