@@ -9,6 +9,7 @@ from bot.services.database_service import UserService, WordService, TranslationH
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
 from bot.utils.keyboards import get_translator_keyboard, get_main_menu_keyboard
+from bot.handlers.admin import is_admin
 
 
 router = Router()
@@ -35,22 +36,24 @@ async def translator_mode(message: Message, state: FSMContext):
         
         lang = user.interface_language.value
         
-        # Check trial activation
-        if not user.trial_activated and not user.subscription_active:
-            await message.answer(get_text(lang, "trial_not_activated"))
-            return
-        
-        # Check trial expiration
-        if UserService.is_trial_expired(user):
-            from bot.config import settings
-            payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
-            admin_contact = settings.ADMIN_CONTACT
-            await message.answer(
-                get_text(lang, "trial_expired", 
-                        payment_link=payment_link,
-                        admin_contact=admin_contact)
-            )
-            return
+        # Admins have unrestricted access
+        if not is_admin(message.from_user.id):
+            # Check trial activation
+            if not user.trial_activated and not user.subscription_active:
+                await message.answer(get_text(lang, "trial_not_activated"))
+                return
+            
+            # Check trial expiration
+            if UserService.is_trial_expired(user):
+                from bot.config import settings
+                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
+                admin_contact = settings.ADMIN_CONTACT
+                await message.answer(
+                    get_text(lang, "trial_expired", 
+                            payment_link=payment_link,
+                            admin_contact=admin_contact)
+                )
+                return
         
         await message.answer(get_text(lang, "translator_mode"))
         await state.set_state(TranslatorStates.waiting_for_text)
@@ -98,23 +101,25 @@ async def process_translation(message: Message, state: FSMContext):
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         
-        # Check trial status before processing
-        if not user.trial_activated and not user.subscription_active:
-            await message.answer(get_text(lang, "trial_not_activated"))
-            await state.clear()
-            return
-        
-        if UserService.is_trial_expired(user):
-            from bot.config import settings
-            payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
-            admin_contact = settings.ADMIN_CONTACT
-            await message.answer(
-                get_text(lang, "trial_expired", 
-                        payment_link=payment_link,
-                        admin_contact=admin_contact)
-            )
-            await state.clear()
-            return
+        # Admins have unrestricted access
+        if not is_admin(message.from_user.id):
+            # Check trial status before processing
+            if not user.trial_activated and not user.subscription_active:
+                await message.answer(get_text(lang, "trial_not_activated"))
+                await state.clear()
+                return
+            
+            if UserService.is_trial_expired(user):
+                from bot.config import settings
+                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
+                admin_contact = settings.ADMIN_CONTACT
+                await message.answer(
+                    get_text(lang, "trial_expired", 
+                            payment_link=payment_link,
+                            admin_contact=admin_contact)
+                )
+                await state.clear()
+                return
         
         try:
             # Detect source and target languages
