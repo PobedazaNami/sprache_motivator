@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from bot.models.database import UserStatus, InterfaceLanguage, async_session_maker
 from bot.services.database_service import UserService
 from bot.locales.texts import get_text
-from bot.utils.keyboards import get_language_selection_keyboard, get_main_menu_keyboard
+from bot.utils.keyboards import get_language_selection_keyboard, get_main_menu_keyboard, get_trial_activation_keyboard
 from bot.config import settings
 
 
@@ -45,12 +45,22 @@ async def cmd_start(message: Message, state: FSMContext):
             lang = user.interface_language.value
             await message.answer(get_text(lang, "rejected"))
         else:
-            # Approved user - show main menu
+            # Approved user - check trial status
             lang = user.interface_language.value
-            await message.answer(
-                get_text(lang, "main_menu"),
-                reply_markup=get_main_menu_keyboard(user)
-            )
+            
+            # If trial not activated, show activation prompt
+            if not user.trial_activated and not user.subscription_active:
+                user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name or "друже"
+                await message.answer(
+                    get_text(lang, "welcome_with_trial", name=user_name),
+                    reply_markup=get_trial_activation_keyboard(lang)
+                )
+            else:
+                # Trial activated or subscribed - show main menu
+                await message.answer(
+                    get_text(lang, "main_menu"),
+                    reply_markup=get_main_menu_keyboard(user)
+                )
 
 
 @router.callback_query(F.data.startswith("lang_"))
@@ -122,6 +132,47 @@ async def switch_to_trainer(message: Message, state: FSMContext):
     # Import here to avoid circular dependency
     from bot.handlers.trainer import trainer_menu
     await trainer_menu(message, state)
+
+
+@router.callback_query(F.data == "activate_trial")
+async def activate_trial(callback: CallbackQuery):
+    """Handle trial activation"""
+    from datetime import datetime, timezone
+    import pytz
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        if user.status != UserStatus.APPROVED:
+            await callback.answer("Please wait for admin approval first.", show_alert=True)
+            return
+        
+        lang = user.interface_language.value
+        
+        # Activate trial with Berlin timezone
+        berlin_tz = pytz.timezone('Europe/Berlin')
+        activation_time = datetime.now(berlin_tz)
+        
+        await UserService.update_user(
+            session,
+            user,
+            trial_activated=True,
+            trial_activation_date=activation_time
+        )
+        
+        days_remaining = UserService.get_trial_days_remaining(user)
+        
+        await callback.message.edit_text(
+            get_text(lang, "trial_activated", days=days_remaining)
+        )
+        
+        # Show main menu
+        await callback.message.answer(
+            get_text(lang, "main_menu"),
+            reply_markup=get_main_menu_keyboard(user)
+        )
+    
+    await callback.answer()
 
 
 @router.message(F.text.in_([

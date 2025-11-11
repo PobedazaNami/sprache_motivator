@@ -38,6 +38,21 @@ async def settings_menu(message: Message, state: FSMContext):
         text += f"\n• {get_text(lang, 'learning_lang')}: {user.learning_language.value.upper()}"
         text += f"\n• {get_text(lang, 'difficulty')}: {user.difficulty_level.value if user.difficulty_level else 'A2'}"
         
+        # Add trial/subscription status
+        text += "\n\n"
+        if user.subscription_active:
+            status = "✅ Active subscription" if lang == "uk" else "✅ Активна підписка"
+        elif user.trial_activated:
+            days_remaining = UserService.get_trial_days_remaining(user)
+            if days_remaining > 0:
+                status = f"🎁 Trial: {days_remaining} days left" if lang == "uk" else f"🎁 Пробний: {days_remaining} днів залишилось"
+            else:
+                status = "⏰ Trial expired" if lang == "uk" else "⏰ Пробний період закінчився"
+        else:
+            status = "⚠️ Trial not activated" if lang == "uk" else "⚠️ Пробний період не активовано"
+        
+        text += get_text(lang, "trial_status", status=status)
+        
         await message.answer(text, reply_markup=get_settings_keyboard(lang))
 
 
