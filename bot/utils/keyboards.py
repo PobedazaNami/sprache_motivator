@@ -13,6 +13,14 @@ def get_language_selection_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_trial_activation_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for trial activation"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_activate_trial"), callback_data="activate_trial")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     """Main menu keyboard based on user language"""
     lang = user.interface_language.value
