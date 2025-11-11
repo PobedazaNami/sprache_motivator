@@ -130,25 +130,28 @@ Expected target language: {expected_lang_name}
 Your task:
 1. First check if the user's answer is even attempting to translate the original sentence or if it's completely off-topic/irrelevant
 2. If off-topic (e.g., single random word, unrelated sentence), mark as INCORRECT with quality 0-20%
-3. If on-topic, evaluate the translation quality based on:
-   - Semantic accuracy (does it convey the same meaning?)
-   - Grammar correctness (minor errors should not severely impact quality)
-   - Vocabulary appropriateness
-   - Natural phrasing in {expected_lang_name}
+3. If on-topic, evaluate the translation quality based on these specific criteria:
+   - **Punctuation correctness**: Are commas, periods, and other punctuation marks placed correctly according to {expected_lang_name} grammar rules? (20% weight)
+   - **Word endings and grammar**: Are word endings correct (declensions, conjugations)? Are articles, prepositions, and cases used correctly? (30% weight)
+   - **Semantic accuracy**: Does the translation accurately convey the same meaning as the original sentence? (30% weight)
+   - **Vocabulary appropriateness**: Are the words natural and appropriate for the context? (10% weight)
+   - **Natural phrasing**: Does it sound natural in {expected_lang_name}? (10% weight)
+   Note: Minor errors in any category should not severely impact the quality score if the overall meaning is preserved.
 4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
-5. Give explanation about the ORIGINAL sentence and how to translate it correctly
+5. Give explanation about the ORIGINAL sentence and how to translate it correctly, specifically mentioning any errors in punctuation, word endings, or meaning
 
 IMPORTANT: 
 - Write ALL explanations in {interface_lang_name} language
 - The TRANSLATION field must ALWAYS contain the actual correct translation in {expected_lang_name}, NEVER words like "Incorrect" or "Correct"
 - Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
 - Only give very low quality scores (0-30%) for completely wrong or off-topic answers
+- In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
 
 Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
 TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word]
 QUALITY: [0-100]
-EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation]"""
+EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation, mentioning any issues with punctuation, word endings, or meaning]"""
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
