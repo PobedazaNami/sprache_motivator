@@ -80,6 +80,10 @@ class RedisService:
             await self.redis.setex(key, ex, value)
         else:
             await self.redis.set(key, value)
+    
+    async def delete(self, key: str):
+        """Delete a key"""
+        await self.redis.delete(key)
 
 
 redis_service = RedisService()

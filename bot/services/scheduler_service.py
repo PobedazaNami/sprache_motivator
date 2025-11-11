@@ -107,24 +107,31 @@ class SchedulerService:
         if tasks_sent >= messages_per_day:
             return False  # Already sent all tasks for today
         
-        # Calculate time slots within user's window
+        # Get last task time
+        last_task_time_key = f"last_task_time:{user.id}:{current_date}"
+        last_task_time_str = await redis_service.get(last_task_time_key)
+        
+        # Calculate minimum interval between tasks
         window_minutes = self._time_diff_minutes(start_time, end_time)
-        slot_size = window_minutes // messages_per_day
+        min_interval_minutes = window_minutes // messages_per_day
         
-        # Determine which slot we're in
-        minutes_since_start = self._time_diff_minutes(start_time, current_time)
-        current_slot = minutes_since_start // slot_size
+        # If this is the first task or enough time has passed
+        if not last_task_time_str:
+            # First task: send it
+            current_time_str = current_time.strftime("%H:%M")
+            await redis_service.set(tasks_today_key, tasks_sent + 1, ex=86400)
+            await redis_service.set(last_task_time_key, current_time_str, ex=86400)
+            return True
         
-        # Check if we already sent a task for this slot
-        last_slot_key = f"last_slot:{user.id}:{current_date}"
-        last_slot = await redis_service.get(last_slot_key)
-        last_slot = int(last_slot) if last_slot else -1
+        # Check if enough time has passed since last task
+        last_task_time = time.fromisoformat(last_task_time_str)
+        minutes_since_last = self._time_diff_minutes(last_task_time, current_time)
         
-        if current_slot > last_slot:
-            # Time to send task for this slot
-            # Update counters
-            await redis_service.set(tasks_today_key, tasks_sent + 1, ex=86400)  # Expire in 24h
-            await redis_service.set(last_slot_key, current_slot, ex=86400)
+        if minutes_since_last >= min_interval_minutes:
+            # Enough time has passed, send task
+            current_time_str = current_time.strftime("%H:%M")
+            await redis_service.set(tasks_today_key, tasks_sent + 1, ex=86400)
+            await redis_service.set(last_task_time_key, current_time_str, ex=86400)
             return True
         
         return False
@@ -185,41 +192,42 @@ class SchedulerService:
             minutes = int((time_diff.total_seconds() % 3600) // 60)
             return next_task_dt, f"{hours}ч {minutes}мин"
         
-        # Calculate time slots
+        # Calculate minimum interval between tasks
         window_minutes = self._time_diff_minutes(start_time, end_time)
-        slot_size = window_minutes // messages_per_day
+        min_interval_minutes = window_minutes // messages_per_day
         
-        # Get current slot
-        last_slot_key = f"last_slot:{user.id}:{current_date}"
-        last_slot = await redis_service.get(last_slot_key)
-        last_slot = int(last_slot) if last_slot else -1
-        
-        # Calculate next slot start time
-        next_slot = last_slot + 1
+        # Get last task time
+        last_task_time_key = f"last_task_time:{user.id}:{current_date}"
+        last_task_time_str = await redis_service.get(last_task_time_key)
         
         # If we haven't started today yet
-        if current_time < start_time:
-            # Next task is at start time
-            next_task_dt = datetime.combine(current_date, start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
-        else:
-            # Calculate the start time of the next slot
-            next_slot_start_minutes = start_time.hour * 60 + start_time.minute + (next_slot * slot_size)
-            next_slot_hour = next_slot_start_minutes // 60
-            next_slot_minute = next_slot_start_minutes % 60
-            
-            # Create next task time
-            if next_slot_hour < 24:
-                next_slot_time = time(hour=next_slot_hour, minute=next_slot_minute)
-                next_task_dt = datetime.combine(current_date, next_slot_time, tzinfo=ZoneInfo('Europe/Kyiv'))
-                
-                # If this time has already passed or is beyond end_time, next task is tomorrow
-                if next_task_dt <= now_kyiv or next_slot_time > end_time:
-                    tomorrow = now_kyiv + timedelta(days=1)
-                    next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+        if not last_task_time_str:
+            if current_time < start_time:
+                # Next task is at start time
+                next_task_dt = datetime.combine(current_date, start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
             else:
+                # We're in the window but haven't sent first task yet - send soon
+                next_task_dt = now_kyiv + timedelta(minutes=5)
+        else:
+            # Calculate when next task should be sent based on last task time
+            last_task_time = time.fromisoformat(last_task_time_str)
+            last_task_minutes = last_task_time.hour * 60 + last_task_time.minute
+            next_task_minutes = last_task_minutes + min_interval_minutes
+            
+            if next_task_minutes >= 24 * 60:
                 # Next task is tomorrow
                 tomorrow = now_kyiv + timedelta(days=1)
                 next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+            else:
+                next_task_hour = next_task_minutes // 60
+                next_task_minute = next_task_minutes % 60
+                next_task_time = time(hour=next_task_hour, minute=next_task_minute)
+                next_task_dt = datetime.combine(current_date, next_task_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                
+                # If next task time is beyond end time or already passed, schedule for tomorrow
+                if next_task_time > end_time or next_task_dt <= now_kyiv:
+                    tomorrow = now_kyiv + timedelta(days=1)
+                    next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
         
         # Calculate time difference
         time_diff = next_task_dt - now_kyiv

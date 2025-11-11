@@ -305,9 +305,33 @@ async def show_topic_list(callback: CallbackQuery):
 async def set_topic(callback: CallbackQuery):
     """Set trainer topic"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.redis_service import redis_service
     
     # Parse topic from callback data: set_topic_personal_info -> personal_info
     topic_value = callback.data.replace("set_topic_", "")
+    
+    # Check if it's a level-specific random topic (e.g., random_a2, random_b1, random_b2)
+    if topic_value.startswith("random_") and topic_value != "random":
+        # Level-specific random: store the level in Redis
+        level = topic_value.replace("random_", "").upper()  # e.g., "a2" -> "A2"
+        
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+            
+            # Set topic to random in user settings
+            await UserService.update_user(session, user, trainer_topic=TrainerTopic.RANDOM)
+            
+            # Store the specific level in Redis for random selection
+            await redis_service.set(f"random_topic_level:{user.id}", level, ex=None)
+            
+            await callback.message.edit_text(
+                get_text(lang, "topic_updated"),
+                reply_markup=get_trainer_settings_keyboard(lang)
+            )
+        
+        await callback.answer()
+        return
     
     try:
         topic = TrainerTopic(topic_value)
@@ -323,6 +347,9 @@ async def set_topic(callback: CallbackQuery):
         # Update user settings
         await UserService.update_user(session, user, trainer_topic=topic)
         
+        # Clear any level-specific random setting
+        await redis_service.delete(f"random_topic_level:{user.id}")
+        
         await callback.message.edit_text(
             get_text(lang, "topic_updated"),
             reply_markup=get_trainer_settings_keyboard(lang)
@@ -333,6 +360,9 @@ async def set_topic(callback: CallbackQuery):
 
 async def send_training_task(bot, user_id: int):
     """Send a training task to user (called by scheduler)"""
+    from bot.services.redis_service import redis_service
+    import random
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, user_id)
         
@@ -343,6 +373,26 @@ async def send_training_task(bot, user_id: int):
         learning_lang = user.learning_language.value
         difficulty = user.difficulty_level or DifficultyLevel.A2
         topic = user.trainer_topic or TrainerTopic.RANDOM
+        
+        # Check if there's a level-specific random topic setting
+        if topic == TrainerTopic.RANDOM:
+            random_level = await redis_service.get(f"random_topic_level:{user.id}")
+            if random_level:
+                # Level-specific random: pick a random topic from this level
+                from bot.models.database import TOPIC_METADATA
+                level_topics = [t for t, meta in TOPIC_METADATA.items() 
+                               if meta["level"] == random_level and t != TrainerTopic.RANDOM]
+                if level_topics:
+                    topic = random.choice(level_topics)
+            else:
+                # Global random: pick random level first, then random topic from that level
+                from bot.models.database import TOPIC_METADATA
+                levels = ["A2", "B1", "B2"]
+                random_level = random.choice(levels)
+                level_topics = [t for t, meta in TOPIC_METADATA.items() 
+                               if meta["level"] == random_level and t != TrainerTopic.RANDOM]
+                if level_topics:
+                    topic = random.choice(level_topics)
         
         # Get current progress (after the task counter was incremented by scheduler)
         from bot.services.scheduler_service import scheduler_service

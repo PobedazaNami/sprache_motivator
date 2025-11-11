@@ -199,6 +199,8 @@ def get_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboardMarkup:
             topic_text = get_text(lang, f"topic_{topic.value}")
             builder.button(text=topic_text, callback_data=f"set_topic_{topic.value}")
     
+    # Add random topic button for this level
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data=f"set_topic_random_{level.lower()}")
     builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_set_topic")
     builder.adjust(1)
     return builder.as_markup()
