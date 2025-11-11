@@ -115,7 +115,7 @@ class UserService:
                 "trainer_start_time": "09:00",
                 "trainer_end_time": "21:00",
                 "trainer_messages_per_day": 3,
-                "trainer_timezone": "Europe/Kiev",
+                "trainer_timezone": "Europe/Berlin",
                 "activity_score": 0,
                 "translations_count": 0,
                 "correct_answers": 0,

@@ -113,13 +113,23 @@ async def select_language(callback: CallbackQuery):
                 except Exception:
                     pass
         else:
-            await callback.message.edit_text(
-                get_text(lang_code, "main_menu")
-            )
-            await callback.message.answer(
-                get_text(lang_code, "main_menu"),
-                reply_markup=get_main_menu_keyboard(user)
-            )
+            # User is approved - check trial status
+            if not user.trial_activated and not user.subscription_active:
+                # Show trial activation screen
+                user_name = f"@{callback.from_user.username}" if callback.from_user.username else callback.from_user.first_name or "друже"
+                await callback.message.edit_text(
+                    get_text(lang_code, "welcome_with_trial", name=user_name),
+                    reply_markup=get_trial_activation_keyboard(lang_code)
+                )
+            else:
+                # Trial activated or subscribed - show main menu
+                await callback.message.edit_text(
+                    get_text(lang_code, "main_menu")
+                )
+                await callback.message.answer(
+                    get_text(lang_code, "main_menu"),
+                    reply_markup=get_main_menu_keyboard(user)
+                )
     
     await callback.answer()
 
