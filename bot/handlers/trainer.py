@@ -112,10 +112,15 @@ async def show_trainer_settings(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
+        # Get topic name for display
+        topic = user.trainer_topic or TrainerTopic.RANDOM
+        topic_text = get_text(lang, f"topic_{topic.value}")
+        
         text = get_text(lang, "trainer_settings_menu",
                        start=user.trainer_start_time or "09:00",
                        end=user.trainer_end_time or "21:00",
-                       count=user.trainer_messages_per_day or 3)
+                       count=user.trainer_messages_per_day or 3,
+                       topic=topic_text)
         
         await callback.message.edit_text(
             text,
