@@ -50,6 +50,10 @@ class UserModel:
         self.total_answers = doc.get("total_answers", 0)
         self.tokens_used_today = doc.get("tokens_used_today", 0)
         self.last_token_reset = doc.get("last_token_reset")
+        # Trial system fields
+        self.trial_activated = doc.get("trial_activated", False)
+        self.trial_activation_date = doc.get("trial_activation_date")
+        self.subscription_active = doc.get("subscription_active", False)
 
     def to_update_dict(self) -> Dict[str, Any]:
         return {
@@ -70,6 +74,9 @@ class UserModel:
             "total_answers": self.total_answers,
             "tokens_used_today": self.tokens_used_today,
             "last_token_reset": self.last_token_reset,
+            "trial_activated": self.trial_activated,
+            "trial_activation_date": self.trial_activation_date,
+            "subscription_active": self.subscription_active,
         }
 
 
@@ -108,13 +115,16 @@ class UserService:
                 "trainer_start_time": "09:00",
                 "trainer_end_time": "21:00",
                 "trainer_messages_per_day": 3,
-                "trainer_timezone": "Europe/Kiev",
+                "trainer_timezone": "Europe/Berlin",
                 "activity_score": 0,
                 "translations_count": 0,
                 "correct_answers": 0,
                 "total_answers": 0,
                 "tokens_used_today": 0,
                 "last_token_reset": _now(),
+                "trial_activated": is_admin,  # Auto-activate for admins
+                "trial_activation_date": _now() if is_admin else None,
+                "subscription_active": is_admin,  # Auto-subscribe admins
                 "created_at": _now(),
                 "updated_at": _now(),
             }
@@ -197,6 +207,57 @@ class UserService:
         col = await UserService._collection()
         cursor = col.find({"status": UserStatus.APPROVED.value, "allow_broadcasts": True})
         return [UserModel(d) async for d in cursor]
+    
+    @staticmethod
+    def is_trial_expired(user: UserModel) -> bool:
+        """Check if user's trial has expired (10 days in Berlin timezone)"""
+        import pytz
+        
+        # Admins and subscribed users never expire
+        if user.subscription_active:
+            return False
+        
+        # Not activated = not expired (user hasn't started trial)
+        if not user.trial_activated or not user.trial_activation_date:
+            return False
+        
+        # Calculate 10 days from activation in Berlin timezone
+        berlin_tz = pytz.timezone('Europe/Berlin')
+        now_berlin = datetime.now(berlin_tz)
+        
+        # Convert activation date to Berlin timezone
+        if user.trial_activation_date.tzinfo is None:
+            activation_berlin = berlin_tz.localize(user.trial_activation_date)
+        else:
+            activation_berlin = user.trial_activation_date.astimezone(berlin_tz)
+        
+        # Check if 10 days have passed
+        trial_end = activation_berlin + timedelta(days=10)
+        return now_berlin >= trial_end
+    
+    @staticmethod
+    def get_trial_days_remaining(user: UserModel) -> int:
+        """Get number of days remaining in trial"""
+        import pytz
+        
+        if user.subscription_active:
+            return 999  # Unlimited for subscribers
+        
+        if not user.trial_activated or not user.trial_activation_date:
+            return 10  # Full trial available
+        
+        berlin_tz = pytz.timezone('Europe/Berlin')
+        now_berlin = datetime.now(berlin_tz)
+        
+        # Convert activation date to Berlin timezone
+        if user.trial_activation_date.tzinfo is None:
+            activation_berlin = berlin_tz.localize(user.trial_activation_date)
+        else:
+            activation_berlin = user.trial_activation_date.astimezone(berlin_tz)
+        
+        trial_end = activation_berlin + timedelta(days=10)
+        days_remaining = (trial_end - now_berlin).days
+        return max(0, days_remaining)
 
 
 class WordService:
