@@ -94,11 +94,15 @@ async def show_trainer_settings(callback: CallbackQuery):
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
+        learning_lang = user.learning_language.value.upper()
+        difficulty = user.difficulty_level.value if user.difficulty_level else "A2"
         
         text = get_text(lang, "trainer_settings_menu",
                        start=user.trainer_start_time or "09:00",
                        end=user.trainer_end_time or "21:00",
-                       count=user.trainer_messages_per_day or 3)
+                       count=user.trainer_messages_per_day or 3,
+                       learning_lang=learning_lang,
+                       difficulty=difficulty)
         
         await callback.message.edit_text(
             text,
@@ -205,6 +209,115 @@ async def set_message_count(callback: CallbackQuery):
         
         await callback.message.edit_text(
             get_text(lang, "message_count_updated", count=count),
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_set_learning_lang")
+async def show_trainer_learning_lang(callback: CallbackQuery):
+    """Show learning language selection from trainer settings"""
+    from bot.utils.keyboards import get_learning_language_keyboard_for_trainer
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_learning_lang"),
+            reply_markup=get_learning_language_keyboard_for_trainer(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "trainer_set_difficulty")
+async def show_trainer_difficulty(callback: CallbackQuery):
+    """Show difficulty selection from trainer settings"""
+    from bot.utils.keyboards import get_difficulty_keyboard_for_trainer
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        await callback.message.edit_text(
+            get_text(lang, "select_difficulty"),
+            reply_markup=get_difficulty_keyboard_for_trainer(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("trainer_update_learning_"))
+async def update_trainer_learning_lang(callback: CallbackQuery):
+    """Update learning language from trainer settings"""
+    from bot.models.database import LearningLanguage
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    lang_code = callback.data.split("_")[3]
+    learning_lang = LearningLanguage.ENGLISH if lang_code == "en" else LearningLanguage.GERMAN
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        await UserService.update_user(session, user, learning_language=learning_lang)
+        
+        # Refresh user to get updated values
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        lang = user.interface_language.value
+        learning_lang_display = user.learning_language.value.upper()
+        difficulty = user.difficulty_level.value if user.difficulty_level else "A2"
+        
+        text = get_text(lang, "trainer_settings_menu",
+                       start=user.trainer_start_time or "09:00",
+                       end=user.trainer_end_time or "21:00",
+                       count=user.trainer_messages_per_day or 3,
+                       learning_lang=learning_lang_display,
+                       difficulty=difficulty)
+        
+        await callback.message.edit_text(
+            get_text(lang, "settings_updated") + "\n\n" + text,
+            reply_markup=get_trainer_settings_keyboard(lang)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("trainer_update_difficulty_"))
+async def update_trainer_difficulty(callback: CallbackQuery):
+    """Update difficulty level from trainer settings"""
+    from bot.utils.keyboards import get_trainer_settings_keyboard
+    
+    difficulty_code = callback.data.split("_")[3]
+    difficulty_map = {
+        "A2": DifficultyLevel.A2,
+        "B1": DifficultyLevel.B1,
+        "B2": DifficultyLevel.B2,
+        "A2-B2": DifficultyLevel.COMBINED
+    }
+    difficulty = difficulty_map.get(difficulty_code, DifficultyLevel.A2)
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        await UserService.update_user(session, user, difficulty_level=difficulty)
+        
+        # Refresh user to get updated values
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        
+        lang = user.interface_language.value
+        learning_lang_display = user.learning_language.value.upper()
+        difficulty_display = user.difficulty_level.value if user.difficulty_level else "A2"
+        
+        text = get_text(lang, "trainer_settings_menu",
+                       start=user.trainer_start_time or "09:00",
+                       end=user.trainer_end_time or "21:00",
+                       count=user.trainer_messages_per_day or 3,
+                       learning_lang=learning_lang_display,
+                       difficulty=difficulty_display)
+        
+        await callback.message.edit_text(
+            get_text(lang, "settings_updated") + "\n\n" + text,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
