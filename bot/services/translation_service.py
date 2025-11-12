@@ -191,21 +191,25 @@ Your task:
 
 CRITICAL REQUIREMENTS: 
 - Write ALL explanations in {interface_lang_name} language
-- The TRANSLATION field must ALWAYS contain the actual correct translation of "{original}" in {expected_lang_name}
+- The TRANSLATION field must ALWAYS contain the actual correct translation of "{original}" in {expected_lang_name} - it MUST be an actual translation, not a status word
+- NEVER put the user's answer in the TRANSLATION field - it must be the correct translation from scratch
 - NEVER use placeholders like "N/A", "Incorrect", "Correct", "Wrong", or any other status words in the TRANSLATION field
 - Even if the user's answer is completely wrong or off-topic, ALWAYS provide the correct translation of the original sentence
 - Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
 - Only give very low quality scores (0-30%) for completely wrong or off-topic answers
-- In your EXPLANATION, focus on GRAMMAR: explain the grammatical rules, cases, articles, prepositions, verb conjugations, word order, declensions, etc.
+- In your EXPLANATION, you MUST focus EXCLUSIVELY on GRAMMAR - DO NOT write generic statements
+- You must explain the grammatical rules including cases, articles, prepositions, verb conjugations, word order, declensions: Which grammatical case is used and why? Which article (der/die/das) and why? Which verb conjugation and why? Which preposition and which case does it require?
 - In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
-- The explanation should be educational and help the user understand the grammar behind the correct translation
-- Explain WHY certain grammatical forms are used, not just that they are wrong
+- Do NOT write vague statements like "contains errors in punctuation and word formation" - instead specify EXACTLY which words have wrong endings, which articles are incorrect, which cases should be used
+- In your explanation, identify each specific error: "leuten should be Menschen (correct plural form)", "hat should be haben (plural verb form)", "arbeitlos should be Arbeitslosigkeit (noun form with article)"
+- The explanation should teach the grammar rules, not just describe that errors exist
+- Explain WHY certain grammatical forms are used: "haben is used because the subject is plural", "Armut requires the preposition mit + Dativ case"
 
 Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word or placeholder]
+TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be the CORRECT translation, NOT the user's answer. Even if incorrect, provide what the correct translation should be]
 QUALITY: [0-100]
-EXPLANATION: [GRAMMAR-FOCUSED explanation in {interface_lang_name}: explain the grammatical rules, cases, articles, verb forms, word order, and other grammar points that apply to the correct translation]"""
+EXPLANATION: [Detailed GRAMMAR explanation in {interface_lang_name}. Must include: specific grammatical errors (wrong article, wrong case, wrong verb form, wrong noun form), correct forms with explanations why, relevant grammar rules. Be specific and educational, not generic.]"""
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -238,6 +242,15 @@ EXPLANATION: [GRAMMAR-FOCUSED explanation in {interface_lang_name}: explain the 
             correct_translation == "" or
             correct_translation == "-"
         )
+        
+        # CRITICAL: If the answer is marked as incorrect, the TRANSLATION field should NOT contain the user's wrong answer
+        # Check if correct_translation is too similar to user_translation (case-insensitive, ignoring extra spaces)
+        if not is_correct and not is_invalid_translation:
+            normalized_correct = " ".join(correct_translation.lower().split())
+            normalized_user = " ".join(user_translation.lower().split())
+            # If they match or are very similar (allowing for minor punctuation differences)
+            if normalized_correct == normalized_user or normalized_correct.replace(".", "").replace(",", "").replace("!", "").replace("?", "") == normalized_user.replace(".", "").replace(",", "").replace("!", "").replace("?", ""):
+                is_invalid_translation = True
         
         if is_invalid_translation:
             # Always use the translate method to get a proper translation of the original sentence
