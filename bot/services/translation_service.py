@@ -187,7 +187,7 @@ Your task:
    - **Natural phrasing**: Does it sound natural in {expected_lang_name}? (10% weight)
    Note: Minor errors in any category should not severely impact the quality score if the overall meaning is preserved.
 4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
-5. Give explanation about the ORIGINAL sentence and how to translate it correctly, specifically mentioning any errors in punctuation, word endings, or meaning
+5. Give a GRAMMAR-FOCUSED explanation about the correct translation, explaining the grammatical rules, word forms, sentence structure, and usage patterns that apply
 
 CRITICAL REQUIREMENTS: 
 - Write ALL explanations in {interface_lang_name} language
@@ -196,14 +196,16 @@ CRITICAL REQUIREMENTS:
 - Even if the user's answer is completely wrong or off-topic, ALWAYS provide the correct translation of the original sentence
 - Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
 - Only give very low quality scores (0-30%) for completely wrong or off-topic answers
+- In your EXPLANATION, focus on GRAMMAR: explain the grammatical rules, cases, articles, prepositions, verb conjugations, word order, declensions, etc.
 - In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
-- When the answer is off-topic, explain what the original sentence means and provide the correct translation
+- The explanation should be educational and help the user understand the grammar behind the correct translation
+- Explain WHY certain grammatical forms are used, not just that they are wrong
 
 Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
 TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word or placeholder]
 QUALITY: [0-100]
-EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation, mentioning any issues with punctuation, word endings, or meaning]"""
+EXPLANATION: [GRAMMAR-FOCUSED explanation in {interface_lang_name}: explain the grammatical rules, cases, articles, verb forms, word order, and other grammar points that apply to the correct translation]"""
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",

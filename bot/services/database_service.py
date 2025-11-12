@@ -311,7 +311,7 @@ class TranslationHistoryService:
 class TrainingService:
     @staticmethod
     async def create_session(session, user_id: ObjectId, sentence: str,
-                             expected: str, difficulty: DifficultyLevel):
+                             expected: str, difficulty: DifficultyLevel, topic: TrainerTopic = None):
         col = mongo_service.db().training_sessions
         doc = {
             "user_id": user_id,
@@ -322,6 +322,7 @@ class TrainingService:
             "explanation": None,
             "quality_percentage": None,
             "difficulty_level": difficulty.value,
+            "topic": topic.value if topic else None,
             "created_at": _now(),
             "answered_at": None,
         }
