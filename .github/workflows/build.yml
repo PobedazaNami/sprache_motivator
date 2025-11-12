@@ -1,10 +1,11 @@
 name: Build and Package
 
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  workflow_dispatch:
+  # Disabled auto-trigger on push to avoid redundant runs (deploy.yml handles deployment)
+  # push:
+  #   branches: [ main, develop ]
+  #   tags: [ 'v*' ]
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   build:
