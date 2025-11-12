@@ -50,7 +50,7 @@ class TranslationService:
                 {"role": "system", "content": "You are a professional translator."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.1,
             max_tokens=500
         )
         
@@ -83,7 +83,7 @@ class TranslationService:
                 {"role": "system", "content": "You are a language teacher creating practice sentences."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            temperature=0.3,
             max_tokens=100
         )
         
