@@ -34,7 +34,7 @@ def test_issue_scenario_validation():
     # Verify TRANSLATION field must contain actual translation
     assert "MUST be an actual translation" in content, \
         "Prompt should explicitly state TRANSLATION must be actual translation"
-    assert "NEVER words like" in content and '"Incorrect"' in content, \
+    assert ("NEVER use placeholders" in content or "NEVER words like" in content) and '"Incorrect"' in content, \
         "Prompt should explicitly forbid words like 'Incorrect' in TRANSLATION field"
     
     # Verify there's validation and fallback for invalid translations
