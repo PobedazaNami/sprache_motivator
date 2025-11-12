@@ -93,7 +93,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} <<'EOSSH'
           set -euo pipefail
           cd /opt/sprache_motivator
-          /usr/bin/docker compose down || true
+          /usr/bin/docker compose down --remove-orphans || true
+          /usr/bin/docker rm -f sprache_motivator-bot-1 sprache_motivator-redis-1 2>/dev/null || true
           /usr/bin/docker compose build --no-cache bot
           /usr/bin/docker compose up -d
           echo
