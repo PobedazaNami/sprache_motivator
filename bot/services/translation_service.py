@@ -100,32 +100,41 @@ class TranslationService:
         Check if user's translation is correct
         Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
-        prompt = f"""Compare these two translations and determine if they are semantically equivalent:
+        prompt = f"""You are a strict language teacher. Check if the user's translation is GRAMMATICALLY CORRECT and semantically accurate.
 
 Original sentence: {original}
 User's translation: {user_translation}
 Target language: {expected_lang}
 
+IMPORTANT:
+- Mark as CORRECT only if there are NO grammatical errors (verb forms, articles, cases, word order, spelling)
+- Even small grammar mistakes = INCORRECT
+- Evaluate quality strictly: grammar errors significantly reduce percentage
+
 Respond in {interface_lang} with:
-1. "CORRECT" or "INCORRECT"
-2. The correct translation
-3. Quality percentage (0-100%) - evaluate grammar, vocabulary, word order, natural phrasing
-4. Brief grammatical explanation
+1. "CORRECT" (only if perfect grammar) or "INCORRECT" (if any errors)
+2. The grammatically correct translation
+3. Quality percentage (0-100%):
+   - 100%: Perfect grammar and meaning
+   - 80-99%: Minor stylistic issues only
+   - 50-79%: Some grammar errors but meaning clear
+   - 0-49%: Major grammar errors or wrong meaning
+4. Detailed explanation of ALL errors found
 
 Format your response as:
 STATUS: [CORRECT/INCORRECT]
 TRANSLATION: [correct translation]
 QUALITY: [0-100]
-EXPLANATION: [explanation in {interface_lang}]"""
+EXPLANATION: [detailed explanation of errors in {interface_lang}]"""
         
         response = await self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",  # More accurate for grammar checking than gpt-3.5-turbo
             messages=[
-                {"role": "system", "content": "You are a language teacher checking translations."},
+                {"role": "system", "content": "You are a strict language teacher. Check grammar precisely and mark INCORRECT if there are ANY errors in verb forms, articles, cases, declensions, or word order."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
-            max_tokens=300
+            temperature=0.1,  # Very low temperature for consistent, strict evaluation
+            max_tokens=400
         )
         
         result = response.choices[0].message.content.strip()
@@ -134,8 +143,12 @@ EXPLANATION: [explanation in {interface_lang}]"""
         lines = result.split("\n")
         status_line = lines[0].strip().upper() if lines else ""
         
-        # Check for exact status patterns to avoid false positives
-        is_correct = status_line.startswith("STATUS:") and "CORRECT" in status_line and "INCORRECT" not in status_line
+        # Check for exact status patterns - must be exactly "STATUS: CORRECT", not "STATUS: INCORRECT"
+        is_correct = False
+        if status_line.startswith("STATUS:"):
+            status_value = status_line.replace("STATUS:", "").strip()
+            # Only accept if it's exactly "CORRECT", reject if contains "INCORRECT"
+            is_correct = status_value == "CORRECT"
         
         translation_line = [line for line in lines if "TRANSLATION:" in line]
         correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation

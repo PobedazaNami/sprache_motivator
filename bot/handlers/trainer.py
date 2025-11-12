@@ -53,8 +53,16 @@ async def start_trainer(callback: CallbackQuery):
         lang = user.interface_language.value
         # Enable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=True)
+        # Try to send the first task immediately to avoid waiting for the next slot
+        try:
+            # Use Telegram ID for sending
+            await send_training_task(callback.bot, user.telegram_id)
+            immediate_note = "\n\n✅ Первое задание отправлено сейчас." if lang == "ru" else "\n\n✅ Перше завдання надіслано зараз."
+        except Exception:
+            # If generation fails, still show started message
+            immediate_note = ""
         await callback.message.edit_text(
-            get_text(lang, "trainer_started"),
+            get_text(lang, "trainer_started") + immediate_note,
             reply_markup=get_trainer_keyboard(user)
         )
     
