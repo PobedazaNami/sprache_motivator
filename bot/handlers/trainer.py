@@ -450,13 +450,20 @@ async def send_training_task(bot, user_id: int):
             None  # Don't count tokens for system-generated tasks
         )
         
+        # Get topic metadata for display
+        from bot.models.database import TOPIC_METADATA
+        topic_metadata = TOPIC_METADATA.get(topic, {"level": difficulty.value, "number": 0})
+        topic_level = topic_metadata["level"]
+        topic_name = get_text(lang, f"topic_{topic.value}")
+        
         # Create training session
         training = await TrainingService.create_session(
             session,
             user.id,
             sentence,
             expected_translation,
-            difficulty
+            difficulty,
+            topic  # Pass topic to training session
         )
         # Optional mirror to Mongo
         if settings.mongo_enabled and mongo_service.is_ready():
@@ -465,12 +472,14 @@ async def send_training_task(bot, user_id: int):
             except Exception:
                 pass
         
-        # Send task to user with progress information
+        # Send task to user with progress information and topic/level
         await bot.send_message(
             user_id,
             get_text(lang, "trainer_task_with_progress", 
                     current=tasks_sent, 
-                    total=total_tasks, 
+                    total=total_tasks,
+                    level=topic_level,
+                    topic=topic_name,
                     sentence=sentence)
         )
         
