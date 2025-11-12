@@ -189,16 +189,19 @@ Your task:
 4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
 5. Give explanation about the ORIGINAL sentence and how to translate it correctly, specifically mentioning any errors in punctuation, word endings, or meaning
 
-IMPORTANT: 
+CRITICAL REQUIREMENTS: 
 - Write ALL explanations in {interface_lang_name} language
-- The TRANSLATION field must ALWAYS contain the actual correct translation in {expected_lang_name}, NEVER words like "Incorrect" or "Correct"
+- The TRANSLATION field must ALWAYS contain the actual correct translation of "{original}" in {expected_lang_name}
+- NEVER use placeholders like "N/A", "Incorrect", "Correct", "Wrong", or any other status words in the TRANSLATION field
+- Even if the user's answer is completely wrong or off-topic, ALWAYS provide the correct translation of the original sentence
 - Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
 - Only give very low quality scores (0-30%) for completely wrong or off-topic answers
 - In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
+- When the answer is off-topic, explain what the original sentence means and provide the correct translation
 
 Format your response EXACTLY as:
 STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word]
+TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be an actual translation, not a status word or placeholder]
 QUALITY: [0-100]
 EXPLANATION: [explanation in {interface_lang_name} about the original sentence and its correct translation, mentioning any issues with punctuation, word endings, or meaning]"""
         
@@ -222,24 +225,33 @@ EXPLANATION: [explanation in {interface_lang_name} about the original sentence a
         is_correct = status_line.startswith("STATUS:") and "CORRECT" in status_line and "INCORRECT" not in status_line
         
         translation_line = [line for line in lines if "TRANSLATION:" in line]
-        correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
+        correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else ""
         
-        # Validate that correct_translation is actually a translation, not a status word
-        # If it contains words like "Incorrect", "Correct", "Wrong", etc., try to extract from explanation
-        invalid_translation_words = ["incorrect", "correct", "wrong", "right", "error"]
-        if correct_translation.lower() in invalid_translation_words or len(correct_translation) < 3:
-            # Try to extract actual translation from the explanation or re-translate
+        # Validate that correct_translation is actually a translation, not a status word or placeholder
+        # Check for invalid translation values
+        invalid_translation_words = ["incorrect", "correct", "wrong", "right", "error", "n/a", "na", "none", "null"]
+        is_invalid_translation = (
+            correct_translation.lower() in invalid_translation_words or 
+            len(correct_translation) < 3 or
+            correct_translation == "" or
+            correct_translation == "-"
+        )
+        
+        if is_invalid_translation:
+            # Always use the translate method to get a proper translation of the original sentence
             try:
-                # Use the translate method to get a proper translation
                 correct_translation, _ = await self.translate(
                     original,
                     interface_lang,
                     expected_lang,
                     None  # Don't count tokens
                 )
-            except Exception:
-                # If that fails, use user's translation as fallback
-                correct_translation = user_translation
+            except Exception as e:
+                # If translation fails, provide a clear error message
+                # This should rarely happen in production but ensures we always have something
+                import logging
+                logging.warning(f"Failed to get fallback translation: {e}")
+                correct_translation = f"[Error: Could not generate translation]"
         
         quality_line = [line for line in lines if "QUALITY:" in line]
         quality_percentage = 100 if is_correct else 0
