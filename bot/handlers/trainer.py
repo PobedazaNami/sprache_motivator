@@ -221,7 +221,10 @@ async def set_time_period(callback: CallbackQuery):
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
             _, countdown = await scheduler_service.calculate_next_task_time(user)
-            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
         else:
             progress_info = ""
         
@@ -270,7 +273,10 @@ async def set_message_count(callback: CallbackQuery):
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
             _, countdown = await scheduler_service.calculate_next_task_time(user)
-            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
         else:
             progress_info = ""
         
@@ -348,7 +354,10 @@ async def set_topic(callback: CallbackQuery):
             if user.daily_trainer_enabled:
                 tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
                 _, countdown = await scheduler_service.calculate_next_task_time(user)
-                progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+                progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                                  completed=tasks_sent, 
+                                                  total=total_tasks, 
+                                                  countdown=countdown)
             else:
                 progress_info = ""
             
@@ -382,7 +391,10 @@ async def set_topic(callback: CallbackQuery):
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
             _, countdown = await scheduler_service.calculate_next_task_time(user)
-            progress_info = f"\n\n📊 Прогрес: {tasks_sent}/{total_tasks}\n⏰ Наступне завдання через: {countdown}"
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
         else:
             progress_info = ""
         
