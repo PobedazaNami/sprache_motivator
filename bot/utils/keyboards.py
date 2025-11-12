@@ -75,6 +75,16 @@ def get_learning_language_keyboard(lang: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_learning_language_keyboard_for_trainer(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting learning language from trainer settings"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_english"), callback_data="trainer_update_learning_en")
+    builder.button(text=get_text(lang, "btn_german"), callback_data="trainer_update_learning_de")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
+    builder.adjust(2, 1)
+    return builder.as_markup()
+
+
 def get_difficulty_keyboard(lang: str) -> InlineKeyboardMarkup:
     """Keyboard for selecting difficulty level"""
     builder = InlineKeyboardBuilder()
@@ -83,6 +93,18 @@ def get_difficulty_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder.button(text="B2", callback_data="set_difficulty_B2")
     builder.button(text="A2-B2", callback_data="set_difficulty_A2-B2")
     builder.button(text=get_text(lang, "btn_back"), callback_data="settings_back")
+    builder.adjust(4, 1)
+    return builder.as_markup()
+
+
+def get_difficulty_keyboard_for_trainer(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting difficulty level from trainer settings"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="A2", callback_data="trainer_update_difficulty_A2")
+    builder.button(text="B1", callback_data="trainer_update_difficulty_B1")
+    builder.button(text="B2", callback_data="trainer_update_difficulty_B2")
+    builder.button(text="A2-B2", callback_data="trainer_update_difficulty_A2-B2")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
     builder.adjust(4, 1)
     return builder.as_markup()
 
@@ -117,6 +139,8 @@ def get_trainer_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text(lang, "btn_set_time_period"), callback_data="trainer_set_time")
     builder.button(text=get_text(lang, "btn_set_message_count"), callback_data="trainer_set_count")
+    builder.button(text=get_text(lang, "learning_lang"), callback_data="trainer_set_learning_lang")
+    builder.button(text=get_text(lang, "difficulty"), callback_data="trainer_set_difficulty")
     builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_back")
     builder.adjust(1)
     return builder.as_markup()
