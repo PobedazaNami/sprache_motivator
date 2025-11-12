@@ -100,32 +100,26 @@ class TranslationService:
         Check if user's translation is correct
         Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
-        prompt = f"""You are a strict language teacher. Check if the user's translation is GRAMMATICALLY CORRECT and semantically accurate.
+        prompt = f"""Evaluate a learner's translation. You receive the original sentence and the learner's translation.
 
-Original sentence: {original}
-User's translation: {user_translation}
-Target language: {expected_lang}
+Original sentence (source language): {original}
+Learner translation (target={expected_lang}): {user_translation}
 
-IMPORTANT:
-- Mark as CORRECT only if there are NO grammatical errors (verb forms, articles, cases, word order, spelling)
-- Even small grammar mistakes = INCORRECT
-- Evaluate quality strictly: grammar errors significantly reduce percentage
+TASK:
+1. Produce the best correct translation in target language.
+2. Identify ALL mistakes (articles, verb endings, tense, word order, capitalization, noun gender, case, choice of verb (e.g. 'frühstücken' vs 'essen Frühstück'), spelling).
+3. Decide correctness: ONLY 'CORRECT' if there are ZERO grammar or morphology errors.
+4. Score quality 0-100 following rubric:
+   100: Perfect
+   85-99: Minor style only
+   60-84: Some grammar errors, meaning OK
+   30-59: Multiple grammar errors but understandable
+   1-29: Severe errors, meaning partly lost
+   0: Meaning wrong or unintelligible
+5. Provide short structured explanation listing each error category.
 
-Respond in {interface_lang} with:
-1. "CORRECT" (only if perfect grammar) or "INCORRECT" (if any errors)
-2. The grammatically correct translation
-3. Quality percentage (0-100%):
-   - 100%: Perfect grammar and meaning
-   - 80-99%: Minor stylistic issues only
-   - 50-79%: Some grammar errors but meaning clear
-   - 0-49%: Major grammar errors or wrong meaning
-4. Detailed explanation of ALL errors found
-
-Format your response as:
-STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [correct translation]
-QUALITY: [0-100]
-EXPLANATION: [detailed explanation of errors in {interface_lang}]"""
+Return STRICT JSON ONLY (no prose) with keys:
+{"status": "CORRECT|INCORRECT", "correct": "<correct translation>", "quality": <int>, "errors": ["error 1", "error 2", ...]}"""
         
         response = await self.client.chat.completions.create(
             model="gpt-4o-mini",  # More accurate for grammar checking than gpt-3.5-turbo
@@ -137,35 +131,55 @@ EXPLANATION: [detailed explanation of errors in {interface_lang}]"""
             max_tokens=400
         )
         
-        result = response.choices[0].message.content.strip()
-        
-        # Parse response with robust status checking
-        lines = result.split("\n")
-        status_line = lines[0].strip().upper() if lines else ""
-        
-        # Check for exact status patterns - must be exactly "STATUS: CORRECT", not "STATUS: INCORRECT"
+        raw = response.choices[0].message.content.strip()
+
+        # Try JSON parse
+        import json
         is_correct = False
-        if status_line.startswith("STATUS:"):
-            status_value = status_line.replace("STATUS:", "").strip()
-            # Only accept if it's exactly "CORRECT", reject if contains "INCORRECT"
-            is_correct = status_value == "CORRECT"
+        correct_translation = user_translation
+        explanation = ""
+        quality_percentage = 0
+        try:
+            data = json.loads(raw)
+            status_val = str(data.get("status", "")).upper()
+            is_correct = status_val == "CORRECT"
+            correct_translation = data.get("correct", user_translation).strip() or user_translation
+            quality_percentage = int(data.get("quality", 0))
+            quality_percentage = max(0, min(100, quality_percentage))
+            errors_list = data.get("errors", []) or []
+            explanation = "\n".join(errors_list)
+        except Exception:
+            # Fallback simple heuristic if JSON failed
+            explanation = "Parser fallback: модель вернула не-JSON."
+            # Penalize if clearly wrong patterns present
+            quality_percentage = 30
+
+        # Apply rule-based German heuristics for stricter penalties
+        if expected_lang.lower() == "de":
+            penalties = 0
+            lower_user = user_translation.lower()
+            def penalize(reason, amount):
+                nonlocal penalties, explanation
+                penalties += amount
+                if reason not in explanation:
+                    explanation += ("\n" if explanation else "") + reason
+            if "maine " in lower_user:
+                penalize("Ошибка: 'Meine' написано как 'Maine'", 15)
+            if "familie essen" in lower_user:
+                penalize("Спряжение: должно 'Familie isst' или 'Familie frühstückt'", 25)
+            if any(x in lower_user for x in ["den frühstück","der frühstück","einen frühstück"]):
+                penalize("Артикль: нужно 'das Frühstück'", 20)
+            if "essen frühstück" in lower_user:
+                penalize("Лексика: предпочтительно глагол 'frühstücken'", 10)
+            if penalties:
+                quality_percentage = max(0, quality_percentage - penalties)
+                if penalties > 0:
+                    is_correct = False  # Force incorrect if any penalty
         
-        translation_line = [line for line in lines if "TRANSLATION:" in line]
-        correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else user_translation
-        
-        quality_line = [line for line in lines if "QUALITY:" in line]
-        quality_percentage = 100 if is_correct else 0
-        if quality_line:
-            try:
-                quality_str = quality_line[0].replace("QUALITY:", "").strip()
-                # Extract just the number from strings like "85%" or "85"
-                quality_percentage = int(''.join(filter(str.isdigit, quality_str)))
-                quality_percentage = max(0, min(100, quality_percentage))  # Clamp to 0-100
-            except (ValueError, IndexError):
-                quality_percentage = 100 if is_correct else 50
-        
-        explanation_line = [line for line in lines if "EXPLANATION:" in line]
-        explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
+        # Final adjustment: if marked correct but quality < 90, downgrade correctness
+        if is_correct and quality_percentage < 90:
+            is_correct = False
+            explanation += ("\nАвто-правка: качество <90 => не идеально по правилам.")
         
         return is_correct, correct_translation, explanation, quality_percentage
 

@@ -366,18 +366,21 @@ async def send_training_task(bot, user_id: int):
             except Exception:
                 pass
         
-        # Send task to user
+        # Send task to user with keyboard
+        from bot.utils.keyboards import get_training_task_keyboard
         await bot.send_message(
             user_id,
-            get_text(lang, "trainer_task", sentence=sentence)
+            get_text(lang, "trainer_task", sentence=sentence),
+            reply_markup=get_training_task_keyboard(lang)
         )
         
         # Store training session ID in Redis for answer processing
         from bot.services.redis_service import redis_service
+        # Fix: training is dict, use Mongo _id
         await redis_service.set_user_state(
             user_id,
             "awaiting_training_answer",
-            {"training_id": training.id}
+            {"training_id": training["_id"]}
         )
 
 
@@ -416,9 +419,13 @@ async def check_training_answer(message: Message):
         
         user_answer = message.text
         
-        # Check translation with quality assessment
+        # Use stored expected translation for more stable evaluation
+        expected_translation = training.get("expected_translation") or training.get("expected") or ""
+        # Combine original + expected for stricter model context
+        combined_original = f"{training['sentence']}\n[EXPECTED REFERENCE]\n{expected_translation}" if expected_translation else training["sentence"]
+
         is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
-            training["sentence"],
+            combined_original,
             user_answer,
             learning_lang,
             lang
@@ -464,3 +471,55 @@ async def check_training_answer(message: Message):
         
         # Clear state
         await redis_service.clear_user_state(message.from_user.id)
+
+
+@router.callback_query(F.data == "trainer_reveal_translation")
+async def reveal_translation(callback: CallbackQuery):
+    """Reveal the expected translation for the current training task (user gives up)."""
+    from bot.services.redis_service import redis_service
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+
+        # Check active training state
+        state = await redis_service.get_user_state(callback.from_user.id)
+        if not state or state.get("state") != "awaiting_training_answer":
+            await callback.answer()
+            return
+        training_id = state.get("data", {}).get("training_id")
+        if not training_id:
+            await redis_service.clear_user_state(callback.from_user.id)
+            await callback.answer()
+            return
+
+        # Fetch training from Mongo
+        training_col = mongo_service.db().training_sessions
+        training = await training_col.find_one({"_id": training_id})
+        if not training:
+            await redis_service.clear_user_state(callback.from_user.id)
+            await callback.answer()
+            return
+
+        expected_translation = training.get("expected_translation") or training.get("expected") or "(нет данных)" if lang == "ru" else "(немає даних)"
+
+        # Mark session as revealed/answered incorrectly with quality 0
+        await TrainingService.update_session(
+            session,
+            training_id,
+            user_translation="(revealed)",
+            is_correct=False,
+            explanation="User requested reveal",
+            quality_percentage=0
+        )
+        # Update user stats
+        user.total_answers += 1
+        await UserService.update_user(session, user, total_answers=user.total_answers)
+        await UserService.increment_activity(session, user, 1)
+        await TrainingService.update_daily_stats(session, user.id, 0)
+
+        # Clear state so they can't submit answer afterwards
+        await redis_service.clear_user_state(callback.from_user.id)
+
+        # Send revealed translation
+        await callback.message.answer(get_text(lang, "revealed_translation", correct=expected_translation))
+    await callback.answer()
