@@ -197,6 +197,7 @@ CRITICAL REQUIREMENTS:
 - Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
 - Only give very low quality scores (0-30%) for completely wrong or off-topic answers
 - In your EXPLANATION, focus on GRAMMAR: explain the grammatical rules, cases, articles, prepositions, verb conjugations, word order, declensions, etc.
+- In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
 - The explanation should be educational and help the user understand the grammar behind the correct translation
 - Explain WHY certain grammatical forms are used, not just that they are wrong
 
