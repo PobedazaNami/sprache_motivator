@@ -1,6 +1,7 @@
 from openai import AsyncOpenAI
 from typing import Optional, Tuple
 import re
+import json
 from bot.config import settings
 from bot.services.redis_service import redis_service
 
@@ -149,152 +150,125 @@ class TranslationService:
         return response.choices[0].message.content.strip()
     
     async def check_translation(
-        self, 
-        original: str, 
-        user_translation: str, 
+        self,
+        original: str,
+        user_translation: str,
         expected_lang: str,
         interface_lang: str
     ) -> Tuple[bool, str, str, int]:
         """
-        Check if user's translation is correct
+        Strictly evaluate a translation attempt.
         Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
-        # Map language codes to full names for clarity
-        lang_names = {
-            "uk": "Ukrainian",
-            "ru": "Russian", 
-            "en": "English",
-            "de": "German"
-        }
-        
+        # Language names for prompt clarity
+        lang_names = {"uk": "Ukrainian", "ru": "Russian", "en": "English", "de": "German"}
         interface_lang_name = lang_names.get(interface_lang, interface_lang)
         expected_lang_name = lang_names.get(expected_lang, expected_lang)
-        
-        prompt = f"""You are a language teacher checking a translation exercise.
 
-Original sentence (to be translated): {original}
-User's translation attempt: {user_translation}
-Expected target language: {expected_lang_name}
+        # Strict JSON-only evaluation prompt
+        eval_prompt = f"""
+Evaluate a learner translation. Input:
+ORIGINAL: {original}
+LEARNER: {user_translation}
+TARGET_LANG: {expected_lang_name}
 
-Your task:
-1. First check if the user's answer is even attempting to translate the original sentence or if it's completely off-topic/irrelevant
-2. If off-topic (e.g., single random word, unrelated sentence), mark as INCORRECT with quality 0-20%
-3. If on-topic, evaluate the translation quality based on these specific criteria:
-   - **Punctuation correctness**: Are commas, periods, and other punctuation marks placed correctly according to {expected_lang_name} grammar rules? (20% weight)
-   - **Word endings and grammar**: Are word endings correct (declensions, conjugations)? Are articles, prepositions, and cases used correctly? (30% weight)
-   - **Semantic accuracy**: Does the translation accurately convey the same meaning as the original sentence? (30% weight)
-   - **Vocabulary appropriateness**: Are the words natural and appropriate for the context? (10% weight)
-   - **Natural phrasing**: Does it sound natural in {expected_lang_name}? (10% weight)
-   Note: Minor errors in any category should not severely impact the quality score if the overall meaning is preserved.
-4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
-5. Give a GRAMMAR-FOCUSED explanation about the correct translation, explaining the grammatical rules, word forms, sentence structure, and usage patterns that apply
+Rules:
+- If there is ANY grammar, morphology, article, case, conjugation, word order, capitalization or clear spelling error, status MUST be INCORRECT.
+- Only PERFECT answers (no errors) can be CORRECT.
+- Score quality 0-100 (perfect=100; minor style only=90-99; small grammar errors=60-84; multiple errors=30-59; severe=1-29; off-topic/meaning wrong=0).
+- Provide the best CORRECT translation in TARGET_LANG in the "correct" field.
+- Return STRICT JSON only: {{"status":"CORRECT|INCORRECT","correct":"...","quality":<int>,"errors":["error 1","error 2",...]}}
+- Explanations in errors must be in {interface_lang_name} and name concrete issues (article/case/verb/word order/orthography), with correct forms.
+""".strip()
 
-CRITICAL REQUIREMENTS: 
-- Write ALL explanations in {interface_lang_name} language
-- The TRANSLATION field must ALWAYS contain the actual correct translation of "{original}" in {expected_lang_name} - it MUST be an actual translation, not a status word
-- NEVER put the user's answer in the TRANSLATION field - it must be the correct translation from scratch
-- NEVER use placeholders like "N/A", "Incorrect", "Correct", "Wrong", or any other status words in the TRANSLATION field
-- Even if the user's answer is completely wrong or off-topic, ALWAYS provide the correct translation of the original sentence
-- Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
-- Only give very low quality scores (0-30%) for completely wrong or off-topic answers
-- In your EXPLANATION, you MUST focus EXCLUSIVELY on GRAMMAR - DO NOT write generic statements
-- You must explain the grammatical rules including cases, articles, prepositions, verb conjugations, word order, declensions: Which grammatical case is used and why? Which article (der/die/das) and why? Which verb conjugation and why? Which preposition and which case does it require?
-- In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
-- Do NOT write vague statements like "contains errors in punctuation and word formation" - instead specify EXACTLY which words have wrong endings, which articles are incorrect, which cases should be used
-- In your explanation, identify each specific error: "leuten should be Menschen (correct plural form)", "hat should be haben (plural verb form)", "arbeitlos should be Arbeitslosigkeit (noun form with article)"
-- The explanation should teach the grammar rules, not just describe that errors exist
-- Explain WHY certain grammatical forms are used: "haben is used because the subject is plural", "Armut requires the preposition mit + Dativ case"
-
-Format your response EXACTLY as:
-STATUS: [CORRECT/INCORRECT]
-TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be the CORRECT translation, NOT the user's answer. Even if incorrect, provide what the correct translation should be]
-QUALITY: [0-100]
-EXPLANATION: [Detailed GRAMMAR explanation in {interface_lang_name}. Must include: specific grammatical errors (wrong article, wrong case, wrong verb form, wrong noun form), correct forms with explanations why, relevant grammar rules. Be specific and educational, not generic.]"""
-        
         response = await self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"You are a strict language teacher. Always respond in {interface_lang_name} for explanations."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are a strict language teacher for precise grammar checking. Respond with strict JSON only."},
+                {"role": "user", "content": eval_prompt},
             ],
-            temperature=0.3,
-            max_tokens=400
+            temperature=0.1,
+            max_tokens=400,
         )
-        
-        result = response.choices[0].message.content.strip()
-        
-        # Parse response with robust status checking
-        lines = result.split("\n")
-        status_line = lines[0].strip().upper() if lines else ""
-        
-        # Check for exact status patterns to avoid false positives
-        is_correct = status_line.startswith("STATUS:") and "CORRECT" in status_line and "INCORRECT" not in status_line
-        
-        translation_line = [line for line in lines if "TRANSLATION:" in line]
-        correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else ""
-        
-        # Validate that correct_translation is actually a translation, not a status word or placeholder
-        # Check for invalid translation values
-        invalid_translation_words = ["incorrect", "correct", "wrong", "right", "error", "n/a", "na", "none", "null"]
-        is_invalid_translation = (
-            correct_translation.lower() in invalid_translation_words or 
-            len(correct_translation) < 3 or
-            correct_translation == "" or
-            correct_translation == "-"
-        )
-        
-        # CRITICAL: If the answer is marked as incorrect, the TRANSLATION field should NOT contain the user's wrong answer
-        # Check if correct_translation is too similar to user_translation (case-insensitive, ignoring extra spaces)
-        if not is_correct and not is_invalid_translation:
-            normalized_correct = " ".join(correct_translation.lower().split())
-            normalized_user = " ".join(user_translation.lower().split())
-            # If they match or are very similar (allowing for minor punctuation differences)
-            if normalized_correct == normalized_user or normalized_correct.replace(".", "").replace(",", "").replace("!", "").replace("?", "") == normalized_user.replace(".", "").replace(",", "").replace("!", "").replace("?", ""):
-                is_invalid_translation = True
-        
-        if is_invalid_translation:
-            # Always use the translate method to get a proper translation of the original sentence
+
+        raw = (response.choices[0].message.content or "").strip()
+
+        # Defaults
+        is_correct = False
+        correct_translation = ""
+        quality_percentage = 0
+        errors_list = []
+
+        # Try parse JSON
+        try:
+            data = json.loads(raw)
+            status_val = str(data.get("status", "")).upper()
+            is_correct = status_val == "CORRECT"
+            correct_translation = (data.get("correct") or "").strip()
+            quality_percentage = int(data.get("quality", 0))
+            quality_percentage = max(0, min(100, quality_percentage))
+            errors = data.get("errors") or []
+            if isinstance(errors, list):
+                errors_list = [str(e) for e in errors if str(e).strip()]
+            else:
+                errors_list = [str(errors)]
+        except Exception:
+            # Fallback very defensive parse
+            # If model misbehaved, mark as incorrect and compute later
+            errors_list = [
+                "Автоматический парсер: ответ не в JSON, применены строгие правила."
+            ]
+            is_correct = False
+            correct_translation = ""
+            quality_percentage = 40
+
+        # Ensure we always provide a correct translation string
+        if not correct_translation:
             try:
-                correct_translation, _ = await self.translate(
-                    original,
-                    interface_lang,
-                    expected_lang,
-                    None  # Don't count tokens
-                )
-            except Exception as e:
-                # If translation fails, provide a clear error message
-                # This should rarely happen in production but ensures we always have something
-                import logging
-                logging.warning(f"Failed to get fallback translation: {e}")
-                correct_translation = f"[Error: Could not generate translation]"
-        
-        quality_line = [line for line in lines if "QUALITY:" in line]
-        quality_percentage = 100 if is_correct else 0
-        if quality_line:
-            try:
-                quality_str = quality_line[0].replace("QUALITY:", "").strip()
-                # Extract just the number from strings like "85%" or "85"
-                quality_percentage = int(''.join(filter(str.isdigit, quality_str)))
-                quality_percentage = max(0, min(100, quality_percentage))  # Clamp to 0-100
-            except (ValueError, IndexError):
-                quality_percentage = 100 if is_correct else 50
-        
-        explanation_line = [line for line in lines if "EXPLANATION:" in line]
-        explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
-        
-        # If no explanation was found, collect remaining lines as explanation
+                correct_translation, _ = await self.translate(original, interface_lang, expected_lang, None)
+            except Exception:
+                correct_translation = ""
+
+        # German-specific rule-based penalties and corrections
+        penalties = 0
+        u = user_translation.strip()
+        u_lower = u.lower()
+        if expected_lang.lower() == "de":
+            def penalize(reason: str, amount: int = 10):
+                nonlocal penalties, errors_list
+                penalties += max(0, amount)
+                if reason not in errors_list:
+                    errors_list.append(reason)
+
+            # Common mistakes
+            if "eden tag" in u_lower:  # jeden Tag
+                penalize("Орфография: нужно 'jeden Tag' (Akkusativ)", 20)
+            if "das gesund" in u_lower or re.search(r"\bgesund(?!heit)\b", u_lower):
+                penalize("Лексика/существительное: требуется 'die Gesundheit' (существительное с заглавной)", 25)
+            if "damit" in u_lower and " zu " in u_lower:
+                penalize("Конструкция цели: вместо 'damit ... zu' использовать 'um ... zu'", 20)
+            # Capitalization of nouns: very rough heuristic – if line contains 'gesundheit' in lowercase
+            if "gesundheit" in u_lower and "Gesundheit" not in u:
+                penalize("Правописание: существительные в немецком с заглавной — 'Gesundheit'", 10)
+
+        # Apply penalties to quality and correctness
+        if penalties:
+            quality_percentage = max(0, quality_percentage - penalties)
+            is_correct = False
+
+        # Final strictness: ensure CORRECT only if high score and no errors
+        if is_correct and (quality_percentage < 90 or errors_list):
+            is_correct = False
+
+        # Build tutor-style explanation in interface language from errors
+        explanation = "\n".join(errors_list).strip()
         if not explanation:
-            explanation_started = False
-            explanation_parts = []
-            for line in lines:
-                if "EXPLANATION:" in line:
-                    explanation_started = True
-                    explanation_parts.append(line.replace("EXPLANATION:", "").strip())
-                elif explanation_started:
-                    explanation_parts.append(line.strip())
-            if explanation_parts:
-                explanation = " ".join(explanation_parts)
-        
+            # Provide minimal educational note even when perfect
+            explanation = (
+                "Перевод соответствует оригиналу без грамматических ошибок." if is_correct
+                else "В ответе обнаружены ошибки. Проверьте статьи, падежи, орфографию и порядок слов."
+            )
+
         return is_correct, correct_translation, explanation, quality_percentage
 
 
