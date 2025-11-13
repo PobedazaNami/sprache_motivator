@@ -13,6 +13,18 @@ services:
       timeout: 5s
       retries: 5
 
+  languagetool:
+    image: erikvl87/languagetool:latest
+    environment:
+      - LT_SERVER_OPTS=-Xms256m -Xmx1g
+    ports:
+      - "8010:8010"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8010/v2/languages"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   bot:
     build:
       context: .
@@ -20,8 +32,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      languagetool:
+        condition: service_healthy
     env_file:
       - .env
+    environment:
+      - LANGUAGETOOL_URL=http://languagetool:8010
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped

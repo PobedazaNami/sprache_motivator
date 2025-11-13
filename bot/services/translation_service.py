@@ -1,7 +1,8 @@
 from openai import AsyncOpenAI
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 import re
 import json
+import aiohttp
 from bot.config import settings
 from bot.services.redis_service import redis_service
 
@@ -14,6 +15,13 @@ class TranslationService:
             "die": "feminine", 
             "das": "neuter",
             "plural": "plural"
+        }
+        # Pre-map LanguageTool language tags
+        self.lt_lang_map = {
+            "de": "de-DE",
+            "en": "en-US",
+            "ru": "ru-RU",
+            "uk": "uk-UA",
         }
     
     async def translate(
@@ -256,6 +264,30 @@ Rules:
             quality_percentage = max(0, quality_percentage - penalties)
             is_correct = False
 
+        # LanguageTool grammar check (deterministic). Non-fatal if unavailable.
+        lt_matches: List[Dict] = []
+        if settings.LANGUAGETOOL_ENABLED and settings.LANGUAGETOOL_URL:
+            try:
+                lt_lang = self.lt_lang_map.get(expected_lang.lower(), expected_lang)
+                lt_matches = await self._languagetool_check(text=u, language=lt_lang)
+                if lt_matches:
+                    # Penalize per match, capped
+                    penalty_per_issue = 6
+                    max_penalty = 40
+                    lt_penalty = min(max_penalty, penalty_per_issue * len(lt_matches))
+                    quality_percentage = max(0, quality_percentage - lt_penalty)
+                    is_correct = False
+                    # Add top messages to errors
+                    for m in lt_matches[:5]:
+                        msg = m.get("message") or m.get("shortMessage") or "Grammar issue"
+                        rule_id = (m.get("rule", {}) or {}).get("id", "")
+                        formatted = f"[LT] {msg}{f' ({rule_id})' if rule_id else ''}"
+                        if formatted not in errors_list:
+                            errors_list.append(formatted)
+            except Exception:
+                # If LT is down, proceed without it
+                pass
+
         # Final strictness: ensure CORRECT only if high score and no errors
         if is_correct and (quality_percentage < 90 or errors_list):
             is_correct = False
@@ -270,6 +302,37 @@ Rules:
             )
 
         return is_correct, correct_translation, explanation, quality_percentage
+
+    async def _languagetool_check(self, text: str, language: str) -> List[Dict]:
+        """Call LanguageTool HTTP server /v2/check and return matches list.
+        Non-raising: returns [] on any error.
+        """
+        base = settings.LANGUAGETOOL_URL.rstrip("/")
+        url = f"{base}/v2/check"
+        data = {
+            "text": text,
+            "language": language,
+            "enabledOnly": "false",
+        }
+        timeout = aiohttp.ClientTimeout(total=6)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, data=data) as resp:
+                if resp.status != 200:
+                    return []
+                payload = await resp.json(content_type=None)
+                matches = payload.get("matches") or []
+                # Normalize a bit
+                norm: List[Dict] = []
+                for m in matches:
+                    if isinstance(m, dict):
+                        norm.append({
+                            "message": m.get("message"),
+                            "shortMessage": m.get("shortMessage"),
+                            "offset": m.get("offset"),
+                            "length": m.get("length"),
+                            "rule": m.get("rule") or {},
+                        })
+                return norm
 
 
 translation_service = TranslationService()

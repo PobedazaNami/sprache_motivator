@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     
+    # LanguageTool grammar server
+    # Example: http://languagetool:8010 or http://localhost:8010
+    LANGUAGETOOL_URL: str = "http://languagetool:8010"
+    LANGUAGETOOL_ENABLED: bool = True
+    
     # Admin
     ADMIN_IDS: str = ""
     
