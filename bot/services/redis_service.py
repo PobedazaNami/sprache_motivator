@@ -69,6 +69,21 @@ class RedisService:
         """Clear user state"""
         key = f"state:user:{user_id}"
         await self.redis.delete(key)
+    
+    async def get(self, key: str) -> Optional[str]:
+        """Get value by key"""
+        return await self.redis.get(key)
+    
+    async def set(self, key: str, value, ex: int = None):
+        """Set value by key with optional expiry"""
+        if ex:
+            await self.redis.setex(key, ex, value)
+        else:
+            await self.redis.set(key, value)
+    
+    async def delete(self, key: str):
+        """Delete a key"""
+        await self.redis.delete(key)
 
 
 redis_service = RedisService()

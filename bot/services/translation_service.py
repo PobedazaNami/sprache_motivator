@@ -50,7 +50,7 @@ class TranslationService:
                 {"role": "system", "content": "You are a professional translator."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,
+            temperature=0.3,
             max_tokens=500
         )
         
@@ -66,8 +66,19 @@ class TranslationService:
         
         return translation, tokens_used
     
-    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str) -> str:
+    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str, topic=None) -> str:
         """Generate a sentence for daily trainer"""
+        from bot.models.database import TrainerTopic, TOPIC_METADATA
+        import random
+        
+        # Map language codes to full names for clarity
+        lang_names = {
+            "uk": "Ukrainian",
+            "ru": "Russian", 
+            "en": "English",
+            "de": "German"
+        }
+        
         difficulty_descriptions = {
             "A2": "elementary level (A2)",
             "B1": "intermediate level (B1)",
@@ -75,7 +86,55 @@ class TranslationService:
             "A2-B2": "mixed difficulty between A2 and B2"
         }
         
-        prompt = f"Generate a simple sentence in {interface_lang} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
+        # Topic descriptions for prompts
+        topic_descriptions = {
+            TrainerTopic.PERSONAL_INFO: "personal information and introduction (name, age, origin, profession)",
+            TrainerTopic.FAMILY_FRIENDS: "family and friends (relationships, character, connections)",
+            TrainerTopic.HOME_DAILY: "home and daily life (housing, neighbors, household chores, daily habits)",
+            TrainerTopic.LEISURE_HOBBIES: "leisure and hobbies (sports, hobbies, free time, meetings)",
+            TrainerTopic.SHOPPING_MONEY: "shopping and money (purchases, stores, prices, goods)",
+            TrainerTopic.FOOD_DRINK: "food and drink (eating, restaurants, favorite dishes)",
+            TrainerTopic.HEALTH_DOCTOR: "health and doctor visits (illness, doctor appointments, medicine)",
+            TrainerTopic.TRANSPORT: "traffic and transport (bus, train, road, tickets)",
+            TrainerTopic.TRAVEL_VACATION: "travel and vacation (trips, holidays, hotels, excursions)",
+            TrainerTopic.WEATHER_SEASONS: "weather and seasons (weather, seasons, clothing)",
+            TrainerTopic.SCHOOL_LEARNING: "school and learning (studying, language courses, exams)",
+            TrainerTopic.CELEBRATIONS: "celebrations and holidays (holidays, traditions, congratulations)",
+            TrainerTopic.WORK_CAREER: "work and career (job, profession, working conditions)",
+            TrainerTopic.JOB_APPLICATION: "job application and CV (interview, resume, job search)",
+            TrainerTopic.RESIDENCE_NEIGHBORHOOD: "residence and neighborhood (life in city/village, neighbors)",
+            TrainerTopic.LEISURE_MEDIA: "leisure and media (cinema, television, internet, social media)",
+            TrainerTopic.FOOD_NUTRITION: "food, drink and nutrition (eating habits, diet, health)",
+            TrainerTopic.TRAVEL_TRAFFIC: "travel and traffic (journeys, transport, impressions)",
+            TrainerTopic.ENVIRONMENT_NATURE: "environment and nature (ecology, waste, recycling)",
+            TrainerTopic.SOCIETY_COEXISTENCE: "society and coexistence (helping others, respect, rules)",
+            TrainerTopic.HEALTH_LIFESTYLE: "health and lifestyle (sports, stress, healthy living)",
+            TrainerTopic.FASHION_CLOTHING: "fashion and clothing (style, shopping, appearance)",
+            TrainerTopic.TECHNOLOGY_DIGITALIZATION: "technology and digitalization (impact of technology, internet, online work)",
+            TrainerTopic.MEDIA_ADVERTISING: "media, advertising and consumption (advertising, manipulation, social media)",
+            TrainerTopic.FUTURE_DREAMS: "future and dreams (goals, career, self-development)",
+            TrainerTopic.SOCIAL_PROBLEMS: "social problems (poverty, unemployment, housing, discrimination)",
+            TrainerTopic.CULTURE_IDENTITY: "culture and identity (cultural differences, traditions, integration)",
+            TrainerTopic.SCIENCE_INNOVATION: "science and innovation (inventions, artificial intelligence, medicine)",
+            TrainerTopic.ENVIRONMENT_CLIMATE: "environment and climate change (climate, global warming, solutions)",
+            TrainerTopic.FUTURE_WORK: "work of the future (automation, remote work, work-life balance)",
+        }
+        
+        interface_lang_name = lang_names.get(interface_lang, interface_lang)
+        
+        # Handle topic selection
+        topic_instruction = ""
+        if topic and topic != TrainerTopic.RANDOM:
+            topic_desc = topic_descriptions.get(topic, "general topic")
+            topic_instruction = f" about the topic: {topic_desc}"
+        elif not topic or topic == TrainerTopic.RANDOM:
+            # Select random topic
+            available_topics = [t for t in TrainerTopic if t != TrainerTopic.RANDOM]
+            random_topic = random.choice(available_topics)
+            topic_desc = topic_descriptions.get(random_topic, "general topic")
+            topic_instruction = f" about the topic: {topic_desc}"
+        
+        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
         
         response = await self.client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -83,7 +142,7 @@ class TranslationService:
                 {"role": "system", "content": "You are a language teacher creating practice sentences."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.7,
             max_tokens=100
         )
         
@@ -100,86 +159,141 @@ class TranslationService:
         Check if user's translation is correct
         Returns: (is_correct, correct_translation, explanation, quality_percentage)
         """
-        prompt = f"""Evaluate a learner's translation. You receive the original sentence and the learner's translation.
+        # Map language codes to full names for clarity
+        lang_names = {
+            "uk": "Ukrainian",
+            "ru": "Russian", 
+            "en": "English",
+            "de": "German"
+        }
+        
+        interface_lang_name = lang_names.get(interface_lang, interface_lang)
+        expected_lang_name = lang_names.get(expected_lang, expected_lang)
+        
+        prompt = f"""You are a language teacher checking a translation exercise.
 
-Original sentence (source language): {original}
-Learner translation (target={expected_lang}): {user_translation}
+Original sentence (to be translated): {original}
+User's translation attempt: {user_translation}
+Expected target language: {expected_lang_name}
 
-TASK:
-1. Produce the best correct translation in target language.
-2. Identify ALL mistakes (articles, verb endings, tense, word order, capitalization, noun gender, case, choice of verb (e.g. 'frühstücken' vs 'essen Frühstück'), spelling).
-3. Decide correctness: ONLY 'CORRECT' if there are ZERO grammar or morphology errors.
-4. Score quality 0-100 following rubric:
-   100: Perfect
-   85-99: Minor style only
-   60-84: Some grammar errors, meaning OK
-   30-59: Multiple grammar errors but understandable
-   1-29: Severe errors, meaning partly lost
-   0: Meaning wrong or unintelligible
-5. Provide short structured explanation listing each error category.
+Your task:
+1. First check if the user's answer is even attempting to translate the original sentence or if it's completely off-topic/irrelevant
+2. If off-topic (e.g., single random word, unrelated sentence), mark as INCORRECT with quality 0-20%
+3. If on-topic, evaluate the translation quality based on these specific criteria:
+   - **Punctuation correctness**: Are commas, periods, and other punctuation marks placed correctly according to {expected_lang_name} grammar rules? (20% weight)
+   - **Word endings and grammar**: Are word endings correct (declensions, conjugations)? Are articles, prepositions, and cases used correctly? (30% weight)
+   - **Semantic accuracy**: Does the translation accurately convey the same meaning as the original sentence? (30% weight)
+   - **Vocabulary appropriateness**: Are the words natural and appropriate for the context? (10% weight)
+   - **Natural phrasing**: Does it sound natural in {expected_lang_name}? (10% weight)
+   Note: Minor errors in any category should not severely impact the quality score if the overall meaning is preserved.
+4. Provide the correct/ideal translation of the ORIGINAL sentence in {expected_lang_name}
+5. Give a GRAMMAR-FOCUSED explanation about the correct translation, explaining the grammatical rules, word forms, sentence structure, and usage patterns that apply
 
-Return STRICT JSON ONLY (no prose) with keys:
-{"status": "CORRECT|INCORRECT", "correct": "<correct translation>", "quality": <int>, "errors": ["error 1", "error 2", ...]}"""
+CRITICAL REQUIREMENTS: 
+- Write ALL explanations in {interface_lang_name} language
+- The TRANSLATION field must ALWAYS contain the actual correct translation of "{original}" in {expected_lang_name} - it MUST be an actual translation, not a status word
+- NEVER put the user's answer in the TRANSLATION field - it must be the correct translation from scratch
+- NEVER use placeholders like "N/A", "Incorrect", "Correct", "Wrong", or any other status words in the TRANSLATION field
+- Even if the user's answer is completely wrong or off-topic, ALWAYS provide the correct translation of the original sentence
+- Consider translations with minor spelling or grammar mistakes as high quality (70-90%) if the meaning is correct
+- Only give very low quality scores (0-30%) for completely wrong or off-topic answers
+- In your EXPLANATION, you MUST focus EXCLUSIVELY on GRAMMAR - DO NOT write generic statements
+- You must explain the grammatical rules including cases, articles, prepositions, verb conjugations, word order, declensions: Which grammatical case is used and why? Which article (der/die/das) and why? Which verb conjugation and why? Which preposition and which case does it require?
+- In your explanation, specifically mention if there are errors in: punctuation, word endings, or semantic meaning
+- Do NOT write vague statements like "contains errors in punctuation and word formation" - instead specify EXACTLY which words have wrong endings, which articles are incorrect, which cases should be used
+- In your explanation, identify each specific error: "leuten should be Menschen (correct plural form)", "hat should be haben (plural verb form)", "arbeitlos should be Arbeitslosigkeit (noun form with article)"
+- The explanation should teach the grammar rules, not just describe that errors exist
+- Explain WHY certain grammatical forms are used: "haben is used because the subject is plural", "Armut requires the preposition mit + Dativ case"
+
+Format your response EXACTLY as:
+STATUS: [CORRECT/INCORRECT]
+TRANSLATION: [the correct/ideal translation of "{original}" in {expected_lang_name} - MUST be the CORRECT translation, NOT the user's answer. Even if incorrect, provide what the correct translation should be]
+QUALITY: [0-100]
+EXPLANATION: [Detailed GRAMMAR explanation in {interface_lang_name}. Must include: specific grammatical errors (wrong article, wrong case, wrong verb form, wrong noun form), correct forms with explanations why, relevant grammar rules. Be specific and educational, not generic.]"""
         
         response = await self.client.chat.completions.create(
-            model="gpt-4o-mini",  # More accurate for grammar checking than gpt-3.5-turbo
+            model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a strict language teacher. Check grammar precisely and mark INCORRECT if there are ANY errors in verb forms, articles, cases, declensions, or word order."},
+                {"role": "system", "content": f"You are a strict language teacher. Always respond in {interface_lang_name} for explanations."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1,  # Very low temperature for consistent, strict evaluation
+            temperature=0.3,
             max_tokens=400
         )
         
-        raw = response.choices[0].message.content.strip()
-
-        # Try JSON parse
-        import json
-        is_correct = False
-        correct_translation = user_translation
-        explanation = ""
-        quality_percentage = 0
-        try:
-            data = json.loads(raw)
-            status_val = str(data.get("status", "")).upper()
-            is_correct = status_val == "CORRECT"
-            correct_translation = data.get("correct", user_translation).strip() or user_translation
-            quality_percentage = int(data.get("quality", 0))
-            quality_percentage = max(0, min(100, quality_percentage))
-            errors_list = data.get("errors", []) or []
-            explanation = "\n".join(errors_list)
-        except Exception:
-            # Fallback simple heuristic if JSON failed
-            explanation = "Parser fallback: модель вернула не-JSON."
-            # Penalize if clearly wrong patterns present
-            quality_percentage = 30
-
-        # Apply rule-based German heuristics for stricter penalties
-        if expected_lang.lower() == "de":
-            penalties = 0
-            lower_user = user_translation.lower()
-            def penalize(reason, amount):
-                nonlocal penalties, explanation
-                penalties += amount
-                if reason not in explanation:
-                    explanation += ("\n" if explanation else "") + reason
-            if "maine " in lower_user:
-                penalize("Ошибка: 'Meine' написано как 'Maine'", 15)
-            if "familie essen" in lower_user:
-                penalize("Спряжение: должно 'Familie isst' или 'Familie frühstückt'", 25)
-            if any(x in lower_user for x in ["den frühstück","der frühstück","einen frühstück"]):
-                penalize("Артикль: нужно 'das Frühstück'", 20)
-            if "essen frühstück" in lower_user:
-                penalize("Лексика: предпочтительно глагол 'frühstücken'", 10)
-            if penalties:
-                quality_percentage = max(0, quality_percentage - penalties)
-                if penalties > 0:
-                    is_correct = False  # Force incorrect if any penalty
+        result = response.choices[0].message.content.strip()
         
-        # Final adjustment: if marked correct but quality < 90, downgrade correctness
-        if is_correct and quality_percentage < 90:
-            is_correct = False
-            explanation += ("\nАвто-правка: качество <90 => не идеально по правилам.")
+        # Parse response with robust status checking
+        lines = result.split("\n")
+        status_line = lines[0].strip().upper() if lines else ""
+        
+        # Check for exact status patterns to avoid false positives
+        is_correct = status_line.startswith("STATUS:") and "CORRECT" in status_line and "INCORRECT" not in status_line
+        
+        translation_line = [line for line in lines if "TRANSLATION:" in line]
+        correct_translation = translation_line[0].replace("TRANSLATION:", "").strip() if translation_line else ""
+        
+        # Validate that correct_translation is actually a translation, not a status word or placeholder
+        # Check for invalid translation values
+        invalid_translation_words = ["incorrect", "correct", "wrong", "right", "error", "n/a", "na", "none", "null"]
+        is_invalid_translation = (
+            correct_translation.lower() in invalid_translation_words or 
+            len(correct_translation) < 3 or
+            correct_translation == "" or
+            correct_translation == "-"
+        )
+        
+        # CRITICAL: If the answer is marked as incorrect, the TRANSLATION field should NOT contain the user's wrong answer
+        # Check if correct_translation is too similar to user_translation (case-insensitive, ignoring extra spaces)
+        if not is_correct and not is_invalid_translation:
+            normalized_correct = " ".join(correct_translation.lower().split())
+            normalized_user = " ".join(user_translation.lower().split())
+            # If they match or are very similar (allowing for minor punctuation differences)
+            if normalized_correct == normalized_user or normalized_correct.replace(".", "").replace(",", "").replace("!", "").replace("?", "") == normalized_user.replace(".", "").replace(",", "").replace("!", "").replace("?", ""):
+                is_invalid_translation = True
+        
+        if is_invalid_translation:
+            # Always use the translate method to get a proper translation of the original sentence
+            try:
+                correct_translation, _ = await self.translate(
+                    original,
+                    interface_lang,
+                    expected_lang,
+                    None  # Don't count tokens
+                )
+            except Exception as e:
+                # If translation fails, provide a clear error message
+                # This should rarely happen in production but ensures we always have something
+                import logging
+                logging.warning(f"Failed to get fallback translation: {e}")
+                correct_translation = f"[Error: Could not generate translation]"
+        
+        quality_line = [line for line in lines if "QUALITY:" in line]
+        quality_percentage = 100 if is_correct else 0
+        if quality_line:
+            try:
+                quality_str = quality_line[0].replace("QUALITY:", "").strip()
+                # Extract just the number from strings like "85%" or "85"
+                quality_percentage = int(''.join(filter(str.isdigit, quality_str)))
+                quality_percentage = max(0, min(100, quality_percentage))  # Clamp to 0-100
+            except (ValueError, IndexError):
+                quality_percentage = 100 if is_correct else 50
+        
+        explanation_line = [line for line in lines if "EXPLANATION:" in line]
+        explanation = explanation_line[0].replace("EXPLANATION:", "").strip() if explanation_line else ""
+        
+        # If no explanation was found, collect remaining lines as explanation
+        if not explanation:
+            explanation_started = False
+            explanation_parts = []
+            for line in lines:
+                if "EXPLANATION:" in line:
+                    explanation_started = True
+                    explanation_parts.append(line.replace("EXPLANATION:", "").strip())
+                elif explanation_started:
+                    explanation_parts.append(line.strip())
+            if explanation_parts:
+                explanation = " ".join(explanation_parts)
         
         return is_correct, correct_translation, explanation, quality_percentage
 

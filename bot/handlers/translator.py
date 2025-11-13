@@ -9,6 +9,7 @@ from bot.services.database_service import UserService, WordService, TranslationH
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
 from bot.utils.keyboards import get_translator_keyboard, get_main_menu_keyboard
+from bot.handlers.admin import is_admin
 
 
 router = Router()
@@ -34,6 +35,26 @@ async def translator_mode(message: Message, state: FSMContext):
             return
         
         lang = user.interface_language.value
+        
+        # Admins have unrestricted access
+        if not is_admin(message.from_user.id):
+            # Check trial activation
+            if not user.trial_activated and not user.subscription_active:
+                await message.answer(get_text(lang, "trial_not_activated"))
+                return
+            
+            # Check trial expiration
+            if UserService.is_trial_expired(user):
+                from bot.config import settings
+                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
+                admin_contact = settings.ADMIN_CONTACT
+                await message.answer(
+                    get_text(lang, "trial_expired", 
+                            payment_link=payment_link,
+                            admin_contact=admin_contact)
+                )
+                return
+        
         await message.answer(get_text(lang, "translator_mode"))
         await state.set_state(TranslatorStates.waiting_for_text)
         await state.update_data(user_id=user.id, lang=lang, learning_lang=user.learning_language.value)
@@ -42,6 +63,7 @@ async def translator_mode(message: Message, state: FSMContext):
 @router.message(
     TranslatorStates.waiting_for_text,
     ~F.text.in_([
+        "📖 Переводчик", "📖 Перекладач",
         "🎯 Ежедневный тренажёр", "🎯 Щоденний тренажер",
         "⚙️ Настройки", "⚙️ Налаштування",
         "📊 Статистика", "📊 Статистика",
@@ -51,6 +73,24 @@ async def translator_mode(message: Message, state: FSMContext):
 )
 async def process_translation(message: Message, state: FSMContext):
     """Process translation request"""
+    # Check if user has an active training session
+    from bot.services.redis_service import redis_service
+    
+    training_state = await redis_service.get_user_state(message.from_user.id)
+    if training_state and training_state.get("state") == "awaiting_training_answer":
+        # User has active training session - let trainer handler process this
+        # Save current translator state to Redis for restoration after training
+        import json
+        current_data = await state.get_data()
+        await redis_service.set(
+            f"saved_translator_state:{message.from_user.id}",
+            json.dumps(current_data),
+            ex=3600  # 1 hour expiry
+        )
+        # Clear translator FSM state to allow trainer to handle the message
+        await state.clear()
+        return
+    
     data = await state.get_data()
     lang = data.get("lang", "ru")
     learning_lang = data.get("learning_lang", "en")
@@ -61,6 +101,26 @@ async def process_translation(message: Message, state: FSMContext):
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         
+        # Admins have unrestricted access
+        if not is_admin(message.from_user.id):
+            # Check trial status before processing
+            if not user.trial_activated and not user.subscription_active:
+                await message.answer(get_text(lang, "trial_not_activated"))
+                await state.clear()
+                return
+            
+            if UserService.is_trial_expired(user):
+                from bot.config import settings
+                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
+                admin_contact = settings.ADMIN_CONTACT
+                await message.answer(
+                    get_text(lang, "trial_expired", 
+                            payment_link=payment_link,
+                            admin_contact=admin_contact)
+                )
+                await state.clear()
+                return
+        
         try:
             # Detect source and target languages
             # Simple heuristic: if text contains Cyrillic, translate to learning language
@@ -68,9 +128,11 @@ async def process_translation(message: Message, state: FSMContext):
             is_cyrillic = any('\u0400' <= c <= '\u04FF' for c in text)
             
             if is_cyrillic:
+                # Cyrillic text (Ukrainian/Russian): translate to learning language
                 source_lang = lang
                 target_lang = learning_lang
             else:
+                # Non-Cyrillic text (English/German): translate to interface language
                 source_lang = learning_lang
                 target_lang = lang
             

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     MAX_TOKENS_PER_USER_DAILY: int = 10000
     CACHE_TTL_SECONDS: int = 2592000  # 30 days
     
+    # Subscription
+    STRIPE_PAYMENT_LINK: str = ""  # Stripe payment link for €5/month subscription
+    ADMIN_CONTACT: str = "@reeziat"  # Admin contact for support
+    
     @property
     def redis_url(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
