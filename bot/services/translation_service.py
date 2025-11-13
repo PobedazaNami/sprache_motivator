@@ -249,7 +249,8 @@ Rules:
                     errors_list.append(reason)
 
             # Common mistakes
-            if "eden tag" in u_lower:  # jeden Tag
+            # catch 'eden Tag' only when 'jeden Tag' is not present
+            if "eden tag" in u_lower and "jeden tag" not in u_lower:  # jeden Tag
                 penalize("Орфография: нужно 'jeden Tag' (Akkusativ)", 20)
             if "das gesund" in u_lower or re.search(r"\bgesund(?!heit)\b", u_lower):
                 penalize("Лексика/существительное: требуется 'die Gesundheit' (существительное с заглавной)", 25)
