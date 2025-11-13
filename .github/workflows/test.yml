@@ -1,12 +1,10 @@
 name: Python Tests
 
 on:
-  # Disabled auto-trigger on push to avoid redundant runs (deploy.yml handles deployment)
-  # push:
-  #   branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]  # Still run on PRs for validation
-  workflow_dispatch:  # Manual trigger
+    branches: [ main, develop ]
 
 jobs:
   test:

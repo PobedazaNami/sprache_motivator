@@ -13,6 +13,14 @@ def get_language_selection_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_trial_activation_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for trial activation"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_activate_trial"), callback_data="activate_trial")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     """Main menu keyboard based on user language"""
     lang = user.interface_language.value
@@ -48,7 +56,7 @@ def get_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     
     builder.button(text=get_text(lang, "interface_lang"), callback_data="settings_interface_lang")
     builder.button(text=get_text(lang, "learning_lang"), callback_data="settings_learning_lang")
-    builder.button(text=get_text(lang, "difficulty"), callback_data="settings_difficulty")
+    # Difficulty level removed - now handled through topic selection in trainer settings
     builder.button(text=get_text(lang, "btn_back"), callback_data="settings_back")
     
     builder.adjust(1)
@@ -75,16 +83,6 @@ def get_learning_language_keyboard(lang: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_learning_language_keyboard_for_trainer(lang: str) -> InlineKeyboardMarkup:
-    """Keyboard for selecting learning language from trainer settings"""
-    builder = InlineKeyboardBuilder()
-    builder.button(text=get_text(lang, "btn_english"), callback_data="trainer_update_learning_en")
-    builder.button(text=get_text(lang, "btn_german"), callback_data="trainer_update_learning_de")
-    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
-    builder.adjust(2, 1)
-    return builder.as_markup()
-
-
 def get_difficulty_keyboard(lang: str) -> InlineKeyboardMarkup:
     """Keyboard for selecting difficulty level"""
     builder = InlineKeyboardBuilder()
@@ -93,18 +91,6 @@ def get_difficulty_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder.button(text="B2", callback_data="set_difficulty_B2")
     builder.button(text="A2-B2", callback_data="set_difficulty_A2-B2")
     builder.button(text=get_text(lang, "btn_back"), callback_data="settings_back")
-    builder.adjust(4, 1)
-    return builder.as_markup()
-
-
-def get_difficulty_keyboard_for_trainer(lang: str) -> InlineKeyboardMarkup:
-    """Keyboard for selecting difficulty level from trainer settings"""
-    builder = InlineKeyboardBuilder()
-    builder.button(text="A2", callback_data="trainer_update_difficulty_A2")
-    builder.button(text="B1", callback_data="trainer_update_difficulty_B1")
-    builder.button(text="B2", callback_data="trainer_update_difficulty_B2")
-    builder.button(text="A2-B2", callback_data="trainer_update_difficulty_A2-B2")
-    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
     builder.adjust(4, 1)
     return builder.as_markup()
 
@@ -134,21 +120,12 @@ def get_trainer_keyboard(user: Any) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_training_task_keyboard(lang: str) -> InlineKeyboardMarkup:
-    """Keyboard shown with an active training task"""
-    builder = InlineKeyboardBuilder()
-    builder.button(text=get_text(lang, "btn_show_translation"), callback_data="trainer_reveal_translation")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
 def get_trainer_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     """Keyboard for trainer settings"""
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text(lang, "btn_set_time_period"), callback_data="trainer_set_time")
     builder.button(text=get_text(lang, "btn_set_message_count"), callback_data="trainer_set_count")
-    builder.button(text=get_text(lang, "learning_lang"), callback_data="trainer_set_learning_lang")
-    builder.button(text=get_text(lang, "difficulty"), callback_data="trainer_set_difficulty")
+    builder.button(text=get_text(lang, "btn_set_topic"), callback_data="trainer_set_topic")
     builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_back")
     builder.adjust(1)
     return builder.as_markup()
@@ -192,4 +169,38 @@ def get_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="✅ Yes", callback_data="broadcast_confirm_yes")
     builder.button(text="❌ No", callback_data="broadcast_confirm_no")
     builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_topic_level_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting topic level category"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_topic_level_a2"), callback_data="topic_level_a2")
+    builder.button(text=get_text(lang, "btn_topic_level_b1"), callback_data="topic_level_b1")
+    builder.button(text=get_text(lang, "btn_topic_level_b2"), callback_data="topic_level_b2")
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data="set_topic_random")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_settings")
+    builder.adjust(3, 1, 1)
+    return builder.as_markup()
+
+
+def get_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting specific topic within a level"""
+    from bot.models.database import TrainerTopic, TOPIC_METADATA
+    
+    builder = InlineKeyboardBuilder()
+    
+    # Filter topics by level
+    for topic in TrainerTopic:
+        if topic == TrainerTopic.RANDOM:
+            continue
+        metadata = TOPIC_METADATA.get(topic)
+        if metadata and metadata["level"] == level:
+            topic_text = get_text(lang, f"topic_{topic.value}")
+            builder.button(text=topic_text, callback_data=f"set_topic_{topic.value}")
+    
+    # Add random topic button for this level
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data=f"set_topic_random_{level.lower()}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_set_topic")
+    builder.adjust(1)
     return builder.as_markup()

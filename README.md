@@ -5,6 +5,10 @@ A comprehensive Telegram bot for language practice and motivation with administr
 ## Features
 
 ### User Features
+- **10-Day Free Trial**: 
+  - New users get 10 days of full access
+  - Trial tracked in Berlin timezone
+  - €5/month subscription after trial
 - **Multi-language Interface**: Ukrainian and Russian interface languages
 - **Translation Mode**: 
   - English and German translation support
@@ -21,7 +25,7 @@ A comprehensive Telegram bot for language practice and motivation with administr
   - Activity scoring
   - Progress tracking
   - Performance statistics
-- **Settings**: Customizable interface language, learning language, and difficulty level
+- **Settings**: Customizable interface language, learning language, difficulty level, and trial status
 
 ### Admin Features
 - User approval/rejection system
@@ -146,15 +150,16 @@ python -m bot.main
 |----------|-------------|---------|
 | BOT_TOKEN | Telegram Bot Token | Required |
 | OPENAI_API_KEY | OpenAI API Key | Required |
-| POSTGRES_DB | Database name | sprache_bot |
-| POSTGRES_USER | Database user | sprache_user |
-| POSTGRES_PASSWORD | Database password | sprache_password |
-| POSTGRES_HOST | Database host | postgres |
+| MONGODB_URI | MongoDB connection URI | Required |
+| REDIS_HOST | Redis server host | redis |
+| REDIS_PORT | Redis server port | 6379 |
 | ADMIN_IDS | Admin user IDs (comma-separated) | Required |
 | MAX_CONCURRENT_USERS | Maximum concurrent users | 100 |
 | DAILY_TRAINER_TIMES | Training times (HH:MM,HH:MM) | 08:00,14:00,20:00 |
 | MAX_TOKENS_PER_USER_DAILY | Daily token limit per user | 10000 |
 | CACHE_TTL_SECONDS | Translation cache TTL | 2592000 (30 days) |
+| STRIPE_PAYMENT_LINK | Stripe payment link for subscription | - |
+| ADMIN_CONTACT | Admin Telegram username | @reeziat |
 
 ### Daily Trainer Schedule
 
@@ -172,12 +177,16 @@ Times are in 24-hour format, separated by commas.
 1. Start the bot: `/start`
 2. Select interface language (Ukrainian/Russian)
 3. Wait for admin approval
-4. Access main menu with features:
+4. Activate 10-day free trial
+5. Access main menu with features:
    - 📖 Translator
    - 🎯 Daily Trainer
    - 💾 Saved Words
    - ⚙️ Settings
    - 💬 Support
+6. After trial expires, subscribe for €5/month to continue
+
+For detailed trial information, see [TRIAL_SYSTEM.md](TRIAL_SYSTEM.md)
 
 ### For Admins
 

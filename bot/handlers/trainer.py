@@ -3,13 +3,14 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.models.database import UserStatus, DifficultyLevel, async_session_maker
+from bot.models.database import UserStatus, DifficultyLevel, TrainerTopic, async_session_maker
 from bot.services.database_service import UserService, TrainingService
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
 from bot.utils.keyboards import get_trainer_keyboard, get_main_menu_keyboard
 from bot.config import settings
 from bot.services import mongo_service
+from bot.handlers.admin import is_admin
 
 
 router = Router()
@@ -35,9 +36,39 @@ async def trainer_menu(message: Message, state: FSMContext):
         
         lang = user.interface_language.value
         
+        # Admins have unrestricted access
+        if not is_admin(message.from_user.id):
+            # Check trial activation
+            if not user.trial_activated and not user.subscription_active:
+                await message.answer(get_text(lang, "trial_not_activated"))
+                return
+            
+            # Check trial expiration
+            if UserService.is_trial_expired(user):
+                from bot.config import settings
+                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
+                admin_contact = settings.ADMIN_CONTACT
+                await message.answer(
+                    get_text(lang, "trial_expired", 
+                            payment_link=payment_link,
+                            admin_contact=admin_contact)
+                )
+                return
+        
         # Show current trainer status
         if user.daily_trainer_enabled:
-            text = get_text(lang, "trainer_started")
+            # Get progress and countdown information
+            from bot.services.scheduler_service import scheduler_service
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            
+            # Build status message with progress and countdown
+            base_text = get_text(lang, "trainer_started")
+            status_text = get_text(lang, "trainer_status", 
+                                  completed=tasks_sent, 
+                                  total=total_tasks, 
+                                  countdown=countdown)
+            text = f"{base_text}\n\n{status_text}"
         else:
             text = get_text(lang, "trainer_menu")
         
@@ -53,16 +84,22 @@ async def start_trainer(callback: CallbackQuery):
         lang = user.interface_language.value
         # Enable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=True)
-        # Try to send the first task immediately to avoid waiting for the next slot
-        try:
-            # Use Telegram ID for sending
-            await send_training_task(callback.bot, user.telegram_id)
-            immediate_note = "\n\n✅ Первое задание отправлено сейчас." if lang == "ru" else "\n\n✅ Перше завдання надіслано зараз."
-        except Exception:
-            # If generation fails, still show started message
-            immediate_note = ""
+        
+        # Get progress and countdown information
+        from bot.services.scheduler_service import scheduler_service
+        tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+        _, countdown = await scheduler_service.calculate_next_task_time(user)
+        
+        # Build status message with progress and countdown
+        base_text = get_text(lang, "trainer_started")
+        status_text = get_text(lang, "trainer_status", 
+                              completed=tasks_sent, 
+                              total=total_tasks, 
+                              countdown=countdown)
+        text = f"{base_text}\n\n{status_text}"
+        
         await callback.message.edit_text(
-            get_text(lang, "trainer_started") + immediate_note,
+            text,
             reply_markup=get_trainer_keyboard(user)
         )
     
@@ -94,15 +131,16 @@ async def show_trainer_settings(callback: CallbackQuery):
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
-        learning_lang = user.learning_language.value.upper()
-        difficulty = user.difficulty_level.value if user.difficulty_level else "A2"
+        
+        # Get topic name for display
+        topic = user.trainer_topic or TrainerTopic.RANDOM
+        topic_text = get_text(lang, f"topic_{topic.value}")
         
         text = get_text(lang, "trainer_settings_menu",
                        start=user.trainer_start_time or "09:00",
                        end=user.trainer_end_time or "21:00",
                        count=user.trainer_messages_per_day or 3,
-                       learning_lang=learning_lang,
-                       difficulty=difficulty)
+                       topic=topic_text)
         
         await callback.message.edit_text(
             text,
@@ -120,7 +158,18 @@ async def back_to_trainer_menu(callback: CallbackQuery):
         lang = user.interface_language.value
         
         if user.daily_trainer_enabled:
-            text = get_text(lang, "trainer_started")
+            # Get progress and countdown information
+            from bot.services.scheduler_service import scheduler_service
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            
+            # Build status message with progress and countdown
+            base_text = get_text(lang, "trainer_started")
+            status_text = get_text(lang, "trainer_status", 
+                                  completed=tasks_sent, 
+                                  total=total_tasks, 
+                                  countdown=countdown)
+            text = f"{base_text}\n\n{status_text}"
         else:
             text = get_text(lang, "trainer_menu")
         
@@ -150,6 +199,7 @@ async def show_time_selection(callback: CallbackQuery):
 async def set_time_period(callback: CallbackQuery):
     """Set training time period"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.scheduler_service import scheduler_service
     
     # Parse time from callback data: time_09_18 -> 09:00, 18:00
     parts = callback.data.split("_")
@@ -162,13 +212,24 @@ async def set_time_period(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Update user settings
+        # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, 
                                       trainer_start_time=start_time,
                                       trainer_end_time=end_time)
         
+        # Get updated progress using the already-updated user object
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
+        else:
+            progress_info = ""
+        
         await callback.message.edit_text(
-            get_text(lang, "time_period_updated", start=start_time, end=end_time),
+            get_text(lang, "time_period_updated", start=start_time, end=end_time) + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
@@ -196,6 +257,7 @@ async def show_count_selection(callback: CallbackQuery):
 async def set_message_count(callback: CallbackQuery):
     """Set daily message count"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.scheduler_service import scheduler_service
     
     # Parse count from callback data: count_5 -> 5
     count = int(callback.data.split("_")[1])
@@ -204,120 +266,140 @@ async def set_message_count(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Update user settings
+        # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, trainer_messages_per_day=count)
         
+        # Get updated progress using the already-updated user object
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
+        else:
+            progress_info = ""
+        
         await callback.message.edit_text(
-            get_text(lang, "message_count_updated", count=count),
+            get_text(lang, "message_count_updated", count=count) + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
     await callback.answer()
 
 
-@router.callback_query(F.data == "trainer_set_learning_lang")
-async def show_trainer_learning_lang(callback: CallbackQuery):
-    """Show learning language selection from trainer settings"""
-    from bot.utils.keyboards import get_learning_language_keyboard_for_trainer
+@router.callback_query(F.data == "trainer_set_topic")
+async def show_topic_selection(callback: CallbackQuery):
+    """Show topic level selection"""
+    from bot.utils.keyboards import get_topic_level_keyboard
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
         await callback.message.edit_text(
-            get_text(lang, "select_learning_lang"),
-            reply_markup=get_learning_language_keyboard_for_trainer(lang)
+            get_text(lang, "select_topic"),
+            reply_markup=get_topic_level_keyboard(lang)
         )
     
     await callback.answer()
 
 
-@router.callback_query(F.data == "trainer_set_difficulty")
-async def show_trainer_difficulty(callback: CallbackQuery):
-    """Show difficulty selection from trainer settings"""
-    from bot.utils.keyboards import get_difficulty_keyboard_for_trainer
+@router.callback_query(F.data.startswith("topic_level_"))
+async def show_topic_list(callback: CallbackQuery):
+    """Show topics for selected level"""
+    from bot.utils.keyboards import get_topic_selection_keyboard
+    
+    # Parse level from callback data: topic_level_a2 -> a2
+    level = callback.data.split("_")[2].upper()
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
         await callback.message.edit_text(
-            get_text(lang, "select_difficulty"),
-            reply_markup=get_difficulty_keyboard_for_trainer(lang)
+            get_text(lang, "select_topic"),
+            reply_markup=get_topic_selection_keyboard(lang, level)
         )
     
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("trainer_update_learning_"))
-async def update_trainer_learning_lang(callback: CallbackQuery):
-    """Update learning language from trainer settings"""
-    from bot.models.database import LearningLanguage
+@router.callback_query(F.data.startswith("set_topic_"))
+async def set_topic(callback: CallbackQuery):
+    """Set trainer topic"""
     from bot.utils.keyboards import get_trainer_settings_keyboard
+    from bot.services.redis_service import redis_service
     
-    lang_code = callback.data.split("_")[3]
-    learning_lang = LearningLanguage.ENGLISH if lang_code == "en" else LearningLanguage.GERMAN
+    # Parse topic from callback data: set_topic_personal_info -> personal_info
+    topic_value = callback.data.replace("set_topic_", "")
+    
+    # Check if it's a level-specific random topic (e.g., random_a2, random_b1, random_b2)
+    if topic_value.startswith("random_") and topic_value != "random":
+        # Level-specific random: store the level in Redis
+        level = topic_value.replace("random_", "").upper()  # e.g., "a2" -> "A2"
+        
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+            
+            # Set topic to random in user settings (this updates both the object in memory and the database)
+            await UserService.update_user(session, user, trainer_topic=TrainerTopic.RANDOM)
+            
+            # Store the specific level in Redis for random selection
+            await redis_service.set(f"random_topic_level:{user.id}", level, ex=None)
+            
+            # Get updated progress using the already-updated user object
+            from bot.services.scheduler_service import scheduler_service
+            if user.daily_trainer_enabled:
+                tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+                _, countdown = await scheduler_service.calculate_next_task_time(user)
+                progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                                  completed=tasks_sent, 
+                                                  total=total_tasks, 
+                                                  countdown=countdown)
+            else:
+                progress_info = ""
+            
+            await callback.message.edit_text(
+                get_text(lang, "topic_updated") + progress_info,
+                reply_markup=get_trainer_settings_keyboard(lang)
+            )
+        
+        await callback.answer()
+        return
+    
+    try:
+        topic = TrainerTopic(topic_value)
+    except ValueError:
+        # Invalid topic, ignore
+        await callback.answer()
+        return
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
-        await UserService.update_user(session, user, learning_language=learning_lang)
-        
-        # Refresh user to get updated values
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        
         lang = user.interface_language.value
-        learning_lang_display = user.learning_language.value.upper()
-        difficulty = user.difficulty_level.value if user.difficulty_level else "A2"
         
-        text = get_text(lang, "trainer_settings_menu",
-                       start=user.trainer_start_time or "09:00",
-                       end=user.trainer_end_time or "21:00",
-                       count=user.trainer_messages_per_day or 3,
-                       learning_lang=learning_lang_display,
-                       difficulty=difficulty)
+        # Update user settings (this updates both the object in memory and the database)
+        await UserService.update_user(session, user, trainer_topic=topic)
+        
+        # Clear any level-specific random setting
+        await redis_service.delete(f"random_topic_level:{user.id}")
+        
+        # Get updated progress using the already-updated user object
+        from bot.services.scheduler_service import scheduler_service
+        if user.daily_trainer_enabled:
+            tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+            _, countdown = await scheduler_service.calculate_next_task_time(user)
+            progress_info = "\n\n" + get_text(lang, "trainer_status", 
+                                              completed=tasks_sent, 
+                                              total=total_tasks, 
+                                              countdown=countdown)
+        else:
+            progress_info = ""
         
         await callback.message.edit_text(
-            get_text(lang, "settings_updated") + "\n\n" + text,
-            reply_markup=get_trainer_settings_keyboard(lang)
-        )
-    
-    await callback.answer()
-
-
-@router.callback_query(F.data.startswith("trainer_update_difficulty_"))
-async def update_trainer_difficulty(callback: CallbackQuery):
-    """Update difficulty level from trainer settings"""
-    from bot.utils.keyboards import get_trainer_settings_keyboard
-    
-    difficulty_code = callback.data.split("_")[3]
-    difficulty_map = {
-        "A2": DifficultyLevel.A2,
-        "B1": DifficultyLevel.B1,
-        "B2": DifficultyLevel.B2,
-        "A2-B2": DifficultyLevel.COMBINED
-    }
-    difficulty = difficulty_map.get(difficulty_code, DifficultyLevel.A2)
-    
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        await UserService.update_user(session, user, difficulty_level=difficulty)
-        
-        # Refresh user to get updated values
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        
-        lang = user.interface_language.value
-        learning_lang_display = user.learning_language.value.upper()
-        difficulty_display = user.difficulty_level.value if user.difficulty_level else "A2"
-        
-        text = get_text(lang, "trainer_settings_menu",
-                       start=user.trainer_start_time or "09:00",
-                       end=user.trainer_end_time or "21:00",
-                       count=user.trainer_messages_per_day or 3,
-                       learning_lang=learning_lang_display,
-                       difficulty=difficulty_display)
-        
-        await callback.message.edit_text(
-            get_text(lang, "settings_updated") + "\n\n" + text,
+            get_text(lang, "topic_updated") + progress_info,
             reply_markup=get_trainer_settings_keyboard(lang)
         )
     
@@ -326,6 +408,9 @@ async def update_trainer_difficulty(callback: CallbackQuery):
 
 async def send_training_task(bot, user_id: int):
     """Send a training task to user (called by scheduler)"""
+    from bot.services.redis_service import redis_service
+    import random
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, user_id)
         
@@ -335,12 +420,38 @@ async def send_training_task(bot, user_id: int):
         lang = user.interface_language.value
         learning_lang = user.learning_language.value
         difficulty = user.difficulty_level or DifficultyLevel.A2
+        topic = user.trainer_topic or TrainerTopic.RANDOM
+        
+        # Check if there's a level-specific random topic setting
+        if topic == TrainerTopic.RANDOM:
+            random_level = await redis_service.get(f"random_topic_level:{user.id}")
+            if random_level:
+                # Level-specific random: pick a random topic from this level
+                from bot.models.database import TOPIC_METADATA
+                level_topics = [t for t, meta in TOPIC_METADATA.items() 
+                               if meta["level"] == random_level and t != TrainerTopic.RANDOM]
+                if level_topics:
+                    topic = random.choice(level_topics)
+            else:
+                # Global random: pick random level first, then random topic from that level
+                from bot.models.database import TOPIC_METADATA
+                levels = ["A2", "B1", "B2"]
+                random_level = random.choice(levels)
+                level_topics = [t for t, meta in TOPIC_METADATA.items() 
+                               if meta["level"] == random_level and t != TrainerTopic.RANDOM]
+                if level_topics:
+                    topic = random.choice(level_topics)
+        
+        # Get current progress (after the task counter was incremented by scheduler)
+        from bot.services.scheduler_service import scheduler_service
+        tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
         
         # Generate sentence
         sentence = await translation_service.generate_sentence(
             difficulty.value,
             learning_lang,
-            lang
+            lang,
+            topic
         )
         
         # Get expected translation
@@ -351,13 +462,20 @@ async def send_training_task(bot, user_id: int):
             None  # Don't count tokens for system-generated tasks
         )
         
+        # Get topic metadata for display
+        from bot.models.database import TOPIC_METADATA
+        topic_metadata = TOPIC_METADATA.get(topic, {"level": difficulty.value, "number": 0})
+        topic_level = topic_metadata["level"]
+        topic_name = get_text(lang, f"topic_{topic.value}")
+        
         # Create training session
         training = await TrainingService.create_session(
             session,
             user.id,
             sentence,
             expected_translation,
-            difficulty
+            difficulty,
+            topic  # Pass topic to training session
         )
         # Optional mirror to Mongo
         if settings.mongo_enabled and mongo_service.is_ready():
@@ -366,26 +484,29 @@ async def send_training_task(bot, user_id: int):
             except Exception:
                 pass
         
-        # Send task to user with keyboard
-        from bot.utils.keyboards import get_training_task_keyboard
+        # Send task to user with progress information and topic/level
         await bot.send_message(
             user_id,
-            get_text(lang, "trainer_task", sentence=sentence),
-            reply_markup=get_training_task_keyboard(lang)
+            get_text(lang, "trainer_task_with_progress", 
+                    current=tasks_sent, 
+                    total=total_tasks,
+                    level=topic_level,
+                    topic=topic_name,
+                    sentence=sentence)
         )
         
         # Store training session ID in Redis for answer processing
         from bot.services.redis_service import redis_service
-        # Fix: training is dict, use Mongo _id
+        # Convert ObjectId to string for JSON serialization
         await redis_service.set_user_state(
             user_id,
             "awaiting_training_answer",
-            {"training_id": training["_id"]}
+            {"training_id": str(training["_id"])}
         )
 
 
 @router.message(F.text)
-async def check_training_answer(message: Message):
+async def check_training_answer(message: Message, state: FSMContext):
     """
     Check if message is an answer to training task.
     
@@ -400,8 +521,16 @@ async def check_training_answer(message: Message):
     if not state or state.get("state") != "awaiting_training_answer":
         return
     
-    training_id = state.get("data", {}).get("training_id")
-    if not training_id:
+    training_id_str = state.get("data", {}).get("training_id")
+    if not training_id_str:
+        return
+    
+    # Convert string back to ObjectId
+    from bson import ObjectId
+    try:
+        training_id = ObjectId(training_id_str)
+    except Exception:
+        await redis_service.clear_user_state(message.from_user.id)
         return
     
     async with async_session_maker() as session:
@@ -419,13 +548,9 @@ async def check_training_answer(message: Message):
         
         user_answer = message.text
         
-        # Use stored expected translation for more stable evaluation
-        expected_translation = training.get("expected_translation") or training.get("expected") or ""
-        # Combine original + expected for stricter model context
-        combined_original = f"{training['sentence']}\n[EXPECTED REFERENCE]\n{expected_translation}" if expected_translation else training["sentence"]
-
+        # Check translation with quality assessment
         is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
-            combined_original,
+            training["sentence"],
             user_answer,
             learning_lang,
             lang
@@ -464,62 +589,29 @@ async def check_training_answer(message: Message):
         else:
             await message.answer(
                 get_text(lang, "incorrect_answer",
-                        correct=correct_translation,
                         explanation=explanation or "",
                         quality=quality_percentage)
             )
         
-        # Clear state
+        # Clear training state
         await redis_service.clear_user_state(message.from_user.id)
-
-
-@router.callback_query(F.data == "trainer_reveal_translation")
-async def reveal_translation(callback: CallbackQuery):
-    """Reveal the expected translation for the current training task (user gives up)."""
-    from bot.services.redis_service import redis_service
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        # Check active training state
-        state = await redis_service.get_user_state(callback.from_user.id)
-        if not state or state.get("state") != "awaiting_training_answer":
-            await callback.answer()
-            return
-        training_id = state.get("data", {}).get("training_id")
-        if not training_id:
-            await redis_service.clear_user_state(callback.from_user.id)
-            await callback.answer()
-            return
-
-        # Fetch training from Mongo
-        training_col = mongo_service.db().training_sessions
-        training = await training_col.find_one({"_id": training_id})
-        if not training:
-            await redis_service.clear_user_state(callback.from_user.id)
-            await callback.answer()
-            return
-
-        expected_translation = training.get("expected_translation") or training.get("expected") or "(нет данных)" if lang == "ru" else "(немає даних)"
-
-        # Mark session as revealed/answered incorrectly with quality 0
-        await TrainingService.update_session(
-            session,
-            training_id,
-            user_translation="(revealed)",
-            is_correct=False,
-            explanation="User requested reveal",
-            quality_percentage=0
-        )
-        # Update user stats
-        user.total_answers += 1
-        await UserService.update_user(session, user, total_answers=user.total_answers)
-        await UserService.increment_activity(session, user, 1)
-        await TrainingService.update_daily_stats(session, user.id, 0)
-
-        # Clear state so they can't submit answer afterwards
-        await redis_service.clear_user_state(callback.from_user.id)
-
-        # Send revealed translation
-        await callback.message.answer(get_text(lang, "revealed_translation", correct=expected_translation))
-    await callback.answer()
+        
+        # Restore translator state if it was saved
+        saved_state_key = f"saved_translator_state:{message.from_user.id}"
+        saved_state = await redis_service.get(saved_state_key)
+        if saved_state and saved_state != "{}":
+            try:
+                # Import here to avoid circular dependency
+                from bot.handlers.translator import TranslatorStates
+                import json
+                
+                # Restore the translator state using the FSM context passed to this handler
+                saved_data = json.loads(saved_state)
+                await state.set_state(TranslatorStates.waiting_for_text)
+                await state.update_data(**saved_data)
+                
+                # Clear the saved state
+                await redis_service.set(saved_state_key, "{}", ex=1)
+            except Exception:
+                # If restoration fails, user can re-enter translator mode manually
+                pass
