@@ -108,3 +108,47 @@ async def test_languagetool_forces_incorrect():
     assert is_correct is False
     assert any(part.startswith("[LT]") for part in explanation.splitlines())
     assert quality < 96
+
+
+async def test_english_subject_verb_agreement():
+    # LLM says CORRECT, but user has "he go" instead of "he goes"
+    llm_json = '{"status":"CORRECT","correct":"He goes to the park every day.","quality":95,"errors":[]}'
+    svc = await make_service(llm_json, lt_matches=[])
+    is_correct, correct, explanation, quality = await svc.check_translation(
+        original="Він ходить у парк щодня.",
+        user_translation="He go to the park every day.",
+        expected_lang="en",
+        interface_lang="uk",
+    )
+    assert is_correct is False
+    assert quality < 95
+    assert "subject-verb agreement" in explanation or "verb+s" in explanation
+
+
+async def test_english_article_error():
+    # LLM says CORRECT, but user has "an university" instead of "a university"
+    llm_json = '{"status":"CORRECT","correct":"I study at a university.","quality":92,"errors":[]}'
+    svc = await make_service(llm_json, lt_matches=[])
+    is_correct, correct, explanation, quality = await svc.check_translation(
+        original="Я навчаюся в університеті.",
+        user_translation="I study at an university.",
+        expected_lang="en",
+        interface_lang="uk",
+    )
+    assert is_correct is False
+    assert quality < 92
+    assert "Article" in explanation or "consonant" in explanation
+
+
+async def test_english_perfect_answer():
+    # Perfect English answer should pass
+    llm_json = '{"status":"CORRECT","correct":"She reads books every evening.","quality":100,"errors":[]}'
+    svc = await make_service(llm_json, lt_matches=[])
+    is_correct, correct, explanation, quality = await svc.check_translation(
+        original="Вона читає книги щовечора.",
+        user_translation="She reads books every evening.",
+        expected_lang="en",
+        interface_lang="uk",
+    )
+    assert is_correct is True
+    assert quality >= 90

@@ -237,17 +237,19 @@ Rules:
             except Exception:
                 correct_translation = ""
 
-        # German-specific rule-based penalties and corrections
+        # Language-specific rule-based penalties and corrections
         penalties = 0
         u = user_translation.strip()
         u_lower = u.lower()
+        
+        def penalize(reason: str, amount: int = 10):
+            nonlocal penalties, errors_list
+            penalties += max(0, amount)
+            if reason not in errors_list:
+                errors_list.append(reason)
+        
+        # German-specific heuristics
         if expected_lang.lower() == "de":
-            def penalize(reason: str, amount: int = 10):
-                nonlocal penalties, errors_list
-                penalties += max(0, amount)
-                if reason not in errors_list:
-                    errors_list.append(reason)
-
             # Common mistakes
             # catch 'eden Tag' only when 'jeden Tag' is not present
             if "eden tag" in u_lower and "jeden tag" not in u_lower:  # jeden Tag
@@ -259,6 +261,29 @@ Rules:
             # Capitalization of nouns: very rough heuristic – if line contains 'gesundheit' in lowercase
             if "gesundheit" in u_lower and "Gesundheit" not in u:
                 penalize("Правописание: существительные в немецком с заглавной — 'Gesundheit'", 10)
+        
+        # English-specific heuristics
+        elif expected_lang.lower() == "en":
+            # Common ESL mistakes
+            # Subject-verb agreement: "he go" instead of "he goes"
+            if re.search(r"\b(he|she|it)\s+(go|do|have)\b", u_lower):
+                penalize("Grammar: subject-verb agreement (he/she/it + verb+s)", 15)
+            # Double negatives: "don't have no"
+            if re.search(r"\bdon't\s+\w*\s*no\b", u_lower) or re.search(r"\bno\s+\w*\s*not\b", u_lower):
+                penalize("Grammar: avoid double negatives in standard English", 15)
+            # Article errors: "an" before consonant sounds (university, European, one)
+            # Note: 'u' in 'university' has /j/ consonant sound, so needs 'a'
+            if re.search(r"\ban\s+(university|user|uniform|euro|one)\b", u_lower):
+                penalize("Article: use 'a' before consonant sounds (a university, a European)", 10)
+            # "a" before vowel sounds (but not before 'u' with /j/ sound)
+            if re.search(r"\ba\s+(apple|orange|hour|elephant|umbrella|idea)\b", u_lower):
+                penalize("Article: use 'an' before vowel sounds (an apple, an hour)", 10)
+            # Common spelling: "recieve" instead of "receive"
+            if "recieve" in u_lower:
+                penalize("Spelling: 'receive' (i before e except after c)", 10)
+            # "alot" instead of "a lot"
+            if "alot" in u_lower:
+                penalize("Spelling: 'a lot' (two words)", 10)
 
         # Apply penalties to quality and correctness
         if penalties:
