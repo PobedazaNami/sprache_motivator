@@ -588,9 +588,13 @@ async def check_training_answer(message: Message, state: FSMContext):
             await message.answer(feedback)
         else:
             await message.answer(
-                get_text(lang, "incorrect_answer",
-                        explanation=explanation or "",
-                        quality=quality_percentage)
+                get_text(
+                    lang,
+                    "incorrect_answer",
+                    explanation=explanation or "",
+                    quality=quality_percentage,
+                    correct=correct_translation or ""
+                )
             )
         
         # Clear training state
