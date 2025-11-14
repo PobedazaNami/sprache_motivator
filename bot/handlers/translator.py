@@ -97,6 +97,13 @@ async def process_translation(message: Message, state: FSMContext):
     user_id = data.get("user_id")
     
     text = message.text
+
+    # If user explicitly sends saved-words command text while in translator state,
+    # route it to the saved-words handler instead of treating as text to translate.
+    if text in ["💾 Сохранённые слова", "💾 Збережені слова"]:
+        # Import lazily to avoid circular imports
+        from bot.handlers.translator import show_saved_words
+        return await show_saved_words(message)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)

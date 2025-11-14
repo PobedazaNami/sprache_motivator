@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.models.database import UserStatus, DifficultyLevel, TrainerTopic, async_session_maker
+from bot.models.database import UserStatus, DifficultyLevel, TrainerTopic, TOPIC_METADATA, LearningLanguage, async_session_maker
 from bot.services.database_service import UserService, TrainingService
 from bot.services.translation_service import translation_service
 from bot.locales.texts import get_text
@@ -132,9 +132,20 @@ async def show_trainer_settings(callback: CallbackQuery):
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
         
-        # Get topic name for display
+        # Get topic name for display using metadata and learning language
         topic = user.trainer_topic or TrainerTopic.RANDOM
-        topic_text = get_text(lang, f"topic_{topic.value}")
+        if topic == TrainerTopic.RANDOM:
+            topic_text = get_text(lang, "btn_random_topic")
+        else:
+            metadata = TOPIC_METADATA.get(topic)
+            if metadata:
+                # Choose label based on learning language (German/English)
+                if user.learning_language == LearningLanguage.GERMAN:
+                    topic_text = metadata.get("de") or get_text(lang, f"topic_{topic.value}")
+                else:
+                    topic_text = metadata.get("en") or get_text(lang, f"topic_{topic.value}")
+            else:
+                topic_text = get_text(lang, f"topic_{topic.value}")
         
         text = get_text(lang, "trainer_settings_menu",
                        start=user.trainer_start_time or "09:00",
