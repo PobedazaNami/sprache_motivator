@@ -466,7 +466,21 @@ async def send_training_task(bot, user_id: int):
         from bot.models.database import TOPIC_METADATA
         topic_metadata = TOPIC_METADATA.get(topic, {"level": difficulty.value, "number": 0})
         topic_level = topic_metadata["level"]
-        topic_name = get_text(lang, f"topic_{topic.value}")
+
+        # Choose topic name based on learning language:
+        # - if user learns German (de) -> German topic label
+        # - if user learns English (en) -> English topic label
+        if topic in TOPIC_METADATA:
+            if user.learning_language.value == "de":
+                topic_name = topic_metadata.get("de")
+            elif user.learning_language.value == "en":
+                topic_name = topic_metadata.get("en")
+            else:
+                # Fallback to German label if something unexpected
+                topic_name = topic_metadata.get("de")
+        else:
+            # Fallback to legacy locale-based key if metadata missing
+            topic_name = get_text(lang, f"topic_{topic.value}")
         
         # Create training session
         training = await TrainingService.create_session(

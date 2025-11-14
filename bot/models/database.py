@@ -78,43 +78,163 @@ class TrainerTopic(str, Enum):
     RANDOM = "random"
 
 
-# Topic metadata: level and topic number
+# Topic metadata: level, topic number and localized names for DE/EN
 TOPIC_METADATA = {
     # A2 Topics
-    TrainerTopic.PERSONAL_INFO: {"level": "A2", "number": 1},
-    TrainerTopic.FAMILY_FRIENDS: {"level": "A2", "number": 2},
-    TrainerTopic.HOME_DAILY: {"level": "A2", "number": 3},
-    TrainerTopic.LEISURE_HOBBIES: {"level": "A2", "number": 4},
-    TrainerTopic.SHOPPING_MONEY: {"level": "A2", "number": 5},
-    TrainerTopic.FOOD_DRINK: {"level": "A2", "number": 6},
-    TrainerTopic.HEALTH_DOCTOR: {"level": "A2", "number": 7},
-    TrainerTopic.TRANSPORT: {"level": "A2", "number": 8},
-    TrainerTopic.TRAVEL_VACATION: {"level": "A2", "number": 9},
-    TrainerTopic.WEATHER_SEASONS: {"level": "A2", "number": 10},
-    TrainerTopic.SCHOOL_LEARNING: {"level": "A2", "number": 11},
-    TrainerTopic.CELEBRATIONS: {"level": "A2", "number": 12},
+    TrainerTopic.PERSONAL_INFO: {
+        "level": "A2", "number": 1,
+        "de": "1. Persönliche Informationen und Vorstellung",
+        "en": "1. Personal information and introduction",
+    },
+    TrainerTopic.FAMILY_FRIENDS: {
+        "level": "A2", "number": 2,
+        "de": "2. Familie und Freunde",
+        "en": "2. Family and friends",
+    },
+    TrainerTopic.HOME_DAILY: {
+        "level": "A2", "number": 3,
+        "de": "3. Wohnung und Alltag",
+        "en": "3. Home and daily life",
+    },
+    TrainerTopic.LEISURE_HOBBIES: {
+        "level": "A2", "number": 4,
+        "de": "4. Freizeit und Hobbys",
+        "en": "4. Leisure and hobbies",
+    },
+    TrainerTopic.SHOPPING_MONEY: {
+        "level": "A2", "number": 5,
+        "de": "5. Einkaufen und Geld",
+        "en": "5. Shopping and money",
+    },
+    TrainerTopic.FOOD_DRINK: {
+        "level": "A2", "number": 6,
+        "de": "6. Essen und Trinken",
+        "en": "6. Food and drink",
+    },
+    TrainerTopic.HEALTH_DOCTOR: {
+        "level": "A2", "number": 7,
+        "de": "7. Gesundheit und Arztbesuch",
+        "en": "7. Health and doctor visits",
+    },
+    TrainerTopic.TRANSPORT: {
+        "level": "A2", "number": 8,
+        "de": "8. Verkehr und Transport",
+        "en": "8. Traffic and transport",
+    },
+    TrainerTopic.TRAVEL_VACATION: {
+        "level": "A2", "number": 9,
+        "de": "9. Reisen und Urlaub",
+        "en": "9. Travel and vacation",
+    },
+    TrainerTopic.WEATHER_SEASONS: {
+        "level": "A2", "number": 10,
+        "de": "10. Wetter und Jahreszeiten",
+        "en": "10. Weather and seasons",
+    },
+    TrainerTopic.SCHOOL_LEARNING: {
+        "level": "A2", "number": 11,
+        "de": "11. Schule und Lernen",
+        "en": "11. School and learning",
+    },
+    TrainerTopic.CELEBRATIONS: {
+        "level": "A2", "number": 12,
+        "de": "12. Feste und Feiertage",
+        "en": "12. Celebrations and holidays",
+    },
     
     # B1 Topics
-    TrainerTopic.WORK_CAREER: {"level": "B1", "number": 13},
-    TrainerTopic.JOB_APPLICATION: {"level": "B1", "number": 14},
-    TrainerTopic.RESIDENCE_NEIGHBORHOOD: {"level": "B1", "number": 15},
-    TrainerTopic.LEISURE_MEDIA: {"level": "B1", "number": 16},
-    TrainerTopic.FOOD_NUTRITION: {"level": "B1", "number": 17},
-    TrainerTopic.TRAVEL_TRAFFIC: {"level": "B1", "number": 18},
-    TrainerTopic.ENVIRONMENT_NATURE: {"level": "B1", "number": 19},
-    TrainerTopic.SOCIETY_COEXISTENCE: {"level": "B1", "number": 20},
-    TrainerTopic.HEALTH_LIFESTYLE: {"level": "B1", "number": 21},
-    TrainerTopic.FASHION_CLOTHING: {"level": "B1", "number": 22},
+    TrainerTopic.WORK_CAREER: {
+        "level": "B1", "number": 13,
+        "de": "13. Arbeit und Beruf",
+        "en": "13. Work and career",
+    },
+    TrainerTopic.JOB_APPLICATION: {
+        "level": "B1", "number": 14,
+        "de": "14. Bewerbung und Lebenslauf",
+        "en": "14. Job application and CV",
+    },
+    TrainerTopic.RESIDENCE_NEIGHBORHOOD: {
+        "level": "B1", "number": 15,
+        "de": "15. Wohnort und Nachbarschaft",
+        "en": "15. Residence and neighborhood",
+    },
+    TrainerTopic.LEISURE_MEDIA: {
+        "level": "B1", "number": 16,
+        "de": "16. Freizeit und Medien",
+        "en": "16. Leisure and media",
+    },
+    TrainerTopic.FOOD_NUTRITION: {
+        "level": "B1", "number": 17,
+        "de": "17. Essen, Trinken und Ernährung",
+        "en": "17. Food, drink and nutrition",
+    },
+    TrainerTopic.TRAVEL_TRAFFIC: {
+        "level": "B1", "number": 18,
+        "de": "18. Reisen und Verkehr",
+        "en": "18. Travel and traffic",
+    },
+    TrainerTopic.ENVIRONMENT_NATURE: {
+        "level": "B1", "number": 19,
+        "de": "19. Umwelt und Natur",
+        "en": "19. Environment and nature",
+    },
+    TrainerTopic.SOCIETY_COEXISTENCE: {
+        "level": "B1", "number": 20,
+        "de": "20. Gesellschaft und Zusammenleben",
+        "en": "20. Society and coexistence",
+    },
+    TrainerTopic.HEALTH_LIFESTYLE: {
+        "level": "B1", "number": 21,
+        "de": "21. Gesundheit und Lebensstil",
+        "en": "21. Health and lifestyle",
+    },
+    TrainerTopic.FASHION_CLOTHING: {
+        "level": "B1", "number": 22,
+        "de": "22. Mode und Kleidung",
+        "en": "22. Fashion and clothing",
+    },
     
     # B2 Topics
-    TrainerTopic.TECHNOLOGY_DIGITALIZATION: {"level": "B2", "number": 23},
-    TrainerTopic.MEDIA_ADVERTISING: {"level": "B2", "number": 24},
-    TrainerTopic.FUTURE_DREAMS: {"level": "B2", "number": 25},
-    TrainerTopic.SOCIAL_PROBLEMS: {"level": "B2", "number": 26},
-    TrainerTopic.CULTURE_IDENTITY: {"level": "B2", "number": 27},
-    TrainerTopic.SCIENCE_INNOVATION: {"level": "B2", "number": 28},
-    TrainerTopic.ENVIRONMENT_CLIMATE: {"level": "B2", "number": 29},
-    TrainerTopic.FUTURE_WORK: {"level": "B2", "number": 30},
+    TrainerTopic.TECHNOLOGY_DIGITALIZATION: {
+        "level": "B2", "number": 23,
+        "de": "23. Technologie und Digitalisierung",
+        "en": "23. Technology and digitalization",
+    },
+    TrainerTopic.MEDIA_ADVERTISING: {
+        "level": "B2", "number": 24,
+        "de": "24. Medien, Werbung und Konsum",
+        "en": "24. Media, advertising and consumption",
+    },
+    TrainerTopic.FUTURE_DREAMS: {
+        "level": "B2", "number": 25,
+        "de": "25. Zukunft und Träume",
+        "en": "25. Future and dreams",
+    },
+    TrainerTopic.SOCIAL_PROBLEMS: {
+        "level": "B2", "number": 26,
+        "de": "26. Gesellschaftliche Probleme",
+        "en": "26. Social problems",
+    },
+    TrainerTopic.CULTURE_IDENTITY: {
+        "level": "B2", "number": 27,
+        "de": "27. Kultur und Identität",
+        "en": "27. Culture and identity",
+    },
+    TrainerTopic.SCIENCE_INNOVATION: {
+        "level": "B2", "number": 28,
+        "de": "28. Wissenschaft und Innovation",
+        "en": "28. Science and innovation",
+    },
+    TrainerTopic.ENVIRONMENT_CLIMATE: {
+        "level": "B2", "number": 29,
+        "de": "29. Umwelt und Klimawandel",
+        "en": "29. Environment and climate change",
+    },
+    TrainerTopic.FUTURE_WORK: {
+        "level": "B2", "number": 30,
+        "de": "30. Arbeit der Zukunft",
+        "en": "30. Work of the future",
+    },
     
     # Special
     TrainerTopic.RANDOM: {"level": "ALL", "number": 0},
