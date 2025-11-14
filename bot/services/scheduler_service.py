@@ -117,10 +117,7 @@ class SchedulerService:
         
         # If this is the first task or enough time has passed
         if not last_task_time_str:
-            # First task: send it
-            current_time_str = current_time.strftime("%H:%M")
-            await redis_service.set(tasks_today_key, tasks_sent + 1, ex=86400)
-            await redis_service.set(last_task_time_key, current_time_str, ex=86400)
+            # First task: can send it (counter will be updated after successful send)
             return True
         
         # Check if enough time has passed since last task
@@ -128,10 +125,7 @@ class SchedulerService:
         minutes_since_last = self._time_diff_minutes(last_task_time, current_time)
         
         if minutes_since_last >= min_interval_minutes:
-            # Enough time has passed, send task
-            current_time_str = current_time.strftime("%H:%M")
-            await redis_service.set(tasks_today_key, tasks_sent + 1, ex=86400)
-            await redis_service.set(last_task_time_key, current_time_str, ex=86400)
+            # Enough time has passed, can send task (counter will be updated after successful send)
             return True
         
         return False
@@ -177,10 +171,12 @@ class SchedulerService:
         end_time = time.fromisoformat(user.trainer_end_time or "21:00")
         messages_per_day = user.trainer_messages_per_day or 3
         
-        # Get tasks sent today
+        # Get tasks sent today (cap by daily limit just in case)
         tasks_today_key = f"tasks_today:{user.id}:{current_date}"
         tasks_sent = await redis_service.get(tasks_today_key)
         tasks_sent = int(tasks_sent) if tasks_sent else 0
+        if tasks_sent > messages_per_day:
+            tasks_sent = messages_per_day
         
         # Check if all tasks for today are complete
         if tasks_sent >= messages_per_day:
@@ -194,7 +190,8 @@ class SchedulerService:
         
         # Calculate minimum interval between tasks
         window_minutes = self._time_diff_minutes(start_time, end_time)
-        min_interval_minutes = window_minutes // messages_per_day
+        # Если окно слишком узкое или сообщений очень много, минимальный интервал не меньше 5 минут
+        min_interval_minutes = max(5, window_minutes // messages_per_day if messages_per_day > 0 else window_minutes)
         
         # Get last task time
         last_task_time_key = f"last_task_time:{user.id}:{current_date}"

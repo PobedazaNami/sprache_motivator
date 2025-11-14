@@ -228,6 +228,18 @@ async def set_time_period(callback: CallbackQuery):
                                       trainer_start_time=start_time,
                                       trainer_end_time=end_time)
         
+        # When time window changes, reset today's counters so scheduling
+        # starts fresh with the new settings
+        from bot.services.redis_service import redis_service
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
+        current_date = now_kyiv.date()
+        tasks_today_key = f"tasks_today:{user.id}:{current_date}"
+        last_task_time_key = f"last_task_time:{user.id}:{current_date}"
+        await redis_service.delete(tasks_today_key)
+        await redis_service.delete(last_task_time_key)
+        
         # Get updated progress using the already-updated user object
         if user.daily_trainer_enabled:
             tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
@@ -279,6 +291,18 @@ async def set_message_count(callback: CallbackQuery):
         
         # Update user settings (this updates both the object in memory and the database)
         await UserService.update_user(session, user, trainer_messages_per_day=count)
+        
+        # When daily count changes, reset today's counters so scheduling
+        # adapts cleanly to the new limit
+        from bot.services.redis_service import redis_service
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
+        current_date = now_kyiv.date()
+        tasks_today_key = f"tasks_today:{user.id}:{current_date}"
+        last_task_time_key = f"last_task_time:{user.id}:{current_date}"
+        await redis_service.delete(tasks_today_key)
+        await redis_service.delete(last_task_time_key)
         
         # Get updated progress using the already-updated user object
         if user.daily_trainer_enabled:
@@ -453,9 +477,12 @@ async def send_training_task(bot, user_id: int):
                 if level_topics:
                     topic = random.choice(level_topics)
         
-        # Get current progress (after the task counter was incremented by scheduler)
+        # Get current progress
         from bot.services.scheduler_service import scheduler_service
         tasks_sent, total_tasks = await scheduler_service.get_daily_progress(user)
+        # Hard cap: never show progress above daily limit
+        if tasks_sent > total_tasks:
+            tasks_sent = total_tasks
         
         # Generate sentence
         sentence = await translation_service.generate_sentence(
@@ -520,8 +547,22 @@ async def send_training_task(bot, user_id: int):
                     sentence=sentence)
         )
         
+        # Update task counter and last task time in Redis after successful send
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
+        current_date = now_kyiv.date()
+        current_time_str = now_kyiv.time().strftime("%H:%M")
+        
+        tasks_today_key = f"tasks_today:{user.id}:{current_date}"
+        last_task_time_key = f"last_task_time:{user.id}:{current_date}"
+        
+        # Increase counter by one but never above daily limit
+        new_tasks_sent = min(tasks_sent + 1, total_tasks)
+        await redis_service.set(tasks_today_key, new_tasks_sent, ex=86400)
+        await redis_service.set(last_task_time_key, current_time_str, ex=86400)
+        
         # Store training session ID in Redis for answer processing
-        from bot.services.redis_service import redis_service
         # Convert ObjectId to string for JSON serialization
         await redis_service.set_user_state(
             user_id,
