@@ -31,8 +31,13 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_saved_words"))
     builder.button(text=get_text(lang, "btn_settings"))
     builder.button(text=get_text(lang, "btn_support"))
+    # Admins get an extra button to open admin panel
+    from bot.config import settings
+    if getattr(user, "telegram_id", None) in settings.admin_id_list:
+        builder.button(text=get_text(lang, "btn_admin"))
     
-    builder.adjust(2, 2, 1)
+    # Layout: main buttons in rows of 2, admin/support on separate rows if present
+    builder.adjust(2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -44,9 +49,11 @@ def get_admin_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_user_stats"))
     builder.button(text=get_text(lang, "btn_broadcast"))
     builder.button(text=get_text(lang, "btn_user_rating"))
+     # New: manage user access (trial/30 days/unlimited)
+    builder.button(text=get_text(lang, "btn_user_access"))
     builder.button(text=get_text(lang, "btn_back"))
     
-    builder.adjust(2, 2, 1)
+    builder.adjust(2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -165,6 +172,16 @@ def get_user_approval_keyboard(user_id: int) -> InlineKeyboardMarkup:
     builder.button(text="📅 30 days", callback_data=f"access_30_{user_id}")
     builder.button(text="♾ Unlimited", callback_data=f"access_unlimited_{user_id}")
     builder.adjust(2, 3)
+    return builder.as_markup()
+
+
+def get_user_access_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Keyboard for managing access for a specific user by ID"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🧪 Trial 10d", callback_data=f"access_trial_{user_id}")
+    builder.button(text="📅 30 days", callback_data=f"access_30_{user_id}")
+    builder.button(text="♾ Unlimited", callback_data=f"access_unlimited_{user_id}")
+    builder.adjust(3)
     return builder.as_markup()
 
 

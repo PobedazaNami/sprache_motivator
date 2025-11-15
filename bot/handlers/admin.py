@@ -13,7 +13,8 @@ from bot.utils.keyboards import (
     get_admin_menu_keyboard,
     get_user_approval_keyboard,
     get_broadcast_confirm_keyboard,
-    get_main_menu_keyboard
+    get_main_menu_keyboard,
+    get_user_access_keyboard,
 )
 from bot.config import settings
 
@@ -24,6 +25,10 @@ router = Router()
 class BroadcastStates(StatesGroup):
     waiting_for_message = State()
     confirming = State()
+
+
+class AccessStates(StatesGroup):
+    waiting_for_user_id = State()
 
 
 def is_admin(user_id: int) -> bool:
@@ -45,6 +50,106 @@ async def admin_menu(message: Message):
             get_text(lang, "admin_menu"),
             reply_markup=get_admin_menu_keyboard(lang)
         )
+
+
+@router.message(F.text.in_([
+    "🛠 Адмінка", "🛠 Админка"
+]))
+async def admin_menu_button(message: Message):
+    """Open admin menu from main keyboard button"""
+    await admin_menu(message)
+
+
+@router.message(F.text.in_([
+    "🔐 Керування доступом", "🔐 Управление доступом"
+]))
+async def admin_access_prompt(message: Message, state: FSMContext):
+    """Ask admin to enter user Telegram ID for access management"""
+    if not is_admin(message.from_user.id):
+        return
+
+    async with async_session_maker() as session:
+        admin = await UserService.get_or_create_user(session, message.from_user.id)
+        lang = admin.interface_language.value if admin.interface_language else InterfaceLanguage.RUSSIAN.value
+
+    await message.answer(get_text(lang, "admin_access_enter_id"))
+    await state.set_state(AccessStates.waiting_for_user_id)
+
+
+@router.message(AccessStates.waiting_for_user_id)
+async def admin_access_by_id(message: Message, state: FSMContext):
+    """Handle admin input of user Telegram ID and show access buttons"""
+    if not is_admin(message.from_user.id):
+        await state.clear()
+        return
+
+    try:
+        target_id = int(message.text.strip())
+    except ValueError:
+        await message.answer("Please enter a valid numeric Telegram ID.")
+        return
+
+    async with async_session_maker() as session:
+        admin = await UserService.get_or_create_user(session, message.from_user.id)
+        lang = admin.interface_language.value if admin.interface_language else InterfaceLanguage.RUSSIAN.value
+
+        target_user = await UserService.get_or_create_user(session, target_id)
+        if not target_user:
+            await message.answer(get_text(lang, "admin_access_user_not_found"))
+            await state.clear()
+            return
+
+        # Build human-readable status
+        from bot.services.database_service import UserService as USvc
+
+        # Status text
+        if target_user.status == UserStatus.APPROVED:
+            status_text = "approved" if lang == "en" else ("підтверджено" if lang == "uk" else "подтверждён")
+        elif target_user.status == UserStatus.PENDING:
+            status_text = "pending" if lang == "en" else ("очікує" if lang == "uk" else "ожидает")
+        else:
+            status_text = "rejected" if lang == "en" else ("відхилено" if lang == "uk" else "отклонён")
+
+        # Trial text
+        if not target_user.trial_activated:
+            trial_text = "не активований" if lang == "uk" else "не активирован"
+        else:
+            days_left = USvc.get_trial_days_remaining(target_user)
+            if days_left >= 999:
+                trial_text = "не актуальний (є безлімітна підписка)" if lang == "uk" else "не актуален (есть безлимитная подписка)"
+            else:
+                unit = "днів" if lang == "uk" else "дней"
+                trial_text = f"активний, залишилось {days_left} {unit}" if lang == "uk" else f"активен, осталось {days_left} {unit}"
+
+        # Subscription text
+        if target_user.subscription_active:
+            if target_user.subscription_until:
+                until_str = target_user.subscription_until.strftime("%Y-%m-%d")
+                subscription_text = (
+                    f"активна до {until_str}" if lang == "uk" else f"активна до {until_str}"
+                )
+            else:
+                subscription_text = (
+                    "безлімітна (без кінцевої дати)" if lang == "uk" else "безлимитная (без конечной даты)"
+                )
+        else:
+            subscription_text = "відсутня" if lang == "uk" else "отсутствует"
+
+        header = get_text(lang, "admin_access_user_header", user_id=target_user.telegram_id)
+        status_block = get_text(
+            lang,
+            "admin_access_status",
+            status=status_text,
+            trial=trial_text,
+            subscription=subscription_text,
+        )
+
+        await message.answer(
+            header + status_block,
+            reply_markup=get_user_access_keyboard(target_user.telegram_id),
+        )
+
+    await state.clear()
 
 
 @router.message(F.text.in_([
