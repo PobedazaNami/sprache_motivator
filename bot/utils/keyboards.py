@@ -36,7 +36,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     if getattr(user, "telegram_id", None) in settings.admin_id_list:
         builder.button(text=get_text(lang, "btn_admin"))
     
-    # Layout: main buttons in rows of 2, admin/support on separate rows if present
+    # Layout: main buttons in rows of 2, support/admin on separate rows if present
     builder.adjust(2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 

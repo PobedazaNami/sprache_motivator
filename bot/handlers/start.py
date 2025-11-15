@@ -215,7 +215,8 @@ async def activate_trial(callback: CallbackQuery):
 
 
 @router.message(F.text.in_([
-    "🔙 Главное меню", "🔙 Головне меню"
+    "🔙 Главное меню", "🔙 Головне меню",
+    "📋 Главное меню", "📋 Головне меню"
 ]))
 async def show_main_menu(message: Message, state: FSMContext):
     """Return to main menu and clear state"""
