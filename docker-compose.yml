@@ -20,7 +20,7 @@ services:
     ports:
       - "8010:8010"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8010/v2/languages"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8010/v2/languages" ]
       interval: 10s
       timeout: 5s
       retries: 5

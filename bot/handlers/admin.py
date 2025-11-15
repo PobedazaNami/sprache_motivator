@@ -5,6 +5,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from bot.models.database import UserStatus, InterfaceLanguage, async_session_maker
+from datetime import timedelta
+
 from bot.services.database_service import UserService, BroadcastService
 from bot.locales.texts import get_text
 from bot.utils.keyboards import (
@@ -107,6 +109,91 @@ async def approve_user(callback: CallbackQuery):
             
             await callback.message.edit_text(get_text(lang, "user_approved"))
     
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("access_"))
+async def manage_user_access(callback: CallbackQuery):
+    """Manage user access: trial, 30 days, unlimited"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Not authorized", show_alert=True)
+        return
+
+    # data format: access_<type>_<telegram_id>
+    parts = callback.data.split("_")
+    if len(parts) < 3:
+        await callback.answer("Invalid data", show_alert=True)
+        return
+
+    access_type = parts[1]
+    user_id = int(parts[2])
+
+    async with async_session_maker() as session:
+        admin = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = admin.interface_language.value
+
+        user = await UserService.get_or_create_user(session, user_id)
+
+        # Base: user must be approved to manage access
+        if user.status != UserStatus.APPROVED:
+            await UserService.update_user(session, user, status=UserStatus.APPROVED)
+
+        from bot.services.database_service import _now
+
+        if access_type == "trial":
+            # Activate (or re-activate) 10-day trial from now
+            user.trial_activated = True
+            user.trial_activation_date = _now()
+            # Trial only, no subscription
+            user.subscription_active = False
+            user.subscription_until = None
+            await UserService.update_user(
+                session,
+                user,
+                trial_activated=True,
+                trial_activation_date=user.trial_activation_date,
+                subscription_active=False,
+                subscription_until=None,
+            )
+            text_key = "admin_access_trial_set"
+
+        elif access_type == "30":
+            # 30-day subscription from now
+            now = _now()
+            user.subscription_active = True
+            user.subscription_until = now + timedelta(days=30)
+            await UserService.update_user(
+                session,
+                user,
+                subscription_active=True,
+                subscription_until=user.subscription_until,
+            )
+            text_key = "admin_access_30_set"
+
+        elif access_type == "unlimited":
+            # Unlimited subscription
+            user.subscription_active = True
+            user.subscription_until = None
+            await UserService.update_user(
+                session,
+                user,
+                subscription_active=True,
+                subscription_until=None,
+            )
+            text_key = "admin_access_unlimited_set"
+        else:
+            await callback.answer("Unknown access type", show_alert=True)
+            return
+
+        # Notify admin in chat
+        await callback.message.answer(
+            get_text(
+                lang,
+                text_key,
+                user_id=user.telegram_id,
+            )
+        )
+
     await callback.answer()
 
 

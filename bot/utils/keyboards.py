@@ -155,11 +155,16 @@ def get_message_count_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 def get_user_approval_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    """Keyboard for approving/rejecting users"""
+    """Keyboard for approving/rejecting users and managing access"""
     builder = InlineKeyboardBuilder()
+    # Basic approval actions
     builder.button(text="✅ Approve", callback_data=f"approve_{user_id}")
     builder.button(text="❌ Reject", callback_data=f"reject_{user_id}")
-    builder.adjust(2)
+    # Access management actions
+    builder.button(text="🧪 Trial 10d", callback_data=f"access_trial_{user_id}")
+    builder.button(text="📅 30 days", callback_data=f"access_30_{user_id}")
+    builder.button(text="♾ Unlimited", callback_data=f"access_unlimited_{user_id}")
+    builder.adjust(2, 3)
     return builder.as_markup()
 
 

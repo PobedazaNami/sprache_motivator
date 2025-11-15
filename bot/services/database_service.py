@@ -54,7 +54,9 @@ class UserModel:
         # Trial system fields
         self.trial_activated = doc.get("trial_activated", False)
         self.trial_activation_date = doc.get("trial_activation_date")
+        # Subscription system: active flag + optional expiration date
         self.subscription_active = doc.get("subscription_active", False)
+        self.subscription_until = doc.get("subscription_until")
 
     def to_update_dict(self) -> Dict[str, Any]:
         return {
@@ -79,6 +81,7 @@ class UserModel:
             "trial_activated": self.trial_activated,
             "trial_activation_date": self.trial_activation_date,
             "subscription_active": self.subscription_active,
+            "subscription_until": self.subscription_until,
         }
 
 
@@ -216,12 +219,27 @@ class UserService:
     
     @staticmethod
     def is_trial_expired(user: UserModel) -> bool:
-        """Check if user's trial has expired (10 days in Berlin timezone)"""
+        """Check if user's trial has expired (10 days in Berlin timezone).
+
+        Takes into account subscription status and `subscription_until`.
+        """
         import pytz
         
-        # Admins and subscribed users never expire
-        if user.subscription_active:
+        # Active unlimited subscription
+        if user.subscription_active and not user.subscription_until:
             return False
+        
+        # Time-limited subscription: check expiration
+        if user.subscription_active and user.subscription_until:
+            berlin_tz = pytz.timezone('Europe/Berlin')
+            now_berlin = datetime.now(berlin_tz)
+            if user.subscription_until.tzinfo is None:
+                until_berlin = berlin_tz.localize(user.subscription_until)
+            else:
+                until_berlin = user.subscription_until.astimezone(berlin_tz)
+            # if subscription still valid, trial is not relevant
+            if now_berlin < until_berlin:
+                return False
         
         # Not activated = not expired (user hasn't started trial)
         if not user.trial_activated or not user.trial_activation_date:
@@ -246,8 +264,20 @@ class UserService:
         """Get number of days remaining in trial"""
         import pytz
         
-        if user.subscription_active:
+        # Unlimited subscription
+        if user.subscription_active and not user.subscription_until:
             return 999  # Unlimited for subscribers
+        
+        # Time-limited subscription
+        if user.subscription_active and user.subscription_until:
+            berlin_tz = pytz.timezone('Europe/Berlin')
+            now_berlin = datetime.now(berlin_tz)
+            if user.subscription_until.tzinfo is None:
+                until_berlin = berlin_tz.localize(user.subscription_until)
+            else:
+                until_berlin = user.subscription_until.astimezone(berlin_tz)
+            days_remaining = (until_berlin - now_berlin).days
+            return max(0, days_remaining)
         
         if not user.trial_activated or not user.trial_activation_date:
             return 10  # Full trial available
