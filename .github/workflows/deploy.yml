@@ -1,4 +1,4 @@
-docker exec -it sprache_motivator-redis-1 redis-cli   # имя контейнера подставь своёdocker exec -it sprache_motivator-redis-1 redis-cli   # имя контейнера подставь своёdocker exec -it sprache_motivator-redis-1 redis-cli   # имя контейнера подставь своёname: Deploy to Server
+name: Deploy to Server
 
 on:
   push:

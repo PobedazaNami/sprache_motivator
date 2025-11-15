@@ -28,9 +28,24 @@ async def cmd_start(message: Message, state: FSMContext):
             message.from_user.first_name,
             message.from_user.last_name
         )
-        # Auto-approve on /start if this user is an admin but still pending
-        if user.status == UserStatus.PENDING and message.from_user.id in settings.admin_id_list:
-            await UserService.update_user(session, user, status=UserStatus.APPROVED)
+        # Admins: always treat as approved and with unlimited access
+        if message.from_user.id in settings.admin_id_list:
+            # Ensure admin is approved and has unlimited subscription
+            await UserService.update_user(
+                session,
+                user,
+                status=UserStatus.APPROVED,
+                subscription_active=True,
+                subscription_until=None,
+                trial_activated=True,
+                trial_activation_date=None,
+            )
+            lang = user.interface_language.value if user.interface_language else InterfaceLanguage.RUSSIAN.value
+            await message.answer(
+                get_text(lang, "main_menu"),
+                reply_markup=get_main_menu_keyboard(user)
+            )
+            return
 
         # If user is new or pending (non-admin), show language selection
         if user.status == UserStatus.PENDING:
@@ -76,19 +91,33 @@ async def select_language(callback: CallbackQuery):
         
         # Update interface language
         interface_lang = InterfaceLanguage.UKRAINIAN if lang_code == "uk" else InterfaceLanguage.RUSSIAN
-        
-        # If admin, approve immediately
+
+        # If admin, approve immediately и дать безлимитный доступ,
+        # затем сразу показать главное меню
         if callback.from_user.id in settings.admin_id_list:
             await UserService.update_user(
-                session, 
-                user, 
+                session,
+                user,
                 interface_language=interface_lang,
-                status=UserStatus.APPROVED
+                status=UserStatus.APPROVED,
+                subscription_active=True,
+                subscription_until=None,
+                trial_activated=True,
+                trial_activation_date=None,
             )
-        else:
-            # Regular user - just update language
-            await UserService.update_user(session, user, interface_language=interface_lang)
-        
+            await callback.message.edit_text(
+                get_text(lang_code, "main_menu")
+            )
+            await callback.message.answer(
+                get_text(lang_code, "main_menu"),
+                reply_markup=get_main_menu_keyboard(user)
+            )
+            await callback.answer()
+            return
+
+        # Regular user - просто обновляем язык
+        await UserService.update_user(session, user, interface_language=interface_lang)
+
         # Show pending approval message or main menu
         if user.status == UserStatus.PENDING:
             await callback.message.edit_text(
