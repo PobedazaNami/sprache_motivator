@@ -632,11 +632,14 @@ async def check_training_answer(message: Message, state: FSMContext):
             quality_percentage
         )
         
-        # Update daily stats
+        # Update daily stats with penalties context
+        expected_tasks = user.trainer_messages_per_day or 3
         await TrainingService.update_daily_stats(
             session,
             user.id,
-            quality_percentage
+            quality_percentage,
+            expected_tasks,
+            is_correct,
         )
         
         # Update user stats

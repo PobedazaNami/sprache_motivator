@@ -94,8 +94,11 @@ async def test_translator_processes_when_no_training():
         mock_user = MagicMock()
         mock_user.id = 1
         mock_user.translations_count = 0
+        mock_user.trial_activated = True
+        mock_user.subscription_active = True
         mock_user_service.get_or_create_user = AsyncMock(return_value=mock_user)
         mock_user_service.increment_activity = AsyncMock()
+        mock_user_service.is_trial_expired.return_value = False
         
         # Mock translation
         mock_translation.translate = AsyncMock(return_value=("Привіт світ", 100))

@@ -374,9 +374,20 @@ class TrainingService:
         }})
 
     @staticmethod
-    async def update_daily_stats(session, user_id: ObjectId, quality_percentage: int):
-        # Mirror to Mongo daily_stats collection (similar to mongo_service.update_daily_stats)
-        await mongo_service.update_daily_stats(int(user_id.__str__()[:8], 16), int(quality_percentage or 0))  # lightweight uniqueness
+    async def update_daily_stats(
+        session,
+        telegram_id: int,
+        quality_percentage: int,
+        expected_total: int,
+        is_correct: bool,
+    ):
+        """Mirror trainer answer quality into Mongo daily_stats collection."""
+        await mongo_service.update_daily_stats(
+            telegram_id,
+            int(quality_percentage or 0),
+            expected_total,
+            is_correct,
+        )
 
     @staticmethod
     async def get_user_stats(session, user_id: ObjectId) -> dict:

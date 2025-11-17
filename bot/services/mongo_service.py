@@ -55,34 +55,76 @@ async def store_training_session(user_id: int, sentence: str, expected: str, dif
     return str(res.inserted_id)
 
 
-async def update_daily_stats(user_id: int, quality_percentage: int) -> None:
-    """Increment today's counters and recompute average quality."""
+def _today_midnight_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def update_daily_stats(
+    user_id: int,
+    quality_percentage: int,
+    expected_total: Optional[int] = None,
+    is_correct: Optional[bool] = None,
+) -> None:
+    """Increment today's counters and keep aggregates for quality/penalties."""
     if not is_ready():
         return
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    # Upsert with atomic operators
+
+    today = _today_midnight_utc()
+    quality_value = max(0, int(quality_percentage or 0))
+    now = datetime.now(timezone.utc)
+
+    inc_doc = {
+        "total_tasks": 1,
+        "completed_tasks": 1,
+        "quality_sum": quality_value,
+    }
+    if is_correct is True:
+        inc_doc["correct_answers"] = 1
+    elif is_correct is False:
+        inc_doc["incorrect_answers"] = 1
+
+    update_doc = {
+        "$inc": inc_doc,
+        "$set": {
+            "updated_at": now,
+            "last_answer_quality": quality_value,
+            "last_answer_at": now,
+        },
+        "$setOnInsert": {
+            "created_at": now,
+            "correct_answers": 0,
+            "incorrect_answers": 0,
+            "expected_tasks": max(0, expected_total or 0),
+        },
+    }
+
+    if expected_total is not None:
+        update_doc.setdefault("$max", {})["expected_tasks"] = max(0, expected_total)
+
     await db().daily_stats.update_one(
         {"user_id": user_id, "date": today},
-        {
-            "$inc": {"total_tasks": 1, "completed_tasks": 1, "quality_sum": quality_percentage},
-            "$setOnInsert": {"created_at": datetime.now(timezone.utc)}
-        },
-        upsert=True
+        update_doc,
+        upsert=True,
     )
 
 
 async def get_today_stats(user_id: int) -> Optional[dict]:
     if not is_ready():
         return None
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = _today_midnight_utc()
     doc = await db().daily_stats.find_one({"user_id": user_id, "date": today})
     if not doc:
         return None
-    average_quality = int((doc.get("quality_sum", 0) / max(1, doc.get("completed_tasks", 0))))
+    completed = int(doc.get("completed_tasks", 0))
+    average_quality = int((doc.get("quality_sum", 0) / max(1, completed))) if completed else 0
+    expected = int(doc.get("expected_tasks", 0))
     return {
-        "completed": int(doc.get("completed_tasks", 0)),
+        "completed": completed,
         "total": int(doc.get("total_tasks", 0)),
         "quality": average_quality,
+        "expected": expected,
+        "correct": int(doc.get("correct_answers", 0)),
+        "incorrect": int(doc.get("incorrect_answers", 0)),
     }
 
 

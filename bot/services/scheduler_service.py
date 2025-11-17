@@ -253,22 +253,29 @@ class SchedulerService:
             
             for user in users:
                 try:
-                    # Get today's stats from MongoDB
                     stats = await mongo_service.get_today_stats(user.telegram_id)
-                    
-                    if not stats or stats.get('completed', 0) == 0:
-                        continue  # Skip if no tasks completed
-                    
                     lang = user.interface_language.value
+                    planned_daily = user.trainer_messages_per_day or 3
+                    completed = stats.get('completed', 0) if stats else 0
+                    avg_quality = stats.get('quality', 0) if stats else 0
+                    stored_planned = stats.get('expected') if stats else None
+                    planned = max(planned_daily, stored_planned or 0)
+                    missed = max(planned - completed, 0)
+                    penalty = missed * 10
+                    final_score = max(0, min(100, avg_quality - penalty))
+                    motivation = self._get_motivation_message(final_score, lang)
                     
-                    # Generate motivation message
-                    motivation = self._get_motivation_message(stats['quality'], lang)
-                    
-                    message = get_text(lang, "daily_report",
-                                      completed=stats['completed'],
-                                      total=stats['total'],
-                                      quality=stats['quality'],
-                                      motivation=motivation)
+                    message = get_text(
+                        lang,
+                        "daily_report",
+                        planned=planned,
+                        completed=completed,
+                        missed=missed,
+                        quality=avg_quality,
+                        penalty=penalty,
+                        final=final_score,
+                        motivation=motivation,
+                    )
                     
                     await self.bot.send_message(user.telegram_id, message)
                     await asyncio.sleep(0.1)
