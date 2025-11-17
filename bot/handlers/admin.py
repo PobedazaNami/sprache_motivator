@@ -467,16 +467,50 @@ async def show_user_rating(message: Message):
         user = await UserService.get_or_create_user(session, message.from_user.id)
         lang = user.interface_language.value
         
-        top_users = await UserService.get_top_users(session, 10)
-        
-        text = get_text(lang, "user_rating")
-        
-        for i, top_user in enumerate(top_users, 1):
-            text += f"\n{i}. {top_user.first_name or ''} {top_user.last_name or ''}"
-            text += f" (@{top_user.username or 'N/A'})"
-            text += f" - {top_user.activity_score} pts"
-        
-        await message.answer(text)
+        tracked_users = await UserService.get_users_with_trainer_enabled(session)
+        if not tracked_users:
+            await message.answer(get_text(lang, "user_rating_no_users"))
+            return
+
+        from bot.services import mongo_service
+        user_ids = [u.telegram_id for u in tracked_users]
+        stats_map = await mongo_service.get_today_stats_bulk(user_ids)
+
+        lines = []
+        for tracked in tracked_users:
+            stats = stats_map.get(tracked.telegram_id)
+            planned = tracked.trainer_messages_per_day or 3
+            if stats and stats.get("expected"):
+                planned = max(planned, stats.get("expected", 0))
+            completed = stats.get("completed", 0) if stats else 0
+            avg_quality = stats.get("quality", 0) if stats else 0
+            missed = max(planned - completed, 0)
+            penalty = missed * 10
+            final_score = max(0, min(100, avg_quality - penalty)) if stats else 0
+            quality_text = f"{avg_quality}%" if stats else "—"
+            final_text = f"{final_score}%" if stats else "—"
+            penalty_text = f"{penalty}%" if stats else "—"
+            line = get_text(
+                lang,
+                "user_rating_line",
+                name=(tracked.first_name or "").strip() or tracked.username or str(tracked.telegram_id),
+                username=tracked.username or "—",
+                completed=completed,
+                planned=planned,
+                quality=quality_text,
+                penalty=penalty_text,
+                final=final_text,
+            )
+            lines.append((final_score, line))
+
+        if not lines:
+            await message.answer(get_text(lang, "user_rating_no_data"))
+            return
+
+        lines.sort(key=lambda x: x[0], reverse=True)
+        body = "\n".join(f"{idx+1}. {entry[1]}" for idx, entry in enumerate(lines))
+        header = get_text(lang, "user_rating")
+        await message.answer(f"{header}\n\n{body}")
 
 
 @router.message(F.text.in_([
