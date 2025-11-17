@@ -83,6 +83,13 @@ async def update_daily_stats(
     elif is_correct is False:
         inc_doc["incorrect_answers"] = 1
 
+    set_on_insert_doc = {
+        "created_at": now,
+    }
+    if expected_total is None:
+        # Default expected task count for new day when user hasn't configured goals.
+        set_on_insert_doc["expected_tasks"] = 0
+
     update_doc = {
         "$inc": inc_doc,
         "$set": {
@@ -90,10 +97,7 @@ async def update_daily_stats(
             "last_answer_quality": quality_value,
             "last_answer_at": now,
         },
-        "$setOnInsert": {
-            "created_at": now,
-            "expected_tasks": max(0, expected_total or 0),
-        },
+        "$setOnInsert": set_on_insert_doc,
     }
 
     if expected_total is not None:
