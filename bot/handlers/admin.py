@@ -522,6 +522,7 @@ async def show_user_rating(message: Message, state: FSMContext):
                 "user_rating_line",
                 name=(tracked.first_name or "").strip() or tracked.username or str(tracked.telegram_id),
                 username=tracked.username or "—",
+                user_id=tracked.telegram_id,
                 mode=mode_label,
                 completed=completed,
                 planned=planned,
