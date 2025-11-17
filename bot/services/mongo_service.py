@@ -4,7 +4,7 @@ This service is optional and initializes only if MONGODB_URI is provided.
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 from datetime import datetime, timezone, timedelta
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -126,6 +126,30 @@ async def get_today_stats(user_id: int) -> Optional[dict]:
         "correct": int(doc.get("correct_answers", 0)),
         "incorrect": int(doc.get("incorrect_answers", 0)),
     }
+
+
+async def get_today_stats_bulk(user_ids: List[int]) -> Dict[int, dict]:
+    if not is_ready() or not user_ids:
+        return {}
+    today = _today_midnight_utc()
+    cursor = db().daily_stats.find({
+        "user_id": {"$in": user_ids},
+        "date": today,
+    })
+    results: Dict[int, dict] = {}
+    async for doc in cursor:
+        user_id = int(doc.get("user_id"))
+        completed = int(doc.get("completed_tasks", 0))
+        average_quality = int((doc.get("quality_sum", 0) / max(1, completed))) if completed else 0
+        results[user_id] = {
+            "completed": completed,
+            "total": int(doc.get("total_tasks", 0)),
+            "quality": average_quality,
+            "expected": int(doc.get("expected_tasks", 0)),
+            "correct": int(doc.get("correct_answers", 0)),
+            "incorrect": int(doc.get("incorrect_answers", 0)),
+        }
+    return results
 
 
 async def get_week_stats(user_id: int) -> Optional[Tuple[int, int, int]]:

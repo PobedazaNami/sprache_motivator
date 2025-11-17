@@ -395,6 +395,25 @@ async def receive_broadcast_message(message: Message, state: FSMContext):
     """Receive broadcast message"""
     data = await state.get_data()
     lang = data.get("lang", "ru")
+    text = (message.text or "").strip()
+
+    # Allow admin to exit broadcast flow by tapping other menu buttons
+    rating_buttons = ["🏆 Рейтинг активности", "🏆 Рейтинг активності"]
+    if text in rating_buttons:
+        await show_user_rating(message, state)
+        return
+    admin_menu_buttons = [
+        "👥 Пользователи на проверке", "👥 Користувачі на перевірці",
+        "📊 Статистика пользователей", "📊 Статистика користувачів",
+        "📢 Рассылка", "📢 Розсилка",
+        "🔐 Управление доступом", "🔐 Керування доступом",
+        "🛠 Админка", "🛠 Адмінка",
+        "⬅️ Назад"
+    ]
+    if text in admin_menu_buttons:
+        await state.clear()
+        await admin_menu(message)
+        return
     
     async with async_session_maker() as session:
         recipients = await UserService.get_broadcast_recipients(session)
@@ -458,10 +477,11 @@ async def cancel_broadcast(callback: CallbackQuery, state: FSMContext):
 @router.message(F.text.in_([
     "🏆 Рейтинг активности", "🏆 Рейтинг активності"
 ]))
-async def show_user_rating(message: Message):
+async def show_user_rating(message: Message, state: FSMContext):
     """Show user activity rating"""
     if not is_admin(message.from_user.id):
         return
+    await state.clear()
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
