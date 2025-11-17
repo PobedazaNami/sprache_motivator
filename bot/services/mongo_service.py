@@ -92,8 +92,6 @@ async def update_daily_stats(
         },
         "$setOnInsert": {
             "created_at": now,
-            "correct_answers": 0,
-            "incorrect_answers": 0,
             "expected_tasks": max(0, expected_total or 0),
         },
     }
