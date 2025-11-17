@@ -192,6 +192,13 @@ class UserService:
         return [UserModel(d) async for d in cursor]
 
     @staticmethod
+    async def get_approved_users(session) -> List[UserModel]:
+        """Return all approved users regardless of trainer settings."""
+        col = await UserService._collection()
+        cursor = col.find({"status": UserStatus.APPROVED.value})
+        return [UserModel(d) async for d in cursor]
+
+    @staticmethod
     async def get_top_users(session, limit: int = 10) -> List[UserModel]:
         col = await UserService._collection()
         cursor = col.find({"status": UserStatus.APPROVED.value}).sort("activity_score", -1).limit(limit)

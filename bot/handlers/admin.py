@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.models.database import UserStatus, InterfaceLanguage, async_session_maker
+from bot.models.database import UserStatus, InterfaceLanguage, WorkMode, async_session_maker
 from datetime import timedelta
 
 from bot.services.database_service import UserService, BroadcastService
@@ -487,7 +487,7 @@ async def show_user_rating(message: Message, state: FSMContext):
         user = await UserService.get_or_create_user(session, message.from_user.id)
         lang = user.interface_language.value
         
-        tracked_users = await UserService.get_users_with_trainer_enabled(session)
+        tracked_users = await UserService.get_approved_users(session)
         if not tracked_users:
             await message.answer(get_text(lang, "user_rating_no_users"))
             return
@@ -495,11 +495,13 @@ async def show_user_rating(message: Message, state: FSMContext):
         from bot.services import mongo_service
         user_ids = [u.telegram_id for u in tracked_users]
         stats_map = await mongo_service.get_today_stats_bulk(user_ids)
+        period_label = get_text(lang, "user_rating_period_today")
+        period_line = get_text(lang, "user_rating_period_line", period=period_label)
 
         lines = []
         for tracked in tracked_users:
             stats = stats_map.get(tracked.telegram_id)
-            planned = tracked.trainer_messages_per_day or 3
+            planned = tracked.trainer_messages_per_day if tracked.daily_trainer_enabled else 0
             if stats and stats.get("expected"):
                 planned = max(planned, stats.get("expected", 0))
             completed = stats.get("completed", 0) if stats else 0
@@ -510,11 +512,17 @@ async def show_user_rating(message: Message, state: FSMContext):
             quality_text = f"{avg_quality}%" if stats else "—"
             final_text = f"{final_score}%" if stats else "—"
             penalty_text = f"{penalty}%" if stats else "—"
+            mode_key = {
+                WorkMode.TRANSLATOR: "user_rating_mode_translator",
+                WorkMode.DAILY_TRAINER: "user_rating_mode_trainer",
+            }.get(tracked.work_mode, "user_rating_mode_unknown")
+            mode_label = get_text(lang, mode_key)
             line = get_text(
                 lang,
                 "user_rating_line",
                 name=(tracked.first_name or "").strip() or tracked.username or str(tracked.telegram_id),
                 username=tracked.username or "—",
+                mode=mode_label,
                 completed=completed,
                 planned=planned,
                 quality=quality_text,
@@ -529,8 +537,8 @@ async def show_user_rating(message: Message, state: FSMContext):
 
         lines.sort(key=lambda x: x[0], reverse=True)
         body = "\n".join(f"{idx+1}. {entry[1]}" for idx, entry in enumerate(lines))
-        header = get_text(lang, "user_rating")
-        await message.answer(f"{header}\n\n{body}")
+        header = get_text(lang, "user_rating", period=period_label)
+        await message.answer(f"{header}\n{period_line}\n\n{body}")
 
 
 @router.message(F.text.in_([
