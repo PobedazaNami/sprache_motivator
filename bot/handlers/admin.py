@@ -314,6 +314,20 @@ async def manage_user_access(callback: CallbackQuery):
             )
         )
 
+        # Notify user about access granted
+        user_lang = user.interface_language.value
+        try:
+            # Send main menu to user with updated access
+            await callback.bot.send_message(
+                user.telegram_id,
+                get_text(user_lang, "main_menu"),
+                reply_markup=get_main_menu_keyboard(user)
+            )
+        except Exception as e:
+            # If we can't notify user, log it but don't fail
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to notify user {user.telegram_id}: {e}")
+
     await callback.answer()
 
 

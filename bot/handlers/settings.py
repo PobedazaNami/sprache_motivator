@@ -41,11 +41,20 @@ async def settings_menu(message: Message, state: FSMContext):
         # Add trial/subscription status
         text += "\n\n"
         if user.subscription_active:
-            status = "✅ Активна підписка" if lang == "uk" else "✅ Активная подписка"
+            # Check if unlimited or time-limited subscription
+            days_remaining = UserService.get_trial_days_remaining(user)
+            if days_remaining == 999:
+                # Unlimited subscription
+                status = "♾️ Безлімітна підписка" if lang == "uk" else "♾️ Безлимитная подписка"
+            else:
+                # Time-limited subscription with days remaining
+                days_word = "днів" if lang == "uk" else "дней"
+                status = f"✅ Підписка: {days_remaining} {days_word} залишилось" if lang == "uk" else f"✅ Подписка: {days_remaining} {days_word} осталось"
         elif user.trial_activated:
             days_remaining = UserService.get_trial_days_remaining(user)
             if days_remaining > 0:
-                status = f"🎁 Пробний: {days_remaining} днів залишилось" if lang == "uk" else f"🎁 Пробный: {days_remaining} дней осталось"
+                days_word = "днів" if lang == "uk" else "дней"
+                status = f"🎁 Пробний: {days_remaining} {days_word} залишилось" if lang == "uk" else f"🎁 Пробный: {days_remaining} {days_word} осталось"
             else:
                 status = "⏰ Пробний період закінчився" if lang == "uk" else "⏰ Пробный период закончился"
         else:
