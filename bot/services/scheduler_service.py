@@ -277,6 +277,24 @@ class SchedulerService:
                         motivation=motivation,
                     )
                     
+                    # Add friends' statistics if user has friends
+                    friends_stats = await mongo_service.get_friends_stats(user.telegram_id)
+                    if friends_stats:
+                        friends_section = "\n\n" + get_text(lang, "friends_stats_title")
+                        for friend_id, friend_stat in friends_stats.items():
+                            friend = await UserService.get_or_create_user(session, friend_id)
+                            friend_name = friend.first_name or friend.username or f"User {friend_id}"
+                            friend_username = friend.username or str(friend_id)
+                            friends_section += get_text(
+                                lang,
+                                "friends_stats_user",
+                                name=friend_name,
+                                username=friend_username,
+                                completed=friend_stat.get("completed", 0),
+                                quality=friend_stat.get("quality", 0)
+                            )
+                        message += friends_section
+                    
                     await self.bot.send_message(user.telegram_id, message)
                     await asyncio.sleep(0.1)
                 except Exception as e:
