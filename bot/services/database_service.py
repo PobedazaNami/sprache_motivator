@@ -225,6 +225,15 @@ class UserService:
         return [UserModel(d) async for d in cursor]
     
     @staticmethod
+    async def get_user_by_username(session, username: str) -> Optional[UserModel]:
+        """Find a user by their username."""
+        col = await UserService._collection()
+        doc = await col.find_one({"username": username})
+        if doc:
+            return UserModel(doc)
+        return None
+    
+    @staticmethod
     def is_trial_expired(user: UserModel) -> bool:
         """Check if user's trial has expired (10 days in Berlin timezone).
 

@@ -120,21 +120,23 @@ async def process_add_friend(message: Message, state: FSMContext):
         # Parse friend identifier (ID or username)
         friend_identifier = message.text.strip()
         
-        # Try to parse as ID first
+        # Try to parse as ID or username
+        friend = None
         friend_id = None
+        
         if friend_identifier.startswith("@"):
             # Username provided
             username = friend_identifier[1:]
-            # Search for user by username - we need to add this method
-            # For now, show error
-            await message.answer(
-                get_text(lang, "friend_not_found") + "\n\n💡 " + 
-                ("Будь ласка, використовуйте Telegram ID користувача." if lang == "uk" 
-                 else "Пожалуйста, используйте Telegram ID пользователя."),
-                reply_markup=get_friends_menu_keyboard(lang)
-            )
-            await state.clear()
-            return
+            # Search for user by username
+            friend = await UserService.get_user_by_username(session, username)
+            if not friend:
+                await message.answer(
+                    get_text(lang, "friend_not_found"),
+                    reply_markup=get_friends_menu_keyboard(lang)
+                )
+                await state.clear()
+                return
+            friend_id = friend.telegram_id
         else:
             # Try to parse as numeric ID
             try:
@@ -156,17 +158,20 @@ async def process_add_friend(message: Message, state: FSMContext):
             await state.clear()
             return
         
-        # Check if friend exists in the system
-        try:
-            friend = await UserService.get_or_create_user(session, friend_id)
-            if friend.status != UserStatus.APPROVED:
+        # Check if friend exists in the system (only if not already fetched by username)
+        if not friend:
+            try:
+                friend = await UserService.get_or_create_user(session, friend_id)
+            except Exception:
                 await message.answer(
                     get_text(lang, "friend_not_found"),
                     reply_markup=get_friends_menu_keyboard(lang)
                 )
                 await state.clear()
                 return
-        except Exception:
+        
+        # Check if friend is approved
+        if friend.status != UserStatus.APPROVED:
             await message.answer(
                 get_text(lang, "friend_not_found"),
                 reply_markup=get_friends_menu_keyboard(lang)
