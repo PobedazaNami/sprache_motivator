@@ -441,6 +441,51 @@ async def set_topic(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("hint_"))
+async def show_hint(callback: CallbackQuery):
+    """Show translation hint when user requests it"""
+    from bot.services.redis_service import redis_service
+    from bson import ObjectId
+    
+    # Extract training ID from callback data: hint_<training_id>
+    training_id_str = callback.data.replace("hint_", "")
+    
+    try:
+        training_id = ObjectId(training_id_str)
+    except Exception:
+        await callback.answer("❌ Помилка/Ошибка")
+        return
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Get training session from Mongo
+        from bot.services import mongo_service
+        training_col = mongo_service.db().training_sessions
+        training = await training_col.find_one({"_id": training_id})
+        
+        if not training:
+            await callback.answer("❌ Помилка/Ошибка")
+            return
+        
+        # Show the hint with the expected translation
+        expected_translation = training.get("expected_translation", "")
+        await callback.message.edit_text(
+            get_text(lang, "hint_activated", translation=expected_translation),
+            reply_markup=None
+        )
+        
+        # Track hint activation in daily stats
+        from bot.services import mongo_service
+        await mongo_service.track_hint_activation(user.id)
+        
+        # Clear training state - this task won't count towards daily stats
+        await redis_service.clear_user_state(callback.from_user.id)
+    
+    await callback.answer()
+
+
 async def send_training_task(bot, user_id: int):
     """Send a training task to user (called by scheduler)"""
     from bot.services.redis_service import redis_service
@@ -537,6 +582,7 @@ async def send_training_task(bot, user_id: int):
                 pass
         
         # Send task to user with progress information and topic/level
+        from bot.utils.keyboards import get_trainer_task_keyboard
         await bot.send_message(
             user_id,
             get_text(lang, "trainer_task_with_progress", 
@@ -544,7 +590,8 @@ async def send_training_task(bot, user_id: int):
                     total=total_tasks,
                     level=topic_level,
                     topic=topic_name,
-                    sentence=sentence)
+                    sentence=sentence),
+            reply_markup=get_trainer_task_keyboard(lang, str(training["_id"]))
         )
         
         # Update task counter and last task time in Redis after successful send
