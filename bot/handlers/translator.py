@@ -140,7 +140,8 @@ async def process_translation(message: Message, state: FSMContext):
                 target_lang = learning_lang
             else:
                 # Non-Cyrillic text (English/German): translate to interface language
-                source_lang = learning_lang
+                # Use 'auto' as source to let OpenAI detect between EN/DE
+                source_lang = 'auto'
                 target_lang = lang
             
             # Translate

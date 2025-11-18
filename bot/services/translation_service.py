@@ -49,6 +49,9 @@ class TranslationService:
         # Prepare prompt based on target language
         if target_lang == "de":
             prompt = f"Translate the following text to German. If it's a noun, include the appropriate article (der/die/das). Provide only the translation without explanations.\n\nText: {text}"
+        elif source_lang == "auto":
+            # Auto-detect source language for English/German text
+            prompt = f"Translate the following text to {target_lang}. Provide only the translation without explanations.\n\nText: {text}"
         else:
             prompt = f"Translate the following text from {source_lang} to {target_lang}. Provide only the translation without explanations.\n\nText: {text}"
         
