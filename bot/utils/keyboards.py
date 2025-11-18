@@ -127,6 +127,14 @@ def get_trainer_keyboard(user: Any) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def get_trainer_task_keyboard(lang: str, training_id: str) -> InlineKeyboardMarkup:
+    """Keyboard for training task with hint button"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_get_hint"), callback_data=f"hint_{training_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def get_trainer_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
     """Keyboard for trainer settings"""
     builder = InlineKeyboardBuilder()
