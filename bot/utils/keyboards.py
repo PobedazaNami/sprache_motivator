@@ -29,6 +29,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_translator"))
     builder.button(text=get_text(lang, "btn_daily_trainer"))
     builder.button(text=get_text(lang, "btn_saved_words"))
+    builder.button(text=get_text(lang, "btn_friends"))
     builder.button(text=get_text(lang, "btn_settings"))
     builder.button(text=get_text(lang, "btn_support"))
     # Admins get an extra button to open admin panel
@@ -37,7 +38,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
         builder.button(text=get_text(lang, "btn_admin"))
     
     # Layout: main buttons in rows of 2, support/admin on separate rows if present
-    builder.adjust(2, 2, 1, 1)
+    builder.adjust(2, 2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -232,5 +233,26 @@ def get_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboardMarkup:
     # Add random topic button for this level
     builder.button(text=get_text(lang, "btn_random_topic"), callback_data=f"set_topic_random_{level.lower()}")
     builder.button(text=get_text(lang, "btn_back"), callback_data="trainer_set_topic")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_friends_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for friends menu"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_add_friend"), callback_data="friends_add")
+    builder.button(text=get_text(lang, "btn_remove_friend"), callback_data="friends_remove")
+    builder.button(text=get_text(lang, "btn_view_friends_stats"), callback_data="friends_stats")
+    builder.button(text=get_text(lang, "btn_main_menu"), callback_data="friends_back")
+    builder.adjust(2, 1, 1)
+    return builder.as_markup()
+
+
+def get_friend_list_keyboard(lang: str, friends: list) -> InlineKeyboardMarkup:
+    """Keyboard with list of friends for removal"""
+    builder = InlineKeyboardBuilder()
+    for friend_id, friend_name in friends:
+        builder.button(text=f"❌ {friend_name}", callback_data=f"remove_friend_{friend_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="friends_menu")
     builder.adjust(1)
     return builder.as_markup()
