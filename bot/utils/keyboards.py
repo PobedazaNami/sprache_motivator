@@ -256,3 +256,11 @@ def get_friend_list_keyboard(lang: str, friends: list) -> InlineKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_back"), callback_data="friends_menu")
     builder.adjust(1)
     return builder.as_markup()
+
+
+def get_cancel_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    """Simple keyboard with cancel button"""
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_cancel"))
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True)

@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 from bot.models.database import UserStatus, InterfaceLanguage, LearningLanguage, DifficultyLevel, async_session_maker
 from bot.services.database_service import UserService
@@ -10,11 +11,17 @@ from bot.utils.keyboards import (
     get_interface_language_keyboard,
     get_learning_language_keyboard,
     get_difficulty_keyboard,
-    get_main_menu_keyboard
+    get_main_menu_keyboard,
+    get_cancel_keyboard
 )
+from bot.config import settings
 
 
 router = Router()
+
+
+class SupportStates(StatesGroup):
+    waiting_for_message = State()
 
 
 @router.message(F.text.in_([
@@ -202,8 +209,8 @@ async def settings_back(callback: CallbackQuery):
 @router.message(F.text.in_([
     "💬 Техподдержка", "💬 Техпідтримка"
 ]))
-async def support_message(message: Message):
-    """Show support contact"""
+async def support_message(message: Message, state: FSMContext):
+    """Start support conversation"""
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         
@@ -211,4 +218,101 @@ async def support_message(message: Message):
             return
         
         lang = user.interface_language.value
-        await message.answer(get_text(lang, "support_message"))
+        await message.answer(
+            get_text(lang, "support_prompt"),
+            reply_markup=get_cancel_keyboard(lang)
+        )
+        await state.set_state(SupportStates.waiting_for_message)
+
+
+@router.message(SupportStates.waiting_for_message)
+async def receive_support_message(message: Message, state: FSMContext):
+    """Receive and forward user's support message to admins"""
+    # Allow user to cancel with back button
+    if message.text in ["🔙 Главное меню", "🔙 Головне меню", "❌ Скасувати", "❌ Отменить"]:
+        await state.clear()
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, message.from_user.id)
+            lang = user.interface_language.value
+            await message.answer(
+                get_text(lang, "main_menu"),
+                reply_markup=get_main_menu_keyboard(user)
+            )
+        return
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        lang = user.interface_language.value
+        
+        # Confirm receipt to user
+        await message.answer(get_text(lang, "support_message_sent"))
+        
+        # Show main menu again
+        await message.answer(
+            get_text(lang, "main_menu"),
+            reply_markup=get_main_menu_keyboard(user)
+        )
+        
+        # Forward to admins with user context
+        user_info = f"📩 Повідомлення від користувача:\n\n" if lang == "uk" else f"📩 Сообщение от пользователя:\n\n"
+        user_info += f"👤 {user.first_name or ''} {user.last_name or ''}\n"
+        user_info += f"@{user.username or 'N/A'}\n"
+        user_info += f"ID: {user.telegram_id}\n"
+        user_info += f"\n💬 Повідомлення:\n{message.text}" if lang == "uk" else f"\n💬 Сообщение:\n{message.text}"
+        
+        for admin_id in settings.admin_id_list:
+            try:
+                # Send user info and forward the actual message
+                sent_msg = await message.bot.send_message(
+                    admin_id,
+                    user_info
+                )
+                # Copy the message so admin can reply to it
+                await message.copy_to(admin_id, reply_to_message_id=sent_msg.message_id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to forward support message to admin {admin_id}: {e}")
+    
+    await state.clear()
+
+
+@router.message(F.reply_to_message)
+async def handle_admin_reply(message: Message):
+    """Handle admin replies to user support messages"""
+    # Check if sender is admin
+    if message.from_user.id not in settings.admin_id_list:
+        return
+    
+    # Get the original message that admin is replying to
+    replied_to = message.reply_to_message
+    if not replied_to or not replied_to.text:
+        return
+    
+    # Extract user ID from the replied message
+    # The format is: "ID: {telegram_id}"
+    try:
+        lines = replied_to.text.split('\n')
+        user_id = None
+        for line in lines:
+            if line.startswith('ID:'):
+                user_id = int(line.split(':')[1].strip())
+                break
+        
+        if not user_id:
+            return
+        
+        # Get user to know their language
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, user_id)
+            lang = user.interface_language.value
+            
+            # Send admin's reply to user
+            admin_reply = f"📬 {get_text(lang, 'support_admin_reply')}\n\n{message.text}"
+            await message.bot.send_message(user_id, admin_reply)
+            
+            # Confirm to admin
+            await message.reply("✅ Відповідь надіслано користувачу" if lang == "uk" else "✅ Ответ отправлен пользователю")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to handle admin reply: {e}")
+        await message.reply("❌ Помилка при надсиланні відповіді" if message.from_user.id else "❌ Ошибка при отправке ответа")
