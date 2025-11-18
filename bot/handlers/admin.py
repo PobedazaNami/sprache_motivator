@@ -327,6 +327,12 @@ async def manage_user_access(callback: CallbackQuery):
                 user.telegram_id,
                 get_text(user_lang, user_message_key),
             )
+            # Send main menu keyboard so user can access bot features
+            await callback.bot.send_message(
+                user.telegram_id,
+                get_text(user_lang, "main_menu"),
+                reply_markup=get_main_menu_keyboard(user)
+            )
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(
