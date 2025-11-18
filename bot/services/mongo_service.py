@@ -177,3 +177,88 @@ async def get_week_stats(user_id: int) -> Optional[Tuple[int, int, int]]:
     total = int(a.get("total", 0))
     avg_quality = int((a.get("quality_sum", 0) / max(1, completed)))
     return completed, total, avg_quality
+
+
+# ---------------------------------------------------------------------------
+# Friend/Group Management
+# ---------------------------------------------------------------------------
+
+async def add_friend(user_id: int, friend_id: int) -> bool:
+    """Add a friend relationship. Returns True if successfully added."""
+    if not is_ready():
+        return False
+    
+    # Create bidirectional friendship
+    now = datetime.now(timezone.utc)
+    
+    # Check if friendship already exists
+    existing = await db().friendships.find_one({
+        "$or": [
+            {"user_id": user_id, "friend_id": friend_id},
+            {"user_id": friend_id, "friend_id": user_id}
+        ]
+    })
+    
+    if existing:
+        return False  # Already friends
+    
+    # Add friendship (store both directions for easier queries)
+    await db().friendships.insert_one({
+        "user_id": user_id,
+        "friend_id": friend_id,
+        "created_at": now,
+    })
+    
+    return True
+
+
+async def remove_friend(user_id: int, friend_id: int) -> bool:
+    """Remove a friend relationship. Returns True if successfully removed."""
+    if not is_ready():
+        return False
+    
+    # Remove bidirectional friendship
+    result = await db().friendships.delete_many({
+        "$or": [
+            {"user_id": user_id, "friend_id": friend_id},
+            {"user_id": friend_id, "friend_id": user_id}
+        ]
+    })
+    
+    return result.deleted_count > 0
+
+
+async def get_friends(user_id: int) -> List[int]:
+    """Get list of friend IDs for a user."""
+    if not is_ready():
+        return []
+    
+    # Find all friendships where user is either user_id or friend_id
+    cursor = db().friendships.find({
+        "$or": [
+            {"user_id": user_id},
+            {"friend_id": user_id}
+        ]
+    })
+    
+    friend_ids = []
+    async for doc in cursor:
+        # Add the other user's ID
+        if doc.get("user_id") == user_id:
+            friend_ids.append(int(doc.get("friend_id")))
+        else:
+            friend_ids.append(int(doc.get("user_id")))
+    
+    return friend_ids
+
+
+async def get_friends_stats(user_id: int) -> Dict[int, dict]:
+    """Get today's stats for all friends of a user."""
+    if not is_ready():
+        return {}
+    
+    friend_ids = await get_friends(user_id)
+    if not friend_ids:
+        return {}
+    
+    return await get_today_stats_bulk(friend_ids)

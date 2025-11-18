@@ -9,7 +9,7 @@ from bot.models.database import init_db, async_session_maker
 from bot.services.redis_service import redis_service
 from bot.services.database_service import UserService
 from bot.services.scheduler_service import scheduler_service
-from bot.handlers import start, translator, trainer, settings as settings_handler, admin
+from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends
 from bot.models.database import UserStatus
 from bot.services import mongo_service
 
@@ -53,6 +53,7 @@ async def main():
     dp.include_router(start.router)
     dp.include_router(translator.router)
     dp.include_router(settings_handler.router)
+    dp.include_router(friends.router)
     dp.include_router(admin.router)
     # Trainer router last because it has a catch-all text handler
     dp.include_router(trainer.router)
