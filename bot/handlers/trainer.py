@@ -471,9 +471,11 @@ async def show_hint(callback: CallbackQuery):
         
         # Show the hint with the expected translation
         expected_translation = training.get("expected_translation", "")
-        await callback.message.edit_text(
-            get_text(lang, "hint_activated", translation=expected_translation),
-            reply_markup=None
+        # Remove the inline keyboard from the original message to prevent multiple clicks
+        await callback.message.edit_reply_markup(reply_markup=None)
+        # Send hint as a new message so the original task remains visible
+        await callback.message.answer(
+            get_text(lang, "hint_activated", translation=expected_translation)
         )
         
         # Track hint activation in daily stats
