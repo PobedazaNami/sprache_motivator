@@ -177,3 +177,34 @@ async def get_week_stats(user_id: int) -> Optional[Tuple[int, int, int]]:
     total = int(a.get("total", 0))
     avg_quality = int((a.get("quality_sum", 0) / max(1, completed)))
     return completed, total, avg_quality
+
+
+async def track_hint_activation(user_id: int) -> None:
+    """Track hint activation separately from daily stats"""
+    if not is_ready():
+        return
+    
+    today = _today_midnight_utc()
+    now = datetime.now(timezone.utc)
+    
+    update_doc = {
+        "$inc": {"hint_activations": 1},
+        "$set": {"updated_at": now},
+        "$setOnInsert": {
+            "user_id": user_id,
+            "date": today,
+            "created_at": now,
+            "total_tasks": 0,
+            "completed_tasks": 0,
+            "quality_sum": 0,
+            "expected_tasks": 0,
+            "correct_answers": 0,
+            "incorrect_answers": 0,
+        }
+    }
+    
+    await db().daily_stats.update_one(
+        {"user_id": user_id, "date": today},
+        update_doc,
+        upsert=True,
+    )
