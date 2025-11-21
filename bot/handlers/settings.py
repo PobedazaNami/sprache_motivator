@@ -48,9 +48,9 @@ async def settings_menu(message: Message, state: FSMContext):
         # Add subscription status
         text += "\n\n"
         if user.subscription_active:
-            # Check if unlimited or time-limited subscription
+            # User has active subscription - check if unlimited or time-limited
             if user.subscription_until is None:
-                # Unlimited subscription (typically for admins)
+                # Unlimited subscription (subscription_active=True with no expiration date, typically for admins)
                 status = "♾️ Безлімітна підписка для перекладача" if lang == "uk" else "♾️ Безлимитная подписка для переводчика"
             else:
                 # Time-limited subscription with expiration date
