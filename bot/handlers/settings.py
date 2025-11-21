@@ -45,29 +45,30 @@ async def settings_menu(message: Message, state: FSMContext):
         text += f"\n• {get_text(lang, 'learning_lang')}: {user.learning_language.value.upper()}"
         # Difficulty level removed - now handled through topic selection in trainer settings
         
-        # Add trial/subscription status
+        # Add subscription status
         text += "\n\n"
         if user.subscription_active:
             # Check if unlimited or time-limited subscription
-            days_remaining = UserService.get_trial_days_remaining(user)
-            if days_remaining == 999:
-                # Unlimited subscription
-                status = "♾️ Безлімітна підписка" if lang == "uk" else "♾️ Безлимитная подписка"
+            if user.subscription_until is None:
+                # Unlimited subscription (typically for admins)
+                status = "♾️ Безлімітна підписка для перекладача" if lang == "uk" else "♾️ Безлимитная подписка для переводчика"
             else:
-                # Time-limited subscription with days remaining
-                days_word = "днів" if lang == "uk" else "дней"
-                status = f"✅ Підписка: {days_remaining} {days_word} залишилось" if lang == "uk" else f"✅ Подписка: {days_remaining} {days_word} осталось"
-        elif user.trial_activated:
-            days_remaining = UserService.get_trial_days_remaining(user)
-            if days_remaining > 0:
-                days_word = "днів" if lang == "uk" else "дней"
-                status = f"🎁 Пробний: {days_remaining} {days_word} залишилось" if lang == "uk" else f"🎁 Пробный: {days_remaining} {days_word} осталось"
-            else:
-                status = "⏰ Пробний період закінчився" if lang == "uk" else "⏰ Пробный период закончился"
+                # Time-limited subscription with expiration date
+                from datetime import datetime
+                import pytz
+                berlin_tz = pytz.timezone('Europe/Berlin')
+                now = datetime.now(berlin_tz)
+                if isinstance(user.subscription_until, datetime):
+                    subscription_until_aware = user.subscription_until.replace(tzinfo=pytz.UTC).astimezone(berlin_tz)
+                    days_remaining = (subscription_until_aware - now).days
+                    days_word = "днів" if lang == "uk" else "дней"
+                    status = f"✅ Підписка на перекладач: {days_remaining} {days_word}" if lang == "uk" else f"✅ Подписка на переводчик: {days_remaining} {days_word}"
+                else:
+                    status = "✅ Активна підписка на перекладач" if lang == "uk" else "✅ Активная подписка на переводчик"
         else:
-            status = "⚠️ Пробний період не активовано" if lang == "uk" else "⚠️ Пробный период не активирован"
+            status = "📖 Перекладач: потрібна підписка €4/міс\n🎯 Тренажер: безкоштовно!" if lang == "uk" else "📖 Переводчик: требуется подписка €4/мес\n🎯 Тренажёр: бесплатно!"
         
-        text += get_text(lang, "trial_status", status=status)
+        text += get_text(lang, "subscription_status", status=status)
         
         await message.answer(text, reply_markup=get_settings_keyboard(lang))
 

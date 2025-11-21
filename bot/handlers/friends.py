@@ -31,17 +31,7 @@ async def friends_menu(message: Message, state: FSMContext):
         if user.status != UserStatus.APPROVED:
             return
         
-        # Check if trial expired
-        if UserService.is_trial_expired(user):
-            lang = user.interface_language.value
-            from bot.config import settings
-            await message.answer(
-                get_text(lang, "trial_expired", 
-                        payment_link=settings.STRIPE_PAYMENT_LINK,
-                        admin_contact=settings.ADMIN_CONTACT)
-            )
-            return
-        
+        # Friends feature is free for all approved users
         lang = user.interface_language.value
         
         # Get friends list
