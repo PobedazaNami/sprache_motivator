@@ -5,19 +5,18 @@ A comprehensive Telegram bot for language practice and motivation with administr
 ## Features
 
 ### User Features
-- **10-Day Free Trial**: 
-  - New users get 10 days of full access
-  - Trial tracked in Berlin timezone
-  - €5/month subscription after trial
+- **Subscription Model**: 
+  - Daily Trainer: Free for all approved users
+  - Translation Mode: €4/month subscription required
 - **Multi-language Interface**: Ukrainian and Russian interface languages
-- **Translation Mode**: 
+- **Translation Mode** (€4/month subscription): 
   - English and German translation support
   - Automatic German article detection
   - Bidirectional translation
   - Translation caching for faster responses
   - Word saving functionality
-- **Daily Trainer**:
-  - 3 daily practice sessions
+- **Daily Trainer** (Free):
+  - Customizable daily practice sessions
   - Multiple difficulty levels (A2, B1, B2, Combined)
   - Grammar explanations for incorrect answers
   - Progress tracking
@@ -25,7 +24,7 @@ A comprehensive Telegram bot for language practice and motivation with administr
   - Activity scoring
   - Progress tracking
   - Performance statistics
-- **Settings**: Customizable interface language, learning language, difficulty level, and trial status
+- **Settings**: Customizable interface language, learning language, difficulty level, and subscription status
 
 ### Admin Features
 - User approval/rejection system
@@ -177,16 +176,13 @@ Times are in 24-hour format, separated by commas.
 1. Start the bot: `/start`
 2. Select interface language (Ukrainian/Russian)
 3. Wait for admin approval
-4. Activate 10-day free trial
-5. Access main menu with features:
-   - 📖 Translator
-   - 🎯 Daily Trainer
+4. Access main menu with features:
+   - 📖 Translator (subscription required: €4/month)
+   - 🎯 Daily Trainer (free for all users)
    - 💾 Saved Words
    - ⚙️ Settings
    - 💬 Support
-6. After trial expires, subscribe for €5/month to continue
-
-For detailed trial information, see [TRIAL_SYSTEM.md](TRIAL_SYSTEM.md)
+5. Subscribe for €4/month to use the Translator feature
 
 ### For Admins
 

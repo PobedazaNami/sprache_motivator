@@ -36,24 +36,7 @@ async def trainer_menu(message: Message, state: FSMContext):
         
         lang = user.interface_language.value
         
-        # Admins have unrestricted access
-        if not is_admin(message.from_user.id):
-            # Check trial activation
-            if not user.trial_activated and not user.subscription_active:
-                await message.answer(get_text(lang, "trial_not_activated"))
-                return
-            
-            # Check trial expiration
-            if UserService.is_trial_expired(user):
-                from bot.config import settings
-                payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
-                admin_contact = settings.ADMIN_CONTACT
-                await message.answer(
-                    get_text(lang, "trial_expired", 
-                            payment_link=payment_link,
-                            admin_contact=admin_contact)
-                )
-                return
+        # Trainer is free for all approved users - no subscription check needed
         
         # Show current trainer status
         if user.daily_trainer_enabled:
