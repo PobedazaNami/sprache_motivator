@@ -126,6 +126,9 @@ async def process_translation(message: Message, state: FSMContext):
                 source_lang = 'auto'
                 target_lang = lang
             
+            # Send typing indicator to show the bot is processing
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            
             # Translate
             translation, tokens = await translation_service.translate(
                 text, source_lang, target_lang, user_id

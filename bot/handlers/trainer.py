@@ -663,6 +663,9 @@ async def check_training_answer(message: Message, state: FSMContext):
         
         user_answer = message.text
         
+        # Send typing indicator to show the bot is processing
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        
         # Check translation with quality assessment
         is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
             training["sentence"],

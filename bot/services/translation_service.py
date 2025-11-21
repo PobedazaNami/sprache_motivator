@@ -57,7 +57,7 @@ class TranslationService:
         
         # Call OpenAI API
         response = await self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a professional translator."},
                 {"role": "user", "content": prompt}
@@ -149,7 +149,7 @@ class TranslationService:
         prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
         
         response = await self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a language teacher creating practice sentences."},
                 {"role": "user", "content": prompt}
@@ -193,7 +193,7 @@ Rules:
 """.strip()
 
         response = await self.client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a strict language teacher for precise grammar checking. Respond with strict JSON only."},
                 {"role": "user", "content": eval_prompt},
