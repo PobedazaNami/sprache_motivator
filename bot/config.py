@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 2592000  # 30 days
     
     # Subscription
-    STRIPE_PAYMENT_LINK: str = ""  # Stripe payment link for €5/month subscription
+    STRIPE_PAYMENT_LINK: str = ""  # Stripe payment link for €4/month subscription (translator only)
     ADMIN_CONTACT: str = "@reeziat"  # Admin contact for support
     
     @property

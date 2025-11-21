@@ -21,7 +21,8 @@ class TranslatorStates(StatesGroup):
 
 
 @router.message(F.text.in_([
-    "📖 Переводчик", "📖 Перекладач"
+    "📖 Переводчик", "📖 Перекладач", 
+    "📖 Переводчик (подписка)", "📖 Перекладач (підписка)"
 ]))
 async def translator_mode(message: Message, state: FSMContext):
     """Activate translator mode"""
@@ -38,18 +39,13 @@ async def translator_mode(message: Message, state: FSMContext):
         
         # Admins have unrestricted access
         if not is_admin(message.from_user.id):
-            # Check trial activation
-            if not user.trial_activated and not user.subscription_active:
-                await message.answer(get_text(lang, "trial_not_activated"))
-                return
-            
-            # Check trial expiration
-            if UserService.is_trial_expired(user):
+            # Check subscription status (translator requires subscription)
+            if not user.subscription_active:
                 from bot.config import settings
                 payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
                 admin_contact = settings.ADMIN_CONTACT
                 await message.answer(
-                    get_text(lang, "trial_expired", 
+                    get_text(lang, "translator_subscription_required", 
                             payment_link=payment_link,
                             admin_contact=admin_contact)
                 )
@@ -92,18 +88,13 @@ async def process_translation(message: Message, state: FSMContext):
         
         # Admins have unrestricted access
         if not is_admin(message.from_user.id):
-            # Check trial status before processing
-            if not user.trial_activated and not user.subscription_active:
-                await message.answer(get_text(lang, "trial_not_activated"))
-                await state.clear()
-                return
-            
-            if UserService.is_trial_expired(user):
+            # Check subscription status (translator requires subscription)
+            if not user.subscription_active:
                 from bot.config import settings
                 payment_link = settings.STRIPE_PAYMENT_LINK or "Contact admin for payment"
                 admin_contact = settings.ADMIN_CONTACT
                 await message.answer(
-                    get_text(lang, "trial_expired", 
+                    get_text(lang, "translator_subscription_required", 
                             payment_link=payment_link,
                             admin_contact=admin_contact)
                 )
