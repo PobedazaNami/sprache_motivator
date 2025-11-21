@@ -211,6 +211,7 @@ Rules:
         errors_list = []
 
         # Try parse JSON
+        json_parsed = False
         try:
             data = json.loads(raw)
             status_val = str(data.get("status", "")).upper()
@@ -223,15 +224,72 @@ Rules:
                 errors_list = [str(e) for e in errors if str(e).strip()]
             else:
                 errors_list = [str(errors)]
+            json_parsed = True
         except Exception:
-            # Fallback very defensive parse
-            # If model misbehaved, mark as incorrect and compute later
-            errors_list = [
-                "Автоматический парсер: ответ не в JSON, применены строгие правила."
-            ]
-            is_correct = False
-            correct_translation = ""
-            quality_percentage = 40
+            # Fallback: try to extract JSON from response if it's embedded in text
+            json_match = re.search(r'\{[^{}]*"status"[^{}]*\}', raw, re.DOTALL)
+            if json_match:
+                try:
+                    data = json.loads(json_match.group(0))
+                    status_val = str(data.get("status", "")).upper()
+                    is_correct = status_val == "CORRECT"
+                    correct_translation = (data.get("correct") or "").strip()
+                    quality_percentage = int(data.get("quality", 0))
+                    quality_percentage = max(0, min(100, quality_percentage))
+                    errors = data.get("errors") or []
+                    if isinstance(errors, list):
+                        errors_list = [str(e) for e in errors if str(e).strip()]
+                    else:
+                        errors_list = [str(errors)]
+                    json_parsed = True
+                except Exception:
+                    pass
+            
+            # If JSON extraction failed, try to parse as structured text
+            if not json_parsed:
+                # Try to extract information from text format
+                is_correct = False
+                quality_percentage = 40
+                
+                # Try to extract errors/explanations from the response
+                # Look for common patterns like lists, error descriptions, etc.
+                lines = raw.split('\n')
+                extracted_errors = []
+                
+                for line in lines:
+                    line = line.strip()
+                    # Skip empty lines, JSON artifacts, and system error messages
+                    if not line or line in ['{', '}', '[', ']']:
+                        continue
+                    # Skip generic system errors (not educational feedback)
+                    if any(phrase in line.lower() for phrase in ['internal error', 'unable to process', 
+                                                                   'error processing', 'system error',
+                                                                   'внутренняя ошибка', 'невозможно обработать']):
+                        continue
+                    # Look for educational error descriptions (lines that describe language issues)
+                    # Common patterns: starts with list markers, or contains grammar/language issue keywords
+                    if (line.startswith('-') or line.startswith('*') or 
+                        line.startswith('•') or re.match(r'^\d+[\.\)]\s+', line) or
+                        any(word in line.lower() for word in ['grammar', 'article', 'case', 'verb', 'word order',
+                                                                'spelling', 'punctuation', 'capitalization',
+                                                                'грамматика', 'артикль', 'падеж', 'глагол', 
+                                                                'порядок слов', 'орфография', 'пунктуация',
+                                                                'граматика', 'відмінок', 'дієслово', 
+                                                                'написання', 'пунктуація'])):
+                        # Clean up the line
+                        cleaned = re.sub(r'^[-*•\d\.\)]+\s*', '', line)
+                        if cleaned and len(cleaned) > 10:  # Require meaningful length
+                            extracted_errors.append(cleaned)
+                
+                if extracted_errors:
+                    errors_list = extracted_errors
+                else:
+                    # If we couldn't extract anything meaningful, provide a helpful default
+                    # based on the interface language
+                    if interface_lang == "uk":
+                        errors_list = ["Знайдено помилки в граматиці, пунктуації або значенні. Перевірте артиклі, відмінки, закінчення слів та порядок слів."]
+                    else:  # Russian
+                        errors_list = ["Обнаружены ошибки в грамматике, пунктуации или значении. Проверьте артикли, падежи, окончания слов и порядок слов."]
 
         # Ensure we always provide a correct translation string
         if not correct_translation:
