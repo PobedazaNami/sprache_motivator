@@ -8,6 +8,23 @@ from bot.services.redis_service import redis_service
 
 
 class TranslationService:
+    # Keywords indicating educational feedback about language issues
+    EDUCATIONAL_KEYWORDS = [
+        'grammar', 'article', 'case', 'verb', 'word order',
+        'spelling', 'punctuation', 'capitalization',
+        'грамматика', 'артикль', 'падеж', 'глагол', 
+        'порядок слов', 'орфография', 'пунктуация',
+        'граматика', 'відмінок', 'дієслово', 
+        'написання', 'пунктуація'
+    ]
+    
+    # Phrases indicating system errors (not educational feedback)
+    SYSTEM_ERROR_PHRASES = [
+        'internal error', 'unable to process', 
+        'error processing', 'system error',
+        'внутренняя ошибка', 'невозможно обработать'
+    ]
+    
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.german_articles = {
@@ -227,7 +244,8 @@ Rules:
             json_parsed = True
         except Exception:
             # Fallback: try to extract JSON from response if it's embedded in text
-            json_match = re.search(r'\{[^{}]*"status"[^{}]*\}', raw, re.DOTALL)
+            # Look for JSON objects that contain "status" field
+            json_match = re.search(r'\{(?:[^{}]|(?:\{[^{}]*\}))*?"status"(?:[^{}]|(?:\{[^{}]*\}))*?\}', raw, re.DOTALL)
             if json_match:
                 try:
                     data = json.loads(json_match.group(0))
@@ -262,22 +280,15 @@ Rules:
                     if not line or line in ['{', '}', '[', ']']:
                         continue
                     # Skip generic system errors (not educational feedback)
-                    if any(phrase in line.lower() for phrase in ['internal error', 'unable to process', 
-                                                                   'error processing', 'system error',
-                                                                   'внутренняя ошибка', 'невозможно обработать']):
+                    if any(phrase in line.lower() for phrase in self.SYSTEM_ERROR_PHRASES):
                         continue
                     # Look for educational error descriptions (lines that describe language issues)
                     # Common patterns: starts with list markers, or contains grammar/language issue keywords
                     if (line.startswith('-') or line.startswith('*') or 
-                        line.startswith('•') or re.match(r'^\d+[\.\)]\s+', line) or
-                        any(word in line.lower() for word in ['grammar', 'article', 'case', 'verb', 'word order',
-                                                                'spelling', 'punctuation', 'capitalization',
-                                                                'грамматика', 'артикль', 'падеж', 'глагол', 
-                                                                'порядок слов', 'орфография', 'пунктуация',
-                                                                'граматика', 'відмінок', 'дієслово', 
-                                                                'написання', 'пунктуація'])):
-                        # Clean up the line
-                        cleaned = re.sub(r'^[-*•\d\.\)]+\s*', '', line)
+                        line.startswith('•') or re.match(r'^\d+[.\)]\s+', line) or
+                        any(word in line.lower() for word in self.EDUCATIONAL_KEYWORDS)):
+                        # Clean up the line (remove list markers)
+                        cleaned = re.sub(r'^[-*•\d.)]+\s*', '', line)
                         if cleaned and len(cleaned) > 10:  # Require meaningful length
                             extracted_errors.append(cleaned)
                 
