@@ -66,23 +66,28 @@ def test_trainer_typing_indicator_location():
     found_check_translation = False
     typing_line = -1
     check_line = -1
+    function_start = -1
     
     for i, line in enumerate(lines):
         if 'async def check_training_answer' in line:
             in_check_function = True
+            function_start = i
+        elif in_check_function and line.strip() and not line.strip().startswith('#') and not line[0].isspace():
+            # Exited the function (found a new non-indented, non-comment line)
+            break
         
         if in_check_function:
-            if 'send_chat_action' in line and 'typing' in line:
+            if 'send_chat_action' in line and 'typing' in line and 'await' in line:
                 found_typing = True
                 typing_line = i
             if 'check_translation' in line and 'translation_service' in line:
                 found_check_translation = True
                 check_line = i
-                break
     
     assert found_typing, "Typing indicator should be in check_training_answer"
     assert found_check_translation, "check_translation call should be in function"
     assert typing_line < check_line, f"Typing indicator (line {typing_line}) should come before check_translation (line {check_line})"
+    assert function_start < typing_line, "Typing indicator should be inside the function"
     
     print(f"✓ Typing indicator correctly placed at line {typing_line}, before check_translation at line {check_line}")
 
@@ -98,23 +103,28 @@ def test_translator_typing_indicator_location():
     found_translate = False
     typing_line = -1
     translate_line = -1
+    function_start = -1
     
     for i, line in enumerate(lines):
         if 'async def process_translation' in line:
             in_process_function = True
+            function_start = i
+        elif in_process_function and line.strip() and not line.strip().startswith('#') and not line[0].isspace():
+            # Exited the function (found a new non-indented, non-comment line)
+            break
         
         if in_process_function:
-            if 'send_chat_action' in line and 'typing' in line:
+            if 'send_chat_action' in line and 'typing' in line and 'await' in line:
                 found_typing = True
                 typing_line = i
-            if 'translation_service.translate' in line:
+            if 'translation_service.translate' in line and 'await' in line:
                 found_translate = True
                 translate_line = i
-                break
     
     assert found_typing, "Typing indicator should be in process_translation"
     assert found_translate, "translate call should be in function"
     assert typing_line < translate_line, f"Typing indicator (line {typing_line}) should come before translate (line {translate_line})"
+    assert function_start < typing_line, "Typing indicator should be inside the function"
     
     print(f"✓ Typing indicator correctly placed at line {typing_line}, before translate at line {translate_line}")
 
