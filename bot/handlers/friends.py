@@ -7,7 +7,7 @@ from bot.models.database import UserStatus, async_session_maker
 from bot.services.database_service import UserService
 from bot.services import mongo_service
 from bot.locales.texts import get_text
-from bot.utils.keyboards import get_friends_menu_keyboard, get_friend_list_keyboard
+from bot.utils.keyboards import get_friends_menu_keyboard, get_friend_list_keyboard, get_pending_requests_keyboard
 
 
 router = Router()
@@ -169,17 +169,45 @@ async def process_add_friend(message: Message, state: FSMContext):
             await state.clear()
             return
         
-        # Add friend
-        success = await mongo_service.add_friend(message.from_user.id, friend_id)
+        # Send friend request
+        success = await mongo_service.send_friend_request(message.from_user.id, friend_id)
         
         if success:
+            # Send notification to the friend
+            try:
+                from bot.main import bot
+                from aiogram import Bot
+                from bot.config import settings
+                
+                # Get bot instance
+                bot_instance = Bot(token=settings.BOT_TOKEN)
+                
+                # Get requester's info
+                requester_name = user.first_name or user.username or f"User {message.from_user.id}"
+                requester_username = user.username or str(message.from_user.id)
+                
+                # Get friend's language
+                friend_lang = friend.interface_language.value
+                
+                # Send notification
+                await bot_instance.send_message(
+                    friend_id,
+                    get_text(friend_lang, "friend_request_notification",
+                           name=requester_name,
+                           username=requester_username)
+                )
+                await bot_instance.session.close()
+            except Exception as e:
+                # If notification fails, that's okay - the request is still sent
+                pass
+            
             await message.answer(
-                get_text(lang, "friend_added"),
+                get_text(lang, "friend_request_sent"),
                 reply_markup=get_friends_menu_keyboard(lang)
             )
         else:
             await message.answer(
-                get_text(lang, "friend_already_exists"),
+                get_text(lang, "friend_request_exists"),
                 reply_markup=get_friends_menu_keyboard(lang)
             )
         
@@ -285,6 +313,119 @@ async def view_friends_stats(callback: CallbackQuery):
             text,
             reply_markup=get_friends_menu_keyboard(lang)
         )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data == "friends_pending")
+async def view_pending_requests(callback: CallbackQuery):
+    """View incoming pending friend requests"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Get pending incoming requests
+        requester_ids = await mongo_service.get_pending_incoming_requests(callback.from_user.id)
+        
+        if not requester_ids:
+            await callback.message.edit_text(
+                get_text(lang, "no_pending_requests"),
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
+            await callback.answer()
+            return
+        
+        # Get requester details
+        requesters = []
+        for requester_id in requester_ids:
+            requester = await UserService.get_or_create_user(session, requester_id)
+            requester_name = requester.first_name or requester.username or f"User {requester_id}"
+            requesters.append((requester_id, requester_name))
+        
+        text = get_text(lang, "pending_requests_title")
+        text += "\n".join([f"👤 {name}" for _, name in requesters])
+        text += "\n\n✅ - Прийняти / Принять\n❌ - Відхилити / Отклонить"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_pending_requests_keyboard(lang, requesters)
+        )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("accept_request_"))
+async def accept_friend_request(callback: CallbackQuery):
+    """Accept a friend request"""
+    requester_id = int(callback.data.split("_")[2])
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Accept the request
+        success = await mongo_service.accept_friend_request(callback.from_user.id, requester_id)
+        
+        if success:
+            # Send notification to the requester
+            try:
+                from aiogram import Bot
+                from bot.config import settings
+                
+                bot_instance = Bot(token=settings.BOT_TOKEN)
+                
+                # Get user's info
+                user_name = user.first_name or user.username or f"User {callback.from_user.id}"
+                user_username = user.username or str(callback.from_user.id)
+                
+                # Get requester's language
+                requester = await UserService.get_or_create_user(session, requester_id)
+                requester_lang = requester.interface_language.value
+                
+                # Send notification
+                notification_text = get_text(requester_lang, "friend_request_accepted")
+                notification_text = f"👋 {user_name} (@{user_username}) принял ваш запрос в друзья!" if requester_lang == "ru" else f"👋 {user_name} (@{user_username}) прийняв ваш запит в друзі!"
+                
+                await bot_instance.send_message(requester_id, notification_text)
+                await bot_instance.session.close()
+            except Exception:
+                pass
+            
+            await callback.message.edit_text(
+                get_text(lang, "friend_request_accepted"),
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
+        else:
+            await callback.message.edit_text(
+                get_text(lang, "error"),
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
+    
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("reject_request_"))
+async def reject_friend_request(callback: CallbackQuery):
+    """Reject a friend request"""
+    requester_id = int(callback.data.split("_")[2])
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Reject the request
+        success = await mongo_service.reject_friend_request(callback.from_user.id, requester_id)
+        
+        if success:
+            await callback.message.edit_text(
+                get_text(lang, "friend_request_rejected"),
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
+        else:
+            await callback.message.edit_text(
+                get_text(lang, "error"),
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
     
     await callback.answer()
 
