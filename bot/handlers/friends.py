@@ -242,7 +242,7 @@ async def remove_friend_prompt(callback: CallbackQuery):
             )
         
         await callback.answer()
-    except Exception as e:
+    except Exception:
         # Ensure callback is always answered to prevent button from appearing stuck
         await callback.answer()
         raise
@@ -313,7 +313,7 @@ async def view_friends_stats(callback: CallbackQuery):
             )
         
         await callback.answer()
-    except Exception as e:
+    except Exception:
         # Ensure callback is always answered to prevent button from appearing stuck
         await callback.answer()
         raise
@@ -355,7 +355,7 @@ async def view_pending_requests(callback: CallbackQuery):
             )
         
         await callback.answer()
-    except Exception as e:
+    except Exception:
         # Ensure callback is always answered to prevent button from appearing stuck
         await callback.answer()
         raise
