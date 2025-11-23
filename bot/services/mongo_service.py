@@ -183,15 +183,14 @@ async def get_week_stats(user_id: int) -> Optional[Tuple[int, int, int]]:
 # Friend/Group Management
 # ---------------------------------------------------------------------------
 
-async def add_friend(user_id: int, friend_id: int) -> bool:
-    """Add a friend relationship. Returns True if successfully added."""
+async def send_friend_request(user_id: int, friend_id: int) -> bool:
+    """Send a friend request. Returns True if successfully sent."""
     if not is_ready():
         return False
     
-    # Create bidirectional friendship
     now = datetime.now(timezone.utc)
     
-    # Check if friendship already exists
+    # Check if friendship or request already exists
     existing = await db().friendships.find_one({
         "$or": [
             {"user_id": user_id, "friend_id": friend_id},
@@ -200,28 +199,108 @@ async def add_friend(user_id: int, friend_id: int) -> bool:
     })
     
     if existing:
-        return False  # Already friends
+        return False  # Already friends or request exists
     
-    # Add friendship (store both directions for easier queries)
+    # Create friend request (pending status)
     await db().friendships.insert_one({
         "user_id": user_id,
         "friend_id": friend_id,
+        "status": "pending",
         "created_at": now,
     })
     
     return True
 
 
-async def remove_friend(user_id: int, friend_id: int) -> bool:
-    """Remove a friend relationship. Returns True if successfully removed."""
+async def accept_friend_request(user_id: int, requester_id: int) -> bool:
+    """Accept a friend request. Returns True if successfully accepted."""
     if not is_ready():
         return False
     
-    # Remove bidirectional friendship
+    now = datetime.now(timezone.utc)
+    
+    # Find the pending request where requester sent to user
+    result = await db().friendships.update_one(
+        {
+            "user_id": requester_id,
+            "friend_id": user_id,
+            "status": "pending"
+        },
+        {
+            "$set": {
+                "status": "accepted",
+                "accepted_at": now,
+            }
+        }
+    )
+    
+    return result.modified_count > 0
+
+
+async def reject_friend_request(user_id: int, requester_id: int) -> bool:
+    """Reject a friend request. Returns True if successfully rejected."""
+    if not is_ready():
+        return False
+    
+    # Delete the pending request
+    result = await db().friendships.delete_one({
+        "user_id": requester_id,
+        "friend_id": user_id,
+        "status": "pending"
+    })
+    
+    return result.deleted_count > 0
+
+
+async def get_pending_incoming_requests(user_id: int) -> List[int]:
+    """Get list of user IDs who sent pending friend requests to this user."""
+    if not is_ready():
+        return []
+    
+    cursor = db().friendships.find({
+        "friend_id": user_id,
+        "status": "pending"
+    })
+    
+    requester_ids = []
+    async for doc in cursor:
+        requester_ids.append(int(doc.get("user_id")))
+    
+    return requester_ids
+
+
+async def get_pending_outgoing_requests(user_id: int) -> List[int]:
+    """Get list of user IDs to whom this user sent pending friend requests."""
+    if not is_ready():
+        return []
+    
+    cursor = db().friendships.find({
+        "user_id": user_id,
+        "status": "pending"
+    })
+    
+    friend_ids = []
+    async for doc in cursor:
+        friend_ids.append(int(doc.get("friend_id")))
+    
+    return friend_ids
+
+
+async def add_friend(user_id: int, friend_id: int) -> bool:
+    """Legacy function for backward compatibility. Use send_friend_request instead."""
+    return await send_friend_request(user_id, friend_id)
+
+
+async def remove_friend(user_id: int, friend_id: int) -> bool:
+    """Remove a friend relationship (accepted friendships only). Returns True if successfully removed."""
+    if not is_ready():
+        return False
+    
+    # Remove accepted friendship (bidirectional)
     result = await db().friendships.delete_many({
         "$or": [
-            {"user_id": user_id, "friend_id": friend_id},
-            {"user_id": friend_id, "friend_id": user_id}
+            {"user_id": user_id, "friend_id": friend_id, "status": "accepted"},
+            {"user_id": friend_id, "friend_id": user_id, "status": "accepted"}
         ]
     })
     
@@ -229,15 +308,15 @@ async def remove_friend(user_id: int, friend_id: int) -> bool:
 
 
 async def get_friends(user_id: int) -> List[int]:
-    """Get list of friend IDs for a user."""
+    """Get list of accepted friend IDs for a user."""
     if not is_ready():
         return []
     
-    # Find all friendships where user is either user_id or friend_id
+    # Find all accepted friendships where user is either user_id or friend_id
     cursor = db().friendships.find({
         "$or": [
-            {"user_id": user_id},
-            {"friend_id": user_id}
+            {"user_id": user_id, "status": "accepted"},
+            {"friend_id": user_id, "status": "accepted"}
         ]
     })
     

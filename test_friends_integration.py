@@ -21,7 +21,35 @@ def test_mongo_friend_functions_signature():
         if isinstance(node, ast.AsyncFunctionDef):
             functions[node.name] = [arg.arg for arg in node.args.args]
     
-    # Check add_friend
+    # Check send_friend_request
+    assert 'send_friend_request' in functions, "send_friend_request function not found"
+    assert 'user_id' in functions['send_friend_request'], "send_friend_request missing user_id parameter"
+    assert 'friend_id' in functions['send_friend_request'], "send_friend_request missing friend_id parameter"
+    print("✓ send_friend_request has correct signature")
+    
+    # Check accept_friend_request
+    assert 'accept_friend_request' in functions, "accept_friend_request function not found"
+    assert 'user_id' in functions['accept_friend_request'], "accept_friend_request missing user_id parameter"
+    assert 'requester_id' in functions['accept_friend_request'], "accept_friend_request missing requester_id parameter"
+    print("✓ accept_friend_request has correct signature")
+    
+    # Check reject_friend_request
+    assert 'reject_friend_request' in functions, "reject_friend_request function not found"
+    assert 'user_id' in functions['reject_friend_request'], "reject_friend_request missing user_id parameter"
+    assert 'requester_id' in functions['reject_friend_request'], "reject_friend_request missing requester_id parameter"
+    print("✓ reject_friend_request has correct signature")
+    
+    # Check get_pending_incoming_requests
+    assert 'get_pending_incoming_requests' in functions, "get_pending_incoming_requests function not found"
+    assert 'user_id' in functions['get_pending_incoming_requests'], "get_pending_incoming_requests missing user_id parameter"
+    print("✓ get_pending_incoming_requests has correct signature")
+    
+    # Check get_pending_outgoing_requests
+    assert 'get_pending_outgoing_requests' in functions, "get_pending_outgoing_requests function not found"
+    assert 'user_id' in functions['get_pending_outgoing_requests'], "get_pending_outgoing_requests missing user_id parameter"
+    print("✓ get_pending_outgoing_requests has correct signature")
+    
+    # Check add_friend (legacy)
     assert 'add_friend' in functions, "add_friend function not found"
     assert 'user_id' in functions['add_friend'], "add_friend missing user_id parameter"
     assert 'friend_id' in functions['add_friend'], "add_friend missing friend_id parameter"
@@ -72,10 +100,18 @@ def test_friends_handler_has_all_routes():
     assert 'add_friend' in content, "Missing add_friend handler"
     assert 'remove_friend' in content, "Missing remove_friend handler"
     assert 'friends_stats' in content, "Missing friends_stats handler"
+    assert 'view_pending_requests' in content, "Missing view_pending_requests handler"
+    assert 'accept_friend_request' in content, "Missing accept_friend_request handler"
+    assert 'reject_friend_request' in content, "Missing reject_friend_request handler"
     
     # Check for FSM states
     assert 'FriendsStates' in content, "Missing FriendsStates"
     assert 'waiting_for_friend_id' in content, "Missing waiting_for_friend_id state"
+    
+    # Check for friend request functionality
+    assert 'send_friend_request' in content, "Missing send_friend_request call"
+    assert 'get_pending_incoming_requests' in content, "Missing get_pending_incoming_requests call"
+    assert 'friend_request_notification' in content, "Missing friend_request_notification"
     
     print("✓ Friends handler has all necessary routes and states")
 
@@ -89,6 +125,8 @@ def test_main_menu_button_integration():
     # Check that get_main_menu_keyboard includes friends button
     assert 'btn_friends' in content, "Friends button not referenced in keyboards"
     assert 'get_friends_menu_keyboard' in content, "get_friends_menu_keyboard function not found"
+    assert 'get_pending_requests_keyboard' in content, "get_pending_requests_keyboard function not found"
+    assert 'btn_pending_requests' in content, "Pending requests button not referenced in keyboards"
     
     print("✓ Main menu integration includes friends button")
 
@@ -101,10 +139,12 @@ def test_friends_localization_completeness():
     # Test that all required keys exist in both languages
     uk_keys = [
         "btn_friends", "friends_menu", "friends_list", "no_friends",
-        "add_friend_prompt", "friend_added", "friend_already_exists",
+        "add_friend_prompt", "friend_request_sent", "friend_request_exists",
         "friend_not_found", "friend_removed", "cannot_add_self",
         "btn_add_friend", "btn_remove_friend", "btn_view_friends_stats",
-        "friends_stats_title", "friends_stats_user", "friends_stats_empty"
+        "btn_pending_requests", "friends_stats_title", "friends_stats_user",
+        "friends_stats_empty", "pending_requests_title", "no_pending_requests",
+        "friend_request_accepted", "friend_request_rejected", "friend_request_notification"
     ]
     
     for key in uk_keys:
@@ -121,13 +161,22 @@ def test_friends_localization_completeness():
 def test_friends_workflow_text_consistency():
     """Test that the friends workflow texts make sense together"""
     with open('bot/locales/texts.py', 'r') as f:
-        content = f.read()
+        texts_content = f.read()
+    
+    with open('bot/handlers/friends.py', 'r') as f:
+        handler_content = f.read()
+    
+    # Combine for checking
+    content = texts_content + handler_content
     
     # Check that key phrases exist
     assert "Друзі" in content or "Друзья" in content, "Friends label not found"
-    assert "Додати друга" in content or "Добавить друга" in content, "Add friend text not found"
+    assert "Надіслати запит" in content or "Отправить запрос" in content, "Send request text not found"
     assert "Видалити друга" in content or "Удалить друга" in content, "Remove friend text not found"
     assert "статистик" in content.lower(), "Statistics text not found"
+    assert "Вхідні запити" in content or "Входящие запросы" in content, "Pending requests text not found"
+    assert "Прийняти" in content or "Принять" in content, "Accept text not found"
+    assert "Відхилити" in content or "Отклонить" in content, "Reject text not found"
     
     print("✓ Friends workflow texts are present and consistent")
 

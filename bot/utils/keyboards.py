@@ -234,9 +234,10 @@ def get_friends_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text(lang, "btn_add_friend"), callback_data="friends_add")
     builder.button(text=get_text(lang, "btn_remove_friend"), callback_data="friends_remove")
+    builder.button(text=get_text(lang, "btn_pending_requests"), callback_data="friends_pending")
     builder.button(text=get_text(lang, "btn_view_friends_stats"), callback_data="friends_stats")
     builder.button(text=get_text(lang, "btn_main_menu"), callback_data="friends_back")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 1, 1, 1)
     return builder.as_markup()
 
 
@@ -247,6 +248,17 @@ def get_friend_list_keyboard(lang: str, friends: list) -> InlineKeyboardMarkup:
         builder.button(text=f"❌ {friend_name}", callback_data=f"remove_friend_{friend_id}")
     builder.button(text=get_text(lang, "btn_back"), callback_data="friends_menu")
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_pending_requests_keyboard(lang: str, requesters: list) -> InlineKeyboardMarkup:
+    """Keyboard with list of pending friend requests"""
+    builder = InlineKeyboardBuilder()
+    for requester_id, requester_name in requesters:
+        builder.button(text=f"✅ {requester_name}", callback_data=f"accept_request_{requester_id}")
+        builder.button(text=f"❌ {requester_name}", callback_data=f"reject_request_{requester_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="friends_menu")
+    builder.adjust(2)
     return builder.as_markup()
 
 
