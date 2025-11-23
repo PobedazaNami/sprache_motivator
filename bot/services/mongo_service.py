@@ -190,11 +190,19 @@ async def send_friend_request(user_id: int, friend_id: int) -> bool:
     
     now = datetime.now(timezone.utc)
     
-    # Check if friendship or request already exists
+    # Check if active friendship or pending request already exists
+    # Only check for "pending" and "accepted" statuses
     existing = await db().friendships.find_one({
-        "$or": [
-            {"user_id": user_id, "friend_id": friend_id},
-            {"user_id": friend_id, "friend_id": user_id}
+        "$and": [
+            {
+                "$or": [
+                    {"user_id": user_id, "friend_id": friend_id},
+                    {"user_id": friend_id, "friend_id": user_id}
+                ]
+            },
+            {
+                "status": {"$in": ["pending", "accepted"]}
+            }
         ]
     })
     
