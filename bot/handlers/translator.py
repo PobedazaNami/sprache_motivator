@@ -169,14 +169,15 @@ async def process_translation(message: Message, state: FSMContext):
                 reply_markup=get_translator_keyboard(lang)
             )
             
-            # Store for saving
+            # Store for saving and keep in waiting_for_text state for next translation
             await state.update_data(
                 last_original=text,
                 last_translation=translation,
                 last_source=source_lang,
                 last_target=target_lang
             )
-            await state.set_state(TranslatorStates.show_translation)
+            # Stay in waiting_for_text state so user can continue translating
+            await state.set_state(TranslatorStates.waiting_for_text)
             
         except Exception as e:
             if "Daily token limit" in str(e):
@@ -185,7 +186,7 @@ async def process_translation(message: Message, state: FSMContext):
                 await message.answer(get_text(lang, "translation_error"))
 
 
-@router.callback_query(F.data == "save_word", TranslatorStates.show_translation)
+@router.callback_query(F.data == "save_word", TranslatorStates.waiting_for_text)
 async def save_word(callback: CallbackQuery, state: FSMContext):
     """Save word to user's collection"""
     data = await state.get_data()
@@ -206,10 +207,9 @@ async def save_word(callback: CallbackQuery, state: FSMContext):
         await callback.answer(get_text(lang, "word_saved"), show_alert=True)
         
         # Increment activity
-    await UserService.increment_activity(session, user, 1)
+        await UserService.increment_activity(session, user, 1)
     
-    # Continue in translator mode
-    await state.set_state(TranslatorStates.waiting_for_text)
+    # Already in waiting_for_text state, no need to change
 
 
 @router.message(F.text.in_([
