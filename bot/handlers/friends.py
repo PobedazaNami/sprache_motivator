@@ -209,38 +209,43 @@ async def process_add_friend(message: Message, state: FSMContext):
 @router.callback_query(F.data == "friends_remove")
 async def remove_friend_prompt(callback: CallbackQuery):
     """Show list of friends to remove"""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-        
-        # Get friends list
-        friend_ids = await mongo_service.get_friends(callback.from_user.id)
-        
-        if not friend_ids:
+    try:
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+            
+            # Get friends list
+            friend_ids = await mongo_service.get_friends(callback.from_user.id)
+            
+            if not friend_ids:
+                await callback.message.edit_text(
+                    get_text(lang, "no_friends"),
+                    reply_markup=get_friends_menu_keyboard(lang)
+                )
+                await callback.answer()
+                return
+            
+            # Get friend details
+            friends = []
+            for friend_id in friend_ids:
+                friend = await UserService.get_or_create_user(session, friend_id)
+                friend_name = friend.first_name or friend.username or f"User {friend_id}"
+                friends.append((friend_id, friend_name))
+            
+            text = get_text(lang, "friends_list", 
+                           friends_list="\n".join([f"👤 {name}" for _, name in friends]))
+            text += "\n\n" + ("Оберіть друга для видалення:" if lang == "uk" else "Выберите друга для удаления:")
+            
             await callback.message.edit_text(
-                get_text(lang, "no_friends"),
-                reply_markup=get_friends_menu_keyboard(lang)
+                text,
+                reply_markup=get_friend_list_keyboard(lang, friends)
             )
-            await callback.answer()
-            return
         
-        # Get friend details
-        friends = []
-        for friend_id in friend_ids:
-            friend = await UserService.get_or_create_user(session, friend_id)
-            friend_name = friend.first_name or friend.username or f"User {friend_id}"
-            friends.append((friend_id, friend_name))
-        
-        text = get_text(lang, "friends_list", 
-                       friends_list="\n".join([f"👤 {name}" for _, name in friends]))
-        text += "\n\n" + ("Оберіть друга для видалення:" if lang == "uk" else "Выберите друга для удаления:")
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_friend_list_keyboard(lang, friends)
-        )
-    
-    await callback.answer()
+        await callback.answer()
+    except Exception as e:
+        # Ensure callback is always answered to prevent button from appearing stuck
+        await callback.answer()
+        raise
 
 
 @router.callback_query(F.data.startswith("remove_friend_"))
@@ -272,78 +277,88 @@ async def process_remove_friend(callback: CallbackQuery):
 @router.callback_query(F.data == "friends_stats")
 async def view_friends_stats(callback: CallbackQuery):
     """View friends' statistics"""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-        
-        # Get friends' stats
-        friends_stats = await mongo_service.get_friends_stats(callback.from_user.id)
-        
-        if not friends_stats:
+    try:
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+            
+            # Get friends' stats
+            friends_stats = await mongo_service.get_friends_stats(callback.from_user.id)
+            
+            if not friends_stats:
+                await callback.message.edit_text(
+                    get_text(lang, "friends_stats_empty"),
+                    reply_markup=get_friends_menu_keyboard(lang)
+                )
+                await callback.answer()
+                return
+            
+            # Build stats message
+            text = get_text(lang, "friends_stats_title")
+            
+            for friend_id, stats in friends_stats.items():
+                friend = await UserService.get_or_create_user(session, friend_id)
+                friend_name = friend.first_name or friend.username or f"User {friend_id}"
+                friend_username = friend.username or str(friend_id)
+                
+                text += get_text(lang, "friends_stats_user",
+                               name=friend_name,
+                               username=friend_username,
+                               completed=stats.get("completed", 0),
+                               quality=stats.get("quality", 0))
+            
             await callback.message.edit_text(
-                get_text(lang, "friends_stats_empty"),
+                text,
                 reply_markup=get_friends_menu_keyboard(lang)
             )
-            await callback.answer()
-            return
         
-        # Build stats message
-        text = get_text(lang, "friends_stats_title")
-        
-        for friend_id, stats in friends_stats.items():
-            friend = await UserService.get_or_create_user(session, friend_id)
-            friend_name = friend.first_name or friend.username or f"User {friend_id}"
-            friend_username = friend.username or str(friend_id)
-            
-            text += get_text(lang, "friends_stats_user",
-                           name=friend_name,
-                           username=friend_username,
-                           completed=stats.get("completed", 0),
-                           quality=stats.get("quality", 0))
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_friends_menu_keyboard(lang)
-        )
-    
-    await callback.answer()
+        await callback.answer()
+    except Exception as e:
+        # Ensure callback is always answered to prevent button from appearing stuck
+        await callback.answer()
+        raise
 
 
 @router.callback_query(F.data == "friends_pending")
 async def view_pending_requests(callback: CallbackQuery):
     """View incoming pending friend requests"""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-        
-        # Get pending incoming requests
-        requester_ids = await mongo_service.get_pending_incoming_requests(callback.from_user.id)
-        
-        if not requester_ids:
+    try:
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+            
+            # Get pending incoming requests
+            requester_ids = await mongo_service.get_pending_incoming_requests(callback.from_user.id)
+            
+            if not requester_ids:
+                await callback.message.edit_text(
+                    get_text(lang, "no_pending_requests"),
+                    reply_markup=get_friends_menu_keyboard(lang)
+                )
+                await callback.answer()
+                return
+            
+            # Get requester details
+            requesters = []
+            for requester_id in requester_ids:
+                requester = await UserService.get_or_create_user(session, requester_id)
+                requester_name = requester.first_name or requester.username or f"User {requester_id}"
+                requesters.append((requester_id, requester_name))
+            
+            text = get_text(lang, "pending_requests_title")
+            text += "\n".join([f"👤 {name}" for _, name in requesters])
+            text += "\n\n" + get_text(lang, "pending_requests_instructions")
+            
             await callback.message.edit_text(
-                get_text(lang, "no_pending_requests"),
-                reply_markup=get_friends_menu_keyboard(lang)
+                text,
+                reply_markup=get_pending_requests_keyboard(lang, requesters)
             )
-            await callback.answer()
-            return
         
-        # Get requester details
-        requesters = []
-        for requester_id in requester_ids:
-            requester = await UserService.get_or_create_user(session, requester_id)
-            requester_name = requester.first_name or requester.username or f"User {requester_id}"
-            requesters.append((requester_id, requester_name))
-        
-        text = get_text(lang, "pending_requests_title")
-        text += "\n".join([f"👤 {name}" for _, name in requesters])
-        text += "\n\n" + get_text(lang, "pending_requests_instructions")
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_pending_requests_keyboard(lang, requesters)
-        )
-    
-    await callback.answer()
+        await callback.answer()
+    except Exception as e:
+        # Ensure callback is always answered to prevent button from appearing stuck
+        await callback.answer()
+        raise
 
 
 @router.callback_query(F.data.startswith("accept_request_"))
