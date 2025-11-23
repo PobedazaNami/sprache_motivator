@@ -92,12 +92,18 @@ async def start_trainer(callback: CallbackQuery):
 @router.callback_query(F.data == "trainer_stop")
 async def stop_trainer(callback: CallbackQuery):
     """Stop daily trainer"""
+    from bot.services.redis_service import redis_service
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         
         lang = user.interface_language.value
         # Disable trainer
         await UserService.update_user(session, user, daily_trainer_enabled=False)
+        
+        # Clear any pending training state
+        await redis_service.clear_user_state(callback.from_user.id)
+        
         await callback.message.edit_text(
             get_text(lang, "trainer_stopped"),
             reply_markup=get_trainer_keyboard(user)

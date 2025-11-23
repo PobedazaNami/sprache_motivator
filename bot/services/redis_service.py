@@ -55,8 +55,13 @@ class RedisService:
     
     async def set_user_state(self, user_id: int, state: str, data: dict = None):
         """Set user state for conversations"""
+        import time
         key = f"state:user:{user_id}"
-        value = json.dumps({"state": state, "data": data or {}})
+        value = json.dumps({
+            "state": state, 
+            "data": data or {},
+            "timestamp": time.time()
+        })
         await self.redis.setex(key, 3600, value)  # 1 hour expiry
     
     async def get_user_state(self, user_id: int) -> Optional[dict]:
