@@ -88,7 +88,9 @@ def test_friend_request_localization():
         'friend_request_accepted',
         'friend_request_rejected',
         'friend_request_notification',
+        'friend_request_accepted_notification',
         'pending_requests_title',
+        'pending_requests_instructions',
         'no_pending_requests',
         'btn_pending_requests'
     ]
