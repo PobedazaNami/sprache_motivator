@@ -125,39 +125,37 @@ def test_pending_requests_keyboard():
 
 def test_status_field_in_mongo_operations():
     """Test that status field is used in mongo operations"""
+    import ast
+    
     with open('bot/services/mongo_service.py', 'r') as f:
         content = f.read()
+        tree = ast.parse(content)
     
-    # get_friends should filter by accepted status
+    # Find get_friends and remove_friend functions
+    functions_content = {}
     lines = content.split('\n')
-    in_get_friends = False
-    found_status_filter = False
     
-    for i, line in enumerate(lines):
-        if 'async def get_friends' in line:
-            in_get_friends = True
-        elif in_get_friends and 'async def' in line and 'get_friends' not in line:
-            break
-        elif in_get_friends and '"accepted"' in line:
-            found_status_filter = True
-            break
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef):
+            if node.name in ['get_friends', 'remove_friend']:
+                # Get function body as string
+                start_line = node.lineno - 1
+                end_line = node.end_lineno if hasattr(node, 'end_lineno') else start_line + 20
+                functions_content[node.name] = '\n'.join(lines[start_line:end_line])
     
-    assert found_status_filter, "get_friends doesn't filter by accepted status"
+    # Check get_friends filters by accepted status
+    assert 'get_friends' in functions_content, "get_friends function not found"
+    assert '"accepted"' in functions_content['get_friends'] or "'accepted'" in functions_content['get_friends'], \
+        "get_friends doesn't filter by accepted status"
+    assert '"status"' in functions_content['get_friends'] or "'status'" in functions_content['get_friends'], \
+        "get_friends doesn't use status field"
     
-    # remove_friend should only remove accepted friendships
-    in_remove_friend = False
-    found_status_filter = False
-    
-    for i, line in enumerate(lines):
-        if 'async def remove_friend' in line:
-            in_remove_friend = True
-        elif in_remove_friend and 'async def' in line and 'remove_friend' not in line:
-            break
-        elif in_remove_friend and '"accepted"' in line:
-            found_status_filter = True
-            break
-    
-    assert found_status_filter, "remove_friend doesn't filter by accepted status"
+    # Check remove_friend filters by accepted status
+    assert 'remove_friend' in functions_content, "remove_friend function not found"
+    assert '"accepted"' in functions_content['remove_friend'] or "'accepted'" in functions_content['remove_friend'], \
+        "remove_friend doesn't filter by accepted status"
+    assert '"status"' in functions_content['remove_friend'] or "'status'" in functions_content['remove_friend'], \
+        "remove_friend doesn't use status field"
     
     print("✓ Status field is properly used in mongo operations")
 
