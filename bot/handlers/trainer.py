@@ -621,11 +621,11 @@ async def check_training_answer(message: Message, state: FSMContext):
     from bot.services.redis_service import redis_service
     
     # Early return if not in training mode - minimal overhead
-    state = await redis_service.get_user_state(message.from_user.id)
-    if not state or state.get("state") != "awaiting_training_answer":
+    redis_state = await redis_service.get_user_state(message.from_user.id)
+    if not redis_state or redis_state.get("state") != "awaiting_training_answer":
         return
     
-    training_id_str = state.get("data", {}).get("training_id")
+    training_id_str = redis_state.get("data", {}).get("training_id")
     if not training_id_str:
         return
     

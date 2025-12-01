@@ -81,7 +81,7 @@ async def process_translation(message: Message, state: FSMContext):
         state_age_minutes = (current_time - state_timestamp) / 60
         
         if state_age_minutes < 10:
-            # User has active RECENT training session - let trainer handler process this
+            # User has active RECENT training session - call trainer handler directly
             # Save current translator state to Redis for restoration after training
             import json
             current_data = await state.get_data()
@@ -90,8 +90,10 @@ async def process_translation(message: Message, state: FSMContext):
                 json.dumps(current_data),
                 ex=3600  # 1 hour expiry
             )
-            # Clear translator FSM state to allow trainer to handle the message
-            await state.clear()
+            # Don't clear FSM state - let trainer handler process the answer
+            # Import and call trainer handler directly
+            from bot.handlers.trainer import check_training_answer
+            await check_training_answer(message, state)
             return
         else:
             # Training state is stale (>10 min) - clear it and proceed with translation
