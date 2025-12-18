@@ -45,6 +45,7 @@ class UserModel:
         self.trainer_messages_per_day = doc.get("trainer_messages_per_day", 3)
         self.trainer_timezone = doc.get("trainer_timezone", "Europe/Kiev")
         self.trainer_topic = TrainerTopic(doc.get("trainer_topic", TrainerTopic.RANDOM.value))
+        self.express_trainer_topic = TrainerTopic(doc.get("express_trainer_topic", TrainerTopic.RANDOM.value))
         self.activity_score = doc.get("activity_score", 0)
         self.translations_count = doc.get("translations_count", 0)
         self.correct_answers = doc.get("correct_answers", 0)
@@ -72,6 +73,7 @@ class UserModel:
             "trainer_messages_per_day": self.trainer_messages_per_day,
             "trainer_timezone": self.trainer_timezone,
             "trainer_topic": self.trainer_topic.value,
+            "express_trainer_topic": self.express_trainer_topic.value,
             "activity_score": self.activity_score,
             "translations_count": self.translations_count,
             "correct_answers": self.correct_answers,
@@ -165,6 +167,8 @@ class UserService:
                 user.difficulty_level = v
             elif k == "trainer_topic" and isinstance(v, TrainerTopic):
                 user.trainer_topic = v
+            elif k == "express_trainer_topic" and isinstance(v, TrainerTopic):
+                user.express_trainer_topic = v
             else:
                 setattr(user, k, v)
         user.updated_at = _now()
