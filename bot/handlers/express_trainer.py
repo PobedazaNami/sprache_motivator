@@ -147,7 +147,13 @@ async def show_express_topic_list(callback: CallbackQuery):
 async def set_express_topic(callback: CallbackQuery):
     """Set express trainer topic"""
     # Parse topic from callback data: express_set_topic_personal_info -> personal_info
-    topic_value = callback.data.replace("express_set_topic_", "")
+    # Use proper string slicing instead of replace to avoid unintended matches
+    prefix = "express_set_topic_"
+    if not callback.data.startswith(prefix):
+        await callback.answer()
+        return
+    
+    topic_value = callback.data[len(prefix):]
     
     # Check if it's a level-specific random topic (e.g., random_a2, random_b1, random_b2)
     if topic_value.startswith("random_") and topic_value != "random":
@@ -161,8 +167,8 @@ async def set_express_topic(callback: CallbackQuery):
             # Set topic to random in user settings
             await UserService.update_user(session, user, express_trainer_topic=TrainerTopic.RANDOM)
             
-            # Store the specific level in Redis for random selection
-            await redis_service.set(f"express_random_topic_level:{user.id}", level, ex=None)
+            # Store the specific level in Redis with 30-day expiration to prevent indefinite memory usage
+            await redis_service.set(f"express_random_topic_level:{user.id}", level, ex=2592000)  # 30 days
             
             await callback.message.edit_text(
                 get_text(lang, "topic_updated"),

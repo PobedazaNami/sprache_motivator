@@ -167,6 +167,8 @@ class UserService:
                 user.difficulty_level = v
             elif k == "trainer_topic" and isinstance(v, TrainerTopic):
                 user.trainer_topic = v
+            elif k == "express_trainer_topic" and isinstance(v, TrainerTopic):
+                user.express_trainer_topic = v
             else:
                 setattr(user, k, v)
         user.updated_at = _now()
