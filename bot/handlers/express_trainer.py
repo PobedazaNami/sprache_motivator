@@ -19,6 +19,8 @@ from bot.config import settings
 from bot.services import mongo_service
 from bot.services.redis_service import redis_service
 import random
+from bson import ObjectId
+from bson.errors import InvalidId
 
 
 router = Router()
@@ -206,15 +208,12 @@ async def set_express_topic(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("hint_"))
 async def show_hint(callback: CallbackQuery):
     """Show translation hint when user requests it"""
-    from bot.services.redis_service import redis_service
-    from bson import ObjectId
-    
     # Extract training ID from callback data: hint_<training_id>
     training_id_str = callback.data.replace("hint_", "")
     
     try:
         training_id = ObjectId(training_id_str)
-    except Exception:
+    except (InvalidId, ValueError):
         await callback.answer("❌ Помилка/Ошибка")
         return
     

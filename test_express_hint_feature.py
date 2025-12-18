@@ -99,7 +99,7 @@ def test_express_trainer_hint_workflow():
         "Handler should fetch training session from MongoDB"
     
     # 4. Get expected translation
-    assert 'expected_translation = training.get("expected_translation"' in content, \
+    assert 'expected_translation = training.get("expected_translation", "")' in content, \
         "Handler should get expected translation"
     
     # 5. Remove keyboard to prevent multiple clicks
