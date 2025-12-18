@@ -2,11 +2,7 @@
 Test for hint button functionality in express trainer.
 This test verifies that the hint button works correctly in the express trainer mode.
 """
-import sys
 import os
-
-# Add bot directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'bot'))
 
 
 def test_hint_handler_exists_in_express_trainer():
