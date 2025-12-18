@@ -20,6 +20,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     
     builder.button(text=get_text(lang, "btn_translator"))
     builder.button(text=get_text(lang, "btn_daily_trainer"))
+    builder.button(text=get_text(lang, "btn_express_trainer"))
     builder.button(text=get_text(lang, "btn_saved_words"))
     builder.button(text=get_text(lang, "btn_friends"))
     builder.button(text=get_text(lang, "btn_settings"))
@@ -268,3 +269,72 @@ def get_cancel_keyboard(lang: str) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_cancel"))
     builder.adjust(1)
     return builder.as_markup(resize_keyboard=True)
+
+
+def get_express_trainer_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for express trainer menu"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_start_express"), callback_data="express_start")
+    builder.button(text=get_text(lang, "btn_express_settings"), callback_data="express_settings")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_express_task_keyboard(lang: str, training_id: str) -> InlineKeyboardMarkup:
+    """Keyboard for express training task with hint and next sentence buttons"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_get_hint"), callback_data=f"hint_{training_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_express_next_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for getting next express training task"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_get_next_sentence"), callback_data="express_next")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_express_settings_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for express trainer settings"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_set_topic"), callback_data="express_set_topic")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="express_back")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_express_topic_level_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting topic level category for express trainer"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_topic_level_a2"), callback_data="express_topic_level_a2")
+    builder.button(text=get_text(lang, "btn_topic_level_b1"), callback_data="express_topic_level_b1")
+    builder.button(text=get_text(lang, "btn_topic_level_b2"), callback_data="express_topic_level_b2")
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data="express_set_topic_random")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="express_settings")
+    builder.adjust(3, 1, 1)
+    return builder.as_markup()
+
+
+def get_express_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboardMarkup:
+    """Keyboard for selecting specific topic within a level for express trainer"""
+    from bot.models.database import TrainerTopic, TOPIC_METADATA
+    
+    builder = InlineKeyboardBuilder()
+    
+    # Filter topics by level
+    for topic in TrainerTopic:
+        if topic == TrainerTopic.RANDOM:
+            continue
+        metadata = TOPIC_METADATA.get(topic)
+        if metadata and metadata["level"] == level:
+            topic_text = get_text(lang, f"topic_{topic.value}")
+            builder.button(text=topic_text, callback_data=f"express_set_topic_{topic.value}")
+    
+    # Add random topic button for this level
+    builder.button(text=get_text(lang, "btn_random_topic"), callback_data=f"express_set_topic_random_{level.lower()}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="express_set_topic")
+    builder.adjust(1)
+    return builder.as_markup()
+
