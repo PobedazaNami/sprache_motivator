@@ -203,6 +203,51 @@ async def set_express_topic(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("hint_"))
+async def show_hint(callback: CallbackQuery):
+    """Show translation hint when user requests it"""
+    from bot.services.redis_service import redis_service
+    from bson import ObjectId
+    
+    # Extract training ID from callback data: hint_<training_id>
+    training_id_str = callback.data.replace("hint_", "")
+    
+    try:
+        training_id = ObjectId(training_id_str)
+    except Exception:
+        await callback.answer("❌ Помилка/Ошибка")
+        return
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, callback.from_user.id)
+        lang = user.interface_language.value
+        
+        # Get training session from Mongo
+        training_col = mongo_service.db().training_sessions
+        training = await training_col.find_one({"_id": training_id})
+        
+        if not training:
+            await callback.answer("❌ Помилка/Ошибка")
+            return
+        
+        # Show the hint with the expected translation
+        expected_translation = training.get("expected_translation", "")
+        # Remove the inline keyboard from the original message to prevent multiple clicks
+        await callback.message.edit_reply_markup(reply_markup=None)
+        # Send hint as a new message so the original task remains visible
+        await callback.message.answer(
+            get_text(lang, "hint_activated", translation=expected_translation)
+        )
+        
+        # Track hint activation in daily stats
+        await mongo_service.track_hint_activation(user.id)
+        
+        # Clear training state - this task won't count towards daily stats
+        await redis_service.clear_user_state(callback.from_user.id)
+    
+    await callback.answer()
+
+
 async def send_express_task(user_id: int, bot, chat_id: int):
     """Send an express training task to user"""
     async with async_session_maker() as session:

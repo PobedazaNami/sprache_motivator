@@ -33,6 +33,8 @@ def test_express_trainer_handler_exists():
         "check_express_answer handler should exist"
     assert 'async def show_express_settings' in content, \
         "show_express_settings handler should exist"
+    assert 'async def show_hint' in content, \
+        "show_hint handler should exist for hint button support"
     
     print("✓ Express trainer handler has all required functions")
 
