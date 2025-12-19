@@ -117,6 +117,18 @@ def test_express_trainer_hint_workflow():
     print("✓ Complete hint workflow is implemented correctly")
 
 
+def test_hint_shows_next_sentence_button():
+    """Test that hint message includes 'Next sentence' button for continuing training."""
+    with open('bot/handlers/express_trainer.py', 'r') as f:
+        content = f.read()
+    
+    # Verify that the hint message includes the next sentence keyboard
+    assert 'reply_markup=get_express_next_keyboard(lang)' in content, \
+        "Hint message should include next sentence button so user can continue training"
+    
+    print("✓ Hint message includes 'Next sentence' button")
+
+
 def test_no_duplicate_hint_handlers():
     """Test that hint handler is not duplicated (one per trainer type is expected)."""
     with open('bot/handlers/express_trainer.py', 'r') as f:
@@ -135,5 +147,6 @@ if __name__ == "__main__":
     test_hint_button_in_express_task_keyboard()
     test_hint_localization_texts_exist()
     test_express_trainer_hint_workflow()
+    test_hint_shows_next_sentence_button()
     test_no_duplicate_hint_handlers()
     print("\n✅ All express trainer hint feature tests passed!")
