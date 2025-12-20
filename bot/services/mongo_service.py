@@ -480,6 +480,10 @@ async def update_streak(user_id: int) -> Tuple[int, bool, Optional[int]]:
     longest_streak = streak_doc.get("longest_streak", 0)
     milestones_achieved = streak_doc.get("milestones_achieved", [])
     
+    # Normalize last_activity to UTC if it's offset-naive
+    if last_activity and last_activity.tzinfo is None:
+        last_activity = last_activity.replace(tzinfo=timezone.utc)
+    
     # Already updated today
     if last_activity and last_activity >= today:
         return current_streak, False, None

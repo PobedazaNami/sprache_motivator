@@ -392,12 +392,19 @@ async def check_express_answer(message: Message, state: FSMContext):
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         
         # Check translation with quality assessment
-        is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
-            training["sentence"],
-            user_answer,
-            learning_lang,
-            lang
-        )
+        try:
+            is_correct, correct_translation, explanation, quality_percentage = await translation_service.check_translation(
+                training["sentence"],
+                user_answer,
+                learning_lang,
+                lang
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error checking translation: {e}")
+            await message.answer(get_text(lang, "translation_error"))
+            await redis_service.clear_user_state(message.from_user.id)
+            return
         
         # Update training session with quality
         await TrainingService.update_session(
