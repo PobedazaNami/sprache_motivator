@@ -235,8 +235,10 @@ async def show_hint(callback: CallbackQuery):
         # Remove the inline keyboard from the original message to prevent multiple clicks
         await callback.message.edit_reply_markup(reply_markup=None)
         # Send hint as a new message so the original task remains visible
+        # Include button to get next sentence
         await callback.message.answer(
-            get_text(lang, "hint_activated", translation=expected_translation)
+            get_text(lang, "hint_activated", translation=expected_translation),
+            reply_markup=get_express_next_keyboard(lang)
         )
         
         # Track hint activation in daily stats
