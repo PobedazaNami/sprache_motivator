@@ -119,6 +119,14 @@ class TranslationService:
             "A2-B2": "mixed difficulty between A2 and B2"
         }
         
+        # Sentence length limits by difficulty level (in words)
+        sentence_length_limits = {
+            "A2": "5-10 words",
+            "B1": "8-14 words", 
+            "B2": "10-18 words",
+            "A2-B2": "6-15 words"
+        }
+        
         # Topic descriptions for prompts
         topic_descriptions = {
             TrainerTopic.PERSONAL_INFO: "personal information and introduction (name, age, origin, profession)",
@@ -194,6 +202,8 @@ class TranslationService:
         
         # Try up to 5 times to generate a non-mastered sentence
         max_attempts = 5
+        length_limit = sentence_length_limits.get(difficulty, "6-12 words")
+        
         for attempt in range(max_attempts):
             selected_style = random.choice(style_variations)
             
@@ -207,11 +217,13 @@ class TranslationService:
 Style: {selected_style}
 
 Requirements:
+- IMPORTANT: Keep the sentence SHORT - exactly {length_limit}. No longer!
 - Make it feel like something a real person would actually say
 - Include concrete details, names, or specific situations when appropriate
 - Avoid generic or textbook-style sentences
 - The sentence should evoke emotion, curiosity, or a smile
-- Keep it natural and conversational{uniqueness_hint}
+- Keep it natural and conversational
+- ONE simple idea per sentence, no compound sentences with multiple clauses{uniqueness_hint}
 
 Provide only the sentence without any explanations."""
             
