@@ -21,6 +21,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_translator"))
     builder.button(text=get_text(lang, "btn_daily_trainer"))
     builder.button(text=get_text(lang, "btn_express_trainer"))
+    builder.button(text=get_text(lang, "btn_my_progress"))
     builder.button(text=get_text(lang, "btn_saved_words"))
     builder.button(text=get_text(lang, "btn_friends"))
     builder.button(text=get_text(lang, "btn_settings"))
@@ -31,7 +32,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
         builder.button(text=get_text(lang, "btn_admin"))
     
     # Layout: main buttons in rows of 2, support/admin on separate rows if present
-    builder.adjust(2, 2, 2, 1, 1)
+    builder.adjust(2, 2, 2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 

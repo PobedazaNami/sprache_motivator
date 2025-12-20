@@ -95,10 +95,14 @@ class TranslationService:
         
         return translation, tokens_used
     
-    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str, topic=None) -> str:
-        """Generate a sentence for daily trainer"""
+    async def generate_sentence(self, difficulty: str, target_lang: str, interface_lang: str, topic=None, user_id: int = None) -> str:
+        """Generate a sentence for daily trainer.
+        If user_id is provided, avoids generating sentences the user has already mastered (100% quality).
+        """
         from bot.models.database import TrainerTopic, TOPIC_METADATA
+        from bot.services import mongo_service
         import random
+        import hashlib
         
         # Map language codes to full names for clarity
         lang_names = {
@@ -151,6 +155,17 @@ class TranslationService:
         
         interface_lang_name = lang_names.get(interface_lang, interface_lang)
         
+        # Get mastered sentence hashes if user_id provided
+        mastered_hashes = set()
+        if user_id and mongo_service.is_ready():
+            topic_value = topic.value if topic and topic != TrainerTopic.RANDOM else None
+            mastered_hashes = set(await mongo_service.get_mastered_sentences_hashes(user_id, topic_value))
+        
+        def _hash_sentence(sentence: str) -> str:
+            """Create a normalized hash of a sentence for comparison."""
+            normalized = ' '.join(sentence.lower().strip().split())
+            return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+        
         # Handle topic selection
         topic_instruction = ""
         if topic and topic != TrainerTopic.RANDOM:
@@ -163,19 +178,65 @@ class TranslationService:
             topic_desc = topic_descriptions.get(random_topic, "general topic")
             topic_instruction = f" about the topic: {topic_desc}"
         
-        prompt = f"Generate a simple sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}. The sentence should be suitable for language learning. Provide only the sentence without any explanations."
+        # Sentence style variations for more engaging content
+        style_variations = [
+            "from a first-person perspective, as if someone is sharing their experience",
+            "as a dialogue line that someone might say in a real conversation",
+            "describing a relatable everyday situation with a touch of humor",
+            "expressing an opinion or feeling about something",
+            "telling a mini-story or interesting fact",
+            "as a question someone might ask in daily life",
+            "with a slight emotional undertone (happiness, curiosity, surprise)",
+            "describing a sensory experience (what someone sees, hears, or feels)",
+            "as advice or a life tip someone might share",
+            "about a common problem or funny mishap",
+        ]
         
-        response = await self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a language teacher creating practice sentences."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=100
-        )
+        # Try up to 5 times to generate a non-mastered sentence
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            selected_style = random.choice(style_variations)
+            
+            # Add uniqueness instruction on retries
+            uniqueness_hint = ""
+            if attempt > 0:
+                uniqueness_hint = f"\n- This is attempt {attempt + 1}, so create something completely different from typical sentences"
+            
+            prompt = f"""Generate a lively, natural sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}.
+
+Style: {selected_style}
+
+Requirements:
+- Make it feel like something a real person would actually say
+- Include concrete details, names, or specific situations when appropriate
+- Avoid generic or textbook-style sentences
+- The sentence should evoke emotion, curiosity, or a smile
+- Keep it natural and conversational{uniqueness_hint}
+
+Provide only the sentence without any explanations."""
+            
+            response = await self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a creative language teacher who creates engaging, memorable practice sentences. Your sentences feel alive - they tell mini-stories, express real emotions, and describe situations that learners can relate to. You avoid boring, generic sentences like 'The book is on the table' and instead create sentences that make people smile, think, or feel something."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.9,
+                max_tokens=150
+            )
+            
+            sentence = response.choices[0].message.content.strip()
+            
+            # Check if this sentence is already mastered
+            sentence_hash = _hash_sentence(sentence)
+            if sentence_hash not in mastered_hashes:
+                return sentence
+            
+            # If mastered, try again with higher temperature
         
-        return response.choices[0].message.content.strip()
+        # After max attempts, return the last generated sentence anyway
+        # (very unlikely to hit this with GPT's randomness)
+        return sentence
     
     async def check_translation(
         self,
@@ -203,7 +264,17 @@ TARGET_LANG: {expected_lang_name}
 Rules:
 - If there is ANY grammar, morphology, article, case, conjugation, word order, capitalization or clear spelling error, status MUST be INCORRECT.
 - Only PERFECT answers (no errors) can be CORRECT.
-- Score quality 0-100 (perfect=100; minor style only=90-99; small grammar errors=60-84; multiple errors=30-59; severe=1-29; off-topic/meaning wrong=0).
+- Score quality 0-100 using this FAIR scale:
+  * 100: Perfect translation, no errors at all
+  * 95-99: Nearly perfect, only minor stylistic differences (word choice synonym, slightly different but correct phrasing)
+  * 90-94: One tiny error (missing/wrong punctuation, minor capitalization)
+  * 85-89: One small grammar error (wrong article, small case error, minor spelling typo)
+  * 80-84: Two small errors OR one medium error (wrong verb form, word order issue)
+  * 70-79: Several small errors OR one significant error affecting meaning slightly
+  * 50-69: Multiple errors that affect understanding but core meaning is preserved
+  * 30-49: Many errors, meaning partially lost
+  * 10-29: Severe errors, hard to understand
+  * 0-9: Completely wrong, off-topic, or meaning totally lost
 - Provide the best CORRECT translation in TARGET_LANG in the "correct" field.
 - Return STRICT JSON only: {{"status":"CORRECT|INCORRECT","correct":"...","quality":<int>,"errors":["error 1","error 2",...]}}
 - Explanations in errors must be in {interface_lang_name} and name concrete issues (article/case/verb/word order/orthography), with correct forms.
@@ -394,10 +465,16 @@ Rules:
         explanation = "\n".join(errors_list).strip()
         if not explanation:
             # Provide minimal educational note even when perfect
-            explanation = (
-                "Перевод соответствует оригиналу без грамматических ошибок." if is_correct
-                else "В ответе обнаружены ошибки. Проверьте статьи, падежи, орфографию и порядок слов."
-            )
+            if interface_lang == "uk":
+                explanation = (
+                    "Переклад відповідає оригіналу без граматичних помилок." if is_correct
+                    else "У відповіді виявлено помилки. Перевірте артиклі, відмінки, орфографію та порядок слів."
+                )
+            else:  # Russian
+                explanation = (
+                    "Перевод соответствует оригиналу без грамматических ошибок." if is_correct
+                    else "В ответе обнаружены ошибки. Проверьте артикли, падежи, орфографию и порядок слов."
+                )
 
         return is_correct, correct_translation, explanation, quality_percentage
 

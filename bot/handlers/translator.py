@@ -26,8 +26,10 @@ class TranslatorStates(StatesGroup):
 ]))
 async def translator_mode(message: Message, state: FSMContext):
     """Activate translator mode"""
-    # Clear any previous state
+    # Clear any previous state (FSM and Redis)
     await state.clear()
+    from bot.services.redis_service import redis_service
+    await redis_service.clear_user_state(message.from_user.id)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
@@ -64,40 +66,51 @@ async def translator_mode(message: Message, state: FSMContext):
         "⚙️ Настройки", "⚙️ Налаштування",
         "📊 Статистика", "📊 Статистика",
         "💾 Сохранённые слова", "💾 Збережені слова",
-        "🔙 Главное меню", "🔙 Головне меню"
+        "🔙 Главное меню", "🔙 Головне меню",
+        "⚡️ Експрес тренажер", "⚡️ Экспресс тренажёр",
+        "👥 Друзья", "👥 Друзі",
+        "📊 Мой прогресс", "📊 Мій прогрес",
+        "💬 Техподдержка", "💬 Техпідтримка"
     ])
 )
 async def process_translation(message: Message, state: FSMContext):
     """Process translation request"""
-    # Check if user has an active training session
+    # Check if user has an active training session (daily OR express)
     from bot.services.redis_service import redis_service
     import time
     
     training_state = await redis_service.get_user_state(message.from_user.id)
-    if training_state and training_state.get("state") == "awaiting_training_answer":
-        # Check if training state is recent (within 10 minutes)
-        state_timestamp = training_state.get("timestamp", 0)
-        current_time = time.time()
-        state_age_minutes = (current_time - state_timestamp) / 60
-        
-        if state_age_minutes < 10:
-            # User has active RECENT training session - call trainer handler directly
-            # Save current translator state to Redis for restoration after training
-            import json
-            current_data = await state.get_data()
-            await redis_service.set(
-                f"saved_translator_state:{message.from_user.id}",
-                json.dumps(current_data),
-                ex=3600  # 1 hour expiry
-            )
-            # Don't clear FSM state - let trainer handler process the answer
-            # Import and call trainer handler directly
-            from bot.handlers.trainer import check_training_answer
-            await check_training_answer(message, state)
-            return
-        else:
-            # Training state is stale (>10 min) - clear it and proceed with translation
-            await redis_service.clear_user_state(message.from_user.id)
+    if training_state:
+        state_type = training_state.get("state")
+        # Check if it's any type of training state
+        if state_type in ["awaiting_training_answer", "awaiting_express_answer"]:
+            # Check if training state is recent (within 10 minutes)
+            state_timestamp = training_state.get("timestamp", 0)
+            current_time = time.time()
+            state_age_minutes = (current_time - state_timestamp) / 60
+            
+            if state_age_minutes < 10:
+                # User has active RECENT training session - call appropriate trainer handler
+                # Save current translator state to Redis for restoration after training
+                import json
+                current_data = await state.get_data()
+                await redis_service.set(
+                    f"saved_translator_state:{message.from_user.id}",
+                    json.dumps(current_data),
+                    ex=3600  # 1 hour expiry
+                )
+                
+                # Route to appropriate handler based on state type
+                if state_type == "awaiting_training_answer":
+                    from bot.handlers.trainer import check_training_answer
+                    await check_training_answer(message, state)
+                else:  # awaiting_express_answer
+                    from bot.handlers.express_trainer import check_express_answer
+                    await check_express_answer(message, state)
+                return
+            else:
+                # Training state is stale (>10 min) - clear it and proceed with translation
+                await redis_service.clear_user_state(message.from_user.id)
     
     data = await state.get_data()
     lang = data.get("lang", "ru")

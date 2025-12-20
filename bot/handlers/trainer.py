@@ -25,8 +25,10 @@ class TrainerStates(StatesGroup):
 ]))
 async def trainer_menu(message: Message, state: FSMContext):
     """Show daily trainer menu"""
-    # Clear any previous state (like translator mode)
+    # Clear any previous state (FSM and Redis training states)
     await state.clear()
+    from bot.services.redis_service import redis_service
+    await redis_service.clear_user_state(message.from_user.id)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
@@ -56,6 +58,74 @@ async def trainer_menu(message: Message, state: FSMContext):
             text = get_text(lang, "trainer_menu")
         
         await message.answer(text, reply_markup=get_trainer_keyboard(user))
+
+
+@router.message(F.text.in_([
+    "📊 Мой прогресс", "📊 Мій прогрес"
+]))
+async def my_progress(message: Message, state: FSMContext):
+    """Show user's learning progress and statistics"""
+    # Clear any previous state (FSM and Redis)
+    await state.clear()
+    from bot.services.redis_service import redis_service
+    await redis_service.clear_user_state(message.from_user.id)
+    
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        
+        if user.status != UserStatus.APPROVED:
+            return
+        
+        lang = user.interface_language.value
+        
+        # Get streak information
+        streak_info = await mongo_service.get_streak(user.id)
+        
+        # Get mastered sentences count
+        mastered_count = await mongo_service.get_mastered_count(user.id)
+        
+        # Get today's stats
+        today_stats = await mongo_service.get_today_stats(user.id)
+        
+        # Build progress message
+        text_parts = [get_text(lang, "my_progress_title")]
+        
+        # Streak section
+        if streak_info.get("current", 0) > 0 or streak_info.get("longest", 0) > 0:
+            text_parts.append(get_text(lang, "progress_streak", 
+                                       current=streak_info.get("current", 0),
+                                       longest=streak_info.get("longest", 0)))
+        
+        # Mastered sentences
+        if mastered_count > 0:
+            text_parts.append(get_text(lang, "progress_mastered", count=mastered_count))
+        
+        # Today's progress
+        if today_stats:
+            text_parts.append(get_text(lang, "progress_today",
+                                       completed=today_stats.get("completed", 0),
+                                       quality=today_stats.get("quality", 0)))
+        
+        # Total stats
+        if user.total_answers > 0:
+            accuracy = round((user.correct_answers / user.total_answers) * 100) if user.total_answers > 0 else 0
+            text_parts.append(get_text(lang, "progress_total",
+                                       correct=user.correct_answers,
+                                       total=user.total_answers,
+                                       accuracy=accuracy))
+        
+        # Milestones achieved
+        milestones = streak_info.get("milestones", [])
+        if milestones:
+            milestone_emojis = {3: "🎯", 7: "🏆", 14: "⭐", 30: "👑", 60: "💎", 100: "🌟"}
+            milestone_text = " ".join([f"{milestone_emojis.get(m, '🏅')}{m}" for m in sorted(milestones)])
+            text_parts.append(get_text(lang, "progress_milestones", milestones=milestone_text))
+        
+        # If no data at all
+        if len(text_parts) == 1:
+            text_parts.append(get_text(lang, "progress_no_data"))
+        
+        await message.answer("\n".join(text_parts))
 
 
 @router.callback_query(F.data == "trainer_start")
@@ -520,12 +590,13 @@ async def send_training_task(bot, user_id: int):
         if tasks_sent > total_tasks:
             tasks_sent = total_tasks
         
-        # Generate sentence
+        # Generate sentence (passing user_id to avoid mastered sentences)
         sentence = await translation_service.generate_sentence(
             difficulty.value,
             learning_lang,
             lang,
-            topic
+            topic,
+            user_id=user.id
         )
         
         # Get expected translation
@@ -692,20 +763,53 @@ async def check_training_answer(message: Message, state: FSMContext):
         # Increment activity
         await UserService.increment_activity(session, user, 2 if is_correct else 1)
         
+        # If 100% quality, mark sentence as mastered (won't be shown again)
+        if quality_percentage == 100:
+            topic_value = training.get("topic") if training.get("topic") else None
+            await mongo_service.add_mastered_sentence(
+                user_id=user.id,
+                sentence=training["sentence"],
+                translation=correct_translation or training.get("expected_translation", ""),
+                topic=topic_value,
+                difficulty=training.get("difficulty_level")
+            )
+        
+        # Update streak (motivation system)
+        streak_days, is_milestone, milestone = await mongo_service.update_streak(user.id)
+        
+        # Build feedback message with streak info
+        feedback_parts = []
+        
         # Send feedback with quality percentage
         if is_correct:
-            feedback = get_text(lang, "correct_answer_with_quality", quality=quality_percentage)
-            await message.answer(feedback)
+            feedback_parts.append(get_text(lang, "correct_answer_with_quality", quality=quality_percentage))
         else:
-            await message.answer(
-                get_text(
-                    lang,
-                    "incorrect_answer",
-                    explanation=explanation or "",
-                    quality=quality_percentage,
-                    correct=correct_translation or ""
-                )
-            )
+            feedback_parts.append(get_text(
+                lang,
+                "incorrect_answer",
+                explanation=explanation or "",
+                quality=quality_percentage,
+                correct=correct_translation or ""
+            ))
+        
+        # Add streak message if active
+        if streak_days > 1:
+            feedback_parts.append(get_text(lang, "streak_message", days=streak_days))
+        
+        # Add milestone celebration
+        if is_milestone and milestone:
+            milestone_key = f"streak_milestone_{milestone}"
+            feedback_parts.append(get_text(lang, milestone_key))
+        
+        # Add perfect day message if 100%
+        if quality_percentage == 100:
+            feedback_parts.append(get_text(lang, "perfect_day"))
+        
+        # Add encouragement after mistake
+        if not is_correct and quality_percentage < 70:
+            feedback_parts.append(get_text(lang, "encouragement_after_mistake"))
+        
+        await message.answer("\n\n".join(feedback_parts))
         
         # Clear training state
         await redis_service.clear_user_state(message.from_user.id)

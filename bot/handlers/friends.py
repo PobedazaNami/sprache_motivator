@@ -23,7 +23,11 @@ class FriendsStates(StatesGroup):
 ]))
 async def friends_menu(message: Message, state: FSMContext):
     """Show friends menu"""
+    # Clear any previous state (FSM and Redis)
     await state.clear()
+    await mongo_service.db()  # Ensure mongo is ready
+    from bot.services.redis_service import redis_service
+    await redis_service.clear_user_state(message.from_user.id)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
@@ -103,6 +107,32 @@ async def add_friend_prompt(callback: CallbackQuery, state: FSMContext):
 @router.message(FriendsStates.waiting_for_friend_id)
 async def process_add_friend(message: Message, state: FSMContext):
     """Process friend addition"""
+    # Check if user has an active training session - training takes priority
+    from bot.services.redis_service import redis_service
+    import time
+    
+    training_state = await redis_service.get_user_state(message.from_user.id)
+    if training_state:
+        state_type = training_state.get("state")
+        if state_type in ["awaiting_training_answer", "awaiting_express_answer"]:
+            state_timestamp = training_state.get("timestamp", 0)
+            current_time = time.time()
+            state_age_minutes = (current_time - state_timestamp) / 60
+            
+            if state_age_minutes < 10:
+                # User has active training session - route to appropriate handler
+                await state.clear()  # Clear friends state
+                if state_type == "awaiting_training_answer":
+                    from bot.handlers.trainer import check_training_answer
+                    await check_training_answer(message, state)
+                else:
+                    from bot.handlers.express_trainer import check_express_answer
+                    await check_express_answer(message, state)
+                return
+            else:
+                # Stale training state - clear it
+                await redis_service.clear_user_state(message.from_user.id)
+    
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         lang = user.interface_language.value

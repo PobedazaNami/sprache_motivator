@@ -28,6 +28,11 @@ async def init() -> bool:
     # Create indexes (idempotent)
     await _db.daily_stats.create_index([("user_id", 1), ("date", 1)], unique=True)
     await _db.training_sessions.create_index([("user_id", 1), ("created_at", 1)])
+    # Index for mastered sentences (sentences translated with 100% quality)
+    await _db.mastered_sentences.create_index([("user_id", 1), ("sentence_hash", 1)], unique=True)
+    await _db.mastered_sentences.create_index([("user_id", 1), ("topic", 1)])
+    # Index for user streaks (motivation system)
+    await _db.user_streaks.create_index([("user_id", 1)], unique=True)
     return True
 
 
@@ -349,3 +354,216 @@ async def get_friends_stats(user_id: int) -> Dict[int, dict]:
         return {}
     
     return await get_today_stats_bulk(friend_ids)
+
+
+# ---------------------------------------------------------------------------
+# Mastered Sentences Management
+# ---------------------------------------------------------------------------
+
+def _hash_sentence(sentence: str) -> str:
+    """Create a normalized hash of a sentence for comparison."""
+    import hashlib
+    # Normalize: lowercase, strip whitespace, remove extra spaces
+    normalized = ' '.join(sentence.lower().strip().split())
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+
+
+async def add_mastered_sentence(
+    user_id: int,
+    sentence: str,
+    translation: str,
+    topic: Optional[str] = None,
+    difficulty: Optional[str] = None
+) -> bool:
+    """Add a sentence that user translated with 100% quality.
+    Returns True if added, False if already exists or error."""
+    if not is_ready():
+        return False
+    
+    sentence_hash = _hash_sentence(sentence)
+    now = datetime.now(timezone.utc)
+    
+    try:
+        await db().mastered_sentences.insert_one({
+            "user_id": user_id,
+            "sentence_hash": sentence_hash,
+            "sentence": sentence,
+            "translation": translation,
+            "topic": topic,
+            "difficulty": difficulty,
+            "mastered_at": now,
+        })
+        return True
+    except Exception:
+        # Duplicate key error means already mastered
+        return False
+
+
+async def is_sentence_mastered(user_id: int, sentence: str) -> bool:
+    """Check if user has already mastered this sentence (100% quality)."""
+    if not is_ready():
+        return False
+    
+    sentence_hash = _hash_sentence(sentence)
+    doc = await db().mastered_sentences.find_one({
+        "user_id": user_id,
+        "sentence_hash": sentence_hash
+    })
+    return doc is not None
+
+
+async def get_mastered_sentences_hashes(user_id: int, topic: Optional[str] = None, limit: int = 1000) -> List[str]:
+    """Get list of sentence hashes that user has mastered.
+    Optionally filter by topic. Returns up to `limit` hashes."""
+    if not is_ready():
+        return []
+    
+    query = {"user_id": user_id}
+    if topic:
+        query["topic"] = topic
+    
+    cursor = db().mastered_sentences.find(query, {"sentence_hash": 1}).limit(limit)
+    hashes = []
+    async for doc in cursor:
+        hashes.append(doc.get("sentence_hash"))
+    return hashes
+
+
+async def get_mastered_count(user_id: int, topic: Optional[str] = None) -> int:
+    """Get count of mastered sentences for a user, optionally filtered by topic."""
+    if not is_ready():
+        return 0
+    
+    query = {"user_id": user_id}
+    if topic:
+        query["topic"] = topic
+    
+    return await db().mastered_sentences.count_documents(query)
+
+
+# ---------------------------------------------------------------------------
+# Streak Management (Motivation System)
+# ---------------------------------------------------------------------------
+
+async def update_streak(user_id: int) -> Tuple[int, bool, Optional[int]]:
+    """
+    Update user's learning streak when they complete at least one task.
+    Returns: (current_streak_days, is_new_milestone, milestone_reached)
+    Milestones: 3, 7, 14, 30, 60, 100 days
+    """
+    if not is_ready():
+        return 0, False, None
+    
+    now = datetime.now(timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    
+    # Get current streak data
+    streak_doc = await db().user_streaks.find_one({"user_id": user_id})
+    
+    milestones = [3, 7, 14, 30, 60, 100]
+    
+    if not streak_doc:
+        # First day ever - create streak
+        await db().user_streaks.insert_one({
+            "user_id": user_id,
+            "current_streak": 1,
+            "longest_streak": 1,
+            "last_activity_date": today,
+            "milestones_achieved": [],
+            "created_at": now,
+        })
+        return 1, False, None
+    
+    last_activity = streak_doc.get("last_activity_date")
+    current_streak = streak_doc.get("current_streak", 0)
+    longest_streak = streak_doc.get("longest_streak", 0)
+    milestones_achieved = streak_doc.get("milestones_achieved", [])
+    
+    # Already updated today
+    if last_activity and last_activity >= today:
+        return current_streak, False, None
+    
+    # Check if streak continues or breaks
+    if last_activity and last_activity >= yesterday:
+        # Streak continues!
+        new_streak = current_streak + 1
+    else:
+        # Streak broken - start over
+        new_streak = 1
+    
+    # Check for new milestone
+    new_milestone = None
+    is_new_milestone = False
+    for m in milestones:
+        if new_streak >= m and m not in milestones_achieved:
+            new_milestone = m
+            milestones_achieved.append(m)
+            is_new_milestone = True
+            break  # Only one milestone at a time
+    
+    # Update database
+    await db().user_streaks.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "current_streak": new_streak,
+                "longest_streak": max(longest_streak, new_streak),
+                "last_activity_date": today,
+                "milestones_achieved": milestones_achieved,
+                "updated_at": now,
+            }
+        }
+    )
+    
+    return new_streak, is_new_milestone, new_milestone
+
+
+async def get_streak(user_id: int) -> Dict:
+    """Get user's streak information."""
+    if not is_ready():
+        return {"current": 0, "longest": 0, "milestones": []}
+    
+    streak_doc = await db().user_streaks.find_one({"user_id": user_id})
+    if not streak_doc:
+        return {"current": 0, "longest": 0, "milestones": []}
+    
+    # Check if streak is still active
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    last_activity = streak_doc.get("last_activity_date")
+    
+    # If last activity was before yesterday, streak is broken
+    if last_activity and last_activity < yesterday:
+        return {
+            "current": 0,
+            "longest": streak_doc.get("longest_streak", 0),
+            "milestones": streak_doc.get("milestones_achieved", []),
+            "broken": True
+        }
+    
+    return {
+        "current": streak_doc.get("current_streak", 0),
+        "longest": streak_doc.get("longest_streak", 0),
+        "milestones": streak_doc.get("milestones_achieved", []),
+        "broken": False
+    }
+
+
+async def check_comeback_needed(user_id: int) -> bool:
+    """Check if user hasn't practiced for 2+ days (comeback message needed)."""
+    if not is_ready():
+        return False
+    
+    streak_doc = await db().user_streaks.find_one({"user_id": user_id})
+    if not streak_doc:
+        return False
+    
+    last_activity = streak_doc.get("last_activity_date")
+    if not last_activity:
+        return False
+    
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    days_inactive = (today - last_activity).days
+    
+    return days_inactive >= 2

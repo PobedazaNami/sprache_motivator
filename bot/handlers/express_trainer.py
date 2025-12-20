@@ -35,8 +35,9 @@ class ExpressTrainerStates(StatesGroup):
 ]))
 async def express_trainer_menu(message: Message, state: FSMContext):
     """Show express trainer menu"""
-    # Clear any previous state
+    # Clear any previous state (FSM and Redis training states)
     await state.clear()
+    await redis_service.clear_user_state(message.from_user.id)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
@@ -278,12 +279,13 @@ async def send_express_task(user_id: int, bot, chat_id: int):
                 if level_topics:
                     topic = random.choice(level_topics)
         
-        # Generate sentence
+        # Generate sentence (passing user_id to avoid mastered sentences)
         sentence = await translation_service.generate_sentence(
             difficulty.value,
             learning_lang,
             lang,
-            topic
+            topic,
+            user_id=user.id
         )
         
         # Get expected translation
@@ -414,21 +416,52 @@ async def check_express_answer(message: Message, state: FSMContext):
         # Increment activity
         await UserService.increment_activity(session, user, 2 if is_correct else 1)
         
-        # Send feedback with quality percentage and "Get next sentence" button
-        if is_correct:
-            feedback = get_text(lang, "correct_answer_with_quality", quality=quality_percentage)
-            await message.answer(feedback, reply_markup=get_express_next_keyboard(lang))
-        else:
-            await message.answer(
-                get_text(
-                    lang,
-                    "incorrect_answer",
-                    explanation=explanation or "",
-                    quality=quality_percentage,
-                    correct=correct_translation or ""
-                ),
-                reply_markup=get_express_next_keyboard(lang)
+        # If 100% quality, mark sentence as mastered (won't be shown again)
+        if quality_percentage == 100:
+            topic_value = training.get("topic") if training.get("topic") else None
+            await mongo_service.add_mastered_sentence(
+                user_id=user.id,
+                sentence=training["sentence"],
+                translation=correct_translation or training.get("expected_translation", ""),
+                topic=topic_value,
+                difficulty=training.get("difficulty_level")
             )
+        
+        # Update streak (motivation system)
+        streak_days, is_milestone, milestone = await mongo_service.update_streak(user.id)
+        
+        # Build feedback message with streak info
+        feedback_parts = []
+        
+        if is_correct:
+            feedback_parts.append(get_text(lang, "correct_answer_with_quality", quality=quality_percentage))
+        else:
+            feedback_parts.append(get_text(
+                lang,
+                "incorrect_answer",
+                explanation=explanation or "",
+                quality=quality_percentage,
+                correct=correct_translation or ""
+            ))
+        
+        # Add streak message if active
+        if streak_days > 1:
+            feedback_parts.append(get_text(lang, "streak_message", days=streak_days))
+        
+        # Add milestone celebration
+        if is_milestone and milestone:
+            milestone_key = f"streak_milestone_{milestone}"
+            feedback_parts.append(get_text(lang, milestone_key))
+        
+        # Add perfect day message if 100%
+        if quality_percentage == 100:
+            feedback_parts.append(get_text(lang, "perfect_day"))
+        
+        # Add encouragement after mistake
+        if not is_correct and quality_percentage < 70:
+            feedback_parts.append(get_text(lang, "encouragement_after_mistake"))
+        
+        await message.answer("\n\n".join(feedback_parts), reply_markup=get_express_next_keyboard(lang))
         
         # Clear training state
         await redis_service.clear_user_state(message.from_user.id)
