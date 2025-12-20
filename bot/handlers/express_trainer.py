@@ -239,7 +239,7 @@ async def show_hint(callback: CallbackQuery):
         )
         
         # Track hint activation in daily stats
-        await mongo_service.track_hint_activation(user.id)
+        # await mongo_service.track_hint_activation(user.id)  # TODO: implement this function
         
         # Clear training state - this task won't count towards daily stats
         await redis_service.clear_user_state(callback.from_user.id)
