@@ -217,6 +217,7 @@ class TranslationService:
 Style: {selected_style}
 
 Requirements:
+- CRITICAL: The sentence MUST be grammatically perfect in {interface_lang_name}. Double-check verb conjugations, cases, and word endings.
 - IMPORTANT: Keep the sentence SHORT - exactly {length_limit}. No longer!
 - Make it feel like something a real person would actually say
 - Include concrete details, names, or specific situations when appropriate
@@ -230,10 +231,10 @@ Provide only the sentence without any explanations."""
             response = await self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a creative language teacher who creates engaging, memorable practice sentences. Your sentences feel alive - they tell mini-stories, express real emotions, and describe situations that learners can relate to. You avoid boring, generic sentences like 'The book is on the table' and instead create sentences that make people smile, think, or feel something."},
+                    {"role": "system", "content": f"You are a native {interface_lang_name} speaker and creative language teacher. You create engaging, memorable practice sentences with PERFECT grammar. Your sentences feel alive - they tell mini-stories, express real emotions, and describe situations that learners can relate to. NEVER make grammar mistakes - always verify verb forms, noun cases, and word endings are correct in {interface_lang_name}."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.9,
+                temperature=0.8,
                 max_tokens=150
             )
             
