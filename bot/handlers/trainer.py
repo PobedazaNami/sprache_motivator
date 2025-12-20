@@ -533,9 +533,10 @@ async def show_hint(callback: CallbackQuery):
         # Remove the inline keyboard from the original message to prevent multiple clicks
         await callback.message.edit_reply_markup(reply_markup=None)
         # Send hint as a new message so the original task remains visible
-        await callback.message.answer(
-            get_text(lang, "hint_activated", translation=expected_translation)
-        )
+        # Include info about next task for daily trainer
+        hint_text = get_text(lang, "hint_activated", translation=expected_translation)
+        hint_text += "\n\n" + get_text(lang, "hint_next_task_info")
+        await callback.message.answer(hint_text)
         
         # Track hint activation in daily stats
         from bot.services import mongo_service
