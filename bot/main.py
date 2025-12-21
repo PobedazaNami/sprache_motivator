@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
+from redis.asyncio import Redis
 
 from bot.config import settings
 from bot.models.database import init_db, async_session_maker
@@ -47,7 +49,17 @@ async def main():
     
     # Create bot and dispatcher
     bot = Bot(token=settings.BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
+    
+    # Use RedisStorage for FSM persistence if available
+    try:
+        redis_client = Redis.from_url(settings.redis_url)
+        storage = RedisStorage(redis=redis_client, key_builder=DefaultKeyBuilder(with_destiny=True))
+        logger.info("Using RedisStorage for FSM")
+    except Exception as e:
+        logger.error(f"Failed to initialize RedisStorage: {e}. Falling back to MemoryStorage.")
+        storage = MemoryStorage()
+        
+    dp = Dispatcher(storage=storage)
     
     # Register handlers (order matters - more specific handlers first)
     dp.include_router(start.router)

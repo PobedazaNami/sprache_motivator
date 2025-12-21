@@ -25,7 +25,7 @@ async def friends_menu(message: Message, state: FSMContext):
     """Show friends menu"""
     # Clear any previous state (FSM and Redis)
     await state.clear()
-    await mongo_service.db()  # Ensure mongo is ready
+    mongo_service.db()  # Ensure mongo is ready
     from bot.services.redis_service import redis_service
     await redis_service.clear_user_state(message.from_user.id)
     
