@@ -737,7 +737,10 @@ async def check_training_answer(message: Message, state: FSMContext):
             )
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error(f"Error checking translation: {e}")
+            import traceback
+            logging.getLogger(__name__).error(f"Error checking translation for user {message.from_user.id}: {e}")
+            logging.getLogger(__name__).error(f"Traceback: {traceback.format_exc()}")
+            logging.getLogger(__name__).error(f"Training data: sentence='{training.get('sentence')}', user_answer='{user_answer}', learning_lang={learning_lang}, lang={lang}")
             await message.answer(get_text(lang, "translation_error"))
             await redis_service.clear_user_state(message.from_user.id)
             return
