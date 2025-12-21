@@ -62,7 +62,7 @@ class RedisService:
             "data": data or {},
             "timestamp": time.time()
         })
-        await self.redis.setex(key, 3600, value)  # 1 hour expiry
+        await self.redis.setex(key, 86400, value)  # 24 hours expiry
     
     async def get_user_state(self, user_id: int) -> Optional[dict]:
         """Get user state"""

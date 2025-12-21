@@ -695,6 +695,13 @@ async def check_training_answer(message: Message, state: FSMContext):
     # Early return if not in training mode - minimal overhead
     redis_state = await redis_service.get_user_state(message.from_user.id)
     if not redis_state or redis_state.get("state") != "awaiting_training_answer":
+        # Log ignored messages to debug "silent failure" issues
+        import logging
+        if len(message.text) > 3:  # Only log meaningful messages
+            logging.getLogger(__name__).info(
+                f"Ignored message from {message.from_user.id}: '{message.text}' - No active training state. "
+                f"Redis state: {redis_state}"
+            )
         return
     
     training_id_str = redis_state.get("data", {}).get("training_id")
