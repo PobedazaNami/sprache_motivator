@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from aiogram.filters import Filter
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -14,6 +15,17 @@ from bot.handlers.admin import is_admin
 
 
 router = Router()
+
+
+class _RedisStateFilter(Filter):
+    def __init__(self, expected_state: str) -> None:
+        self.expected_state = expected_state
+
+    async def __call__(self, message: Message) -> bool:
+        from bot.services.redis_service import redis_service
+
+        redis_state = await redis_service.get_user_state(message.from_user.id)
+        return bool(redis_state and redis_state.get("state") == self.expected_state)
 
 
 class TrainerStates(StatesGroup):
@@ -681,7 +693,7 @@ async def send_training_task(bot, user_id: int):
         )
 
 
-@router.message(F.text)
+@router.message(_RedisStateFilter("awaiting_training_answer"), F.text)
 async def check_training_answer(message: Message, state: FSMContext):
     """
     Check if message is an answer to training task.
@@ -692,17 +704,8 @@ async def check_training_answer(message: Message, state: FSMContext):
     """
     from bot.services.redis_service import redis_service
     
-    # Early return if not in training mode - minimal overhead
+    # Redis state is guaranteed by _RedisStateFilter
     redis_state = await redis_service.get_user_state(message.from_user.id)
-    if not redis_state or redis_state.get("state") != "awaiting_training_answer":
-        # Log ignored messages to debug "silent failure" issues
-        import logging
-        if len(message.text) > 3:  # Only log meaningful messages
-            logging.getLogger(__name__).info(
-                f"Ignored message from {message.from_user.id}: '{message.text}' - No active training state. "
-                f"Redis state: {redis_state}"
-            )
-        return
     
     training_id_str = redis_state.get("data", {}).get("training_id")
     if not training_id_str:

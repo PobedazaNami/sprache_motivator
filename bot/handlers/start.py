@@ -19,6 +19,9 @@ async def cmd_start(message: Message, state: FSMContext):
     """Handle /start command"""
     # Clear any active state
     await state.clear()
+    # Also clear Redis training/express state to avoid stuck sessions
+    from bot.services.redis_service import redis_service
+    await redis_service.clear_user_state(message.from_user.id)
     
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(

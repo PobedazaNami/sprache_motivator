@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from aiogram.filters import Filter
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -24,6 +25,15 @@ from bson.errors import InvalidId
 
 
 router = Router()
+
+
+class _RedisStateFilter(Filter):
+    def __init__(self, expected_state: str) -> None:
+        self.expected_state = expected_state
+
+    async def __call__(self, message: Message) -> bool:
+        redis_state = await redis_service.get_user_state(message.from_user.id)
+        return bool(redis_state and redis_state.get("state") == self.expected_state)
 
 
 class ExpressTrainerStates(StatesGroup):
@@ -349,7 +359,7 @@ async def send_express_task(user_id: int, bot, chat_id: int):
         )
 
 
-@router.message(F.text)
+@router.message(_RedisStateFilter("awaiting_express_answer"), F.text)
 async def check_express_answer(message: Message, state: FSMContext):
     """
     Check if message is an answer to express training task.
@@ -357,10 +367,8 @@ async def check_express_answer(message: Message, state: FSMContext):
     This handler is registered to process messages when the user 
     has an active express training session.
     """
-    # Early return if not in express training mode - minimal overhead
+    # Redis state is guaranteed by _RedisStateFilter
     redis_state = await redis_service.get_user_state(message.from_user.id)
-    if not redis_state or redis_state.get("state") != "awaiting_express_answer":
-        return
     
     training_id_str = redis_state.get("data", {}).get("training_id")
     if not training_id_str:
