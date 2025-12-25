@@ -353,7 +353,6 @@ def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) ->
             web_app=WebAppInfo(url=f"{webapp_url}/flashcards")
         )
 
-    builder.button(text=get_text(lang, "btn_create_set"), callback_data="flashcards_create_set")
     builder.adjust(1)
     return builder.as_markup()
 

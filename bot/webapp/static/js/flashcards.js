@@ -531,18 +531,32 @@ function startStudy() {
 
 function nextCard() {
     if (state.currentCardIndex < state.currentCards.length - 1) {
+        animateSwipe('left');
         state.currentCardIndex++;
-        renderStudyCard();
+        setTimeout(() => renderStudyCard(), 120);
         tg.HapticFeedback.impactOccurred('light');
     }
 }
 
 function prevCard() {
     if (state.currentCardIndex > 0) {
+        animateSwipe('right');
         state.currentCardIndex--;
-        renderStudyCard();
+        setTimeout(() => renderStudyCard(), 120);
         tg.HapticFeedback.impactOccurred('light');
     }
+}
+
+function animateSwipe(direction) {
+    const flashcard = document.getElementById('flashcard');
+    if (!flashcard) return;
+    flashcard.classList.remove('swipe-left', 'swipe-right');
+    // reflow to restart animation
+    void flashcard.offsetWidth;
+    flashcard.classList.add(direction === 'left' ? 'swipe-left' : 'swipe-right');
+    setTimeout(() => {
+        flashcard.classList.remove('swipe-left', 'swipe-right');
+    }, 220);
 }
 
 function flipCard() {
