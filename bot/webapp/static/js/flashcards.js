@@ -537,12 +537,16 @@ async function init() {
         console.log('Sets loaded:', state.sets.length);
         
         showScreen('sets-screen');
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.remove();
         console.log('Init completed');
     } catch (error) {
         console.error('Initialization error:', error);
         // Still show screen with default language
         applyLocalization();
         showScreen('sets-screen');
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.remove();
     }
 }
 
