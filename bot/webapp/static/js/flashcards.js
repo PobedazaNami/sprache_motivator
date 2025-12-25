@@ -28,6 +28,7 @@ const TEXTS = {
         loading: 'Завантаження...',
         reverseOn: '↔ Реверс: увімкнено',
         reverseOff: '↔ Реверс: вимкнено',
+        shuffle: '🔀 Перемішати',
         mySets: '📚 Мої набори',
         createSet: 'Створити набір',
         noSetsText: 'У вас поки немає наборів карток',
@@ -70,6 +71,7 @@ const TEXTS = {
         loading: 'Загрузка...',
         reverseOn: '↔ Реверс: включён',
         reverseOff: '↔ Реверс: выключен',
+        shuffle: '🔀 Перемешать',
         mySets: '📚 Мои наборы',
         createSet: 'Создать набор',
         noSetsText: 'У вас пока нет наборов карточек',
@@ -162,6 +164,8 @@ function applyLocalization() {
     document.getElementById('next-text').textContent = t('next');
     const tapHint = document.getElementById('tap-hint');
     if (tapHint) tapHint.textContent = t('tapHint');
+    const shuffleBtn = document.getElementById('shuffle-cards');
+    if (shuffleBtn) shuffleBtn.textContent = t('shuffle');
     const renameTitle = document.getElementById('modal-rename-set-title');
     if (renameTitle) renameTitle.textContent = t('flashcards_rename_set');
     const renameInput = document.getElementById('rename-set-input');
@@ -651,6 +655,22 @@ function updateReverseButton() {
     btn.textContent = state.studyReversed ? t('reverseOn') : t('reverseOff');
 }
 
+function shuffleArrayInPlace(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+function shuffleStudyCards() {
+    if (!state.currentCards || state.currentCards.length < 2) return;
+    shuffleArrayInPlace(state.currentCards);
+    state.currentCardIndex = 0;
+    document.getElementById('flashcard').classList.remove('flipped');
+    renderStudyCard();
+    tg.HapticFeedback.impactOccurred('light');
+}
+
 // Utility functions
 function adjustTextareaHeight(el) {
     if (!el) return;
@@ -700,6 +720,7 @@ document.getElementById('back-to-set').addEventListener('click', () => {
 document.getElementById('flashcard').addEventListener('click', flipCard);
 document.getElementById('prev-card').addEventListener('click', prevCard);
 document.getElementById('next-card').addEventListener('click', nextCard);
+document.getElementById('shuffle-cards').addEventListener('click', shuffleStudyCards);
 document.getElementById('toggle-reverse').addEventListener('click', toggleReverse);
 
 // Handle Enter key in inputs
