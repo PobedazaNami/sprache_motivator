@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flashcards</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20251226_3">
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20251226_4">
 </head>
 <body>
     <div id="app">
@@ -65,8 +65,6 @@
                 <div class="progress-info">
                     <span id="card-counter">1/10</span>
                 </div>
-                <button id="shuffle-cards" class="btn-secondary" type="button">🔀</button>
-                <button id="toggle-reverse" class="btn-secondary" type="button">↔ Reverse</button>
             </div>
             <div class="card-container">
                 <div id="flashcard" class="flashcard">
@@ -81,9 +79,15 @@
                 </div>
             </div>
             <div id="card-example-below" class="example" style="display:none;"></div>
-            <div class="card-navigation">
-                <button id="prev-card" class="btn-nav" disabled>← <span id="prev-text">Назад</span></button>
-                <button id="next-card" class="btn-nav"><span id="next-text">Далее</span> →</button>
+            <div class="study-footer">
+                <div class="card-navigation">
+                    <button id="prev-card" class="btn-nav" disabled>← <span id="prev-text">Назад</span></button>
+                    <button id="next-card" class="btn-nav"><span id="next-text">Далее</span> →</button>
+                </div>
+                <div class="study-actions">
+                    <button id="shuffle-cards" class="btn-secondary" type="button">🔀</button>
+                    <button id="toggle-reverse" class="btn-secondary" type="button">↔ Reverse</button>
+                </div>
             </div>
         </div>
 
@@ -164,6 +168,6 @@
         </div>
     </div>
 
-    <script src="/static/js/flashcards.js?v=20251226_3"></script>
+    <script src="/static/js/flashcards.js?v=20251226_4"></script>
 </body>
 </html>

@@ -462,6 +462,35 @@ textarea:focus {
     margin-top: 20px;
 }
 
+/* Study footer (bottom controls) */
+#study-screen {
+    min-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+}
+
+.study-footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.study-footer .card-navigation {
+    margin-top: 0;
+}
+
+.study-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+}
+
+.study-actions .btn-secondary {
+    flex: 1;
+    max-width: 200px;
+}
+
 /* Modal */
 .modal {
     display: none;
