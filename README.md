@@ -336,6 +336,7 @@ This project is licensed under the MIT License.
 - ✅ Broadcast system
 - ✅ Activity ranking
 - ✅ Token optimization
+- ✅ Flashcard Mini App (Telegram Web App)
 
 ### Future Enhancements
 - 🔜 Advanced motivation system (badges, streaks)
@@ -344,7 +345,6 @@ This project is licensed under the MIT License.
 - 🔜 Spaced repetition system
 - 🔜 User groups and competitions
 - 🔜 Analytics dashboard
-- 🔜 Mobile app integration
 
 ## Contributing
 

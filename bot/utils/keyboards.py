@@ -1,7 +1,7 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from bot.locales.texts import get_text
-from typing import Any
+from typing import Any, Optional
 
 
 def get_language_selection_keyboard() -> InlineKeyboardMarkup:
@@ -342,9 +342,17 @@ def get_express_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboar
 
 
 # Flashcard keyboards
-def get_flashcards_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
-    """Main flashcards menu keyboard"""
+def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Main flashcards menu keyboard with optional Web App button"""
     builder = InlineKeyboardBuilder()
+    
+    # Add Web App button if URL is configured
+    if webapp_url:
+        builder.button(
+            text=get_text(lang, "btn_open_webapp"),
+            web_app=WebAppInfo(url=f"{webapp_url}/flashcards")
+        )
+    
     builder.button(text=get_text(lang, "btn_my_sets"), callback_data="flashcards_my_sets")
     builder.button(text=get_text(lang, "btn_create_set"), callback_data="flashcards_create_set")
     builder.adjust(1)
