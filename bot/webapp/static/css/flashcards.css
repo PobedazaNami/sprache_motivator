@@ -295,12 +295,12 @@ body {
 }
 
 .card-front {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #2b3542 0%, #3a4757 100%);
     color: white;
 }
 
 .card-back {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    background: linear-gradient(135deg, #1f2a36 0%, #304050 100%);
     color: white;
     transform: rotateY(180deg);
 }
