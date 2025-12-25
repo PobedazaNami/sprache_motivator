@@ -158,7 +158,8 @@ function applyLocalization() {
     document.getElementById('confirm-delete-text').textContent = t('delete');
     document.getElementById('prev-text').textContent = t('prev');
     document.getElementById('next-text').textContent = t('next');
-    document.getElementById('tap-hint').textContent = t('tapHint');
+    const tapHint = document.getElementById('tap-hint');
+    if (tapHint) tapHint.textContent = t('tapHint');
     updateReverseButton();
 }
 
@@ -531,32 +532,48 @@ function startStudy() {
 
 function nextCard() {
     if (state.currentCardIndex < state.currentCards.length - 1) {
-        animateSwipe('left');
+        animateSwipeOut('left');
         state.currentCardIndex++;
-        setTimeout(() => renderStudyCard(), 120);
+        setTimeout(() => {
+            renderStudyCard();
+            animateSwipeIn('right');
+        }, 160);
         tg.HapticFeedback.impactOccurred('light');
     }
 }
 
 function prevCard() {
     if (state.currentCardIndex > 0) {
-        animateSwipe('right');
+        animateSwipeOut('right');
         state.currentCardIndex--;
-        setTimeout(() => renderStudyCard(), 120);
+        setTimeout(() => {
+            renderStudyCard();
+            animateSwipeIn('left');
+        }, 160);
         tg.HapticFeedback.impactOccurred('light');
     }
 }
 
-function animateSwipe(direction) {
+function animateSwipeOut(direction) {
     const flashcard = document.getElementById('flashcard');
     if (!flashcard) return;
-    flashcard.classList.remove('swipe-left', 'swipe-right');
-    // reflow to restart animation
+    flashcard.classList.remove('swipe-left', 'swipe-right', 'swipe-in-left', 'swipe-in-right');
     void flashcard.offsetWidth;
     flashcard.classList.add(direction === 'left' ? 'swipe-left' : 'swipe-right');
     setTimeout(() => {
         flashcard.classList.remove('swipe-left', 'swipe-right');
-    }, 220);
+    }, 260);
+}
+
+function animateSwipeIn(fromDirection) {
+    const flashcard = document.getElementById('flashcard');
+    if (!flashcard) return;
+    flashcard.classList.remove('swipe-left', 'swipe-right', 'swipe-in-left', 'swipe-in-right');
+    void flashcard.offsetWidth;
+    flashcard.classList.add(fromDirection === 'left' ? 'swipe-in-left' : 'swipe-in-right');
+    setTimeout(() => {
+        flashcard.classList.remove('swipe-in-left', 'swipe-in-right');
+    }, 260);
 }
 
 function flipCard() {

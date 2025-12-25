@@ -284,21 +284,39 @@ body {
 }
 
 .flashcard.swipe-left {
-    animation: swipeLeft 0.18s ease-out;
+    animation: swipeLeft 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .flashcard.swipe-right {
-    animation: swipeRight 0.18s ease-out;
+    animation: swipeRight 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.flashcard.swipe-in-left {
+    animation: swipeInLeft 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.flashcard.swipe-in-right {
+    animation: swipeInRight 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @keyframes swipeLeft {
     from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(-24px); opacity: 0.6; }
+    to { transform: translateX(-64px); opacity: 0; }
 }
 
 @keyframes swipeRight {
     from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(24px); opacity: 0.6; }
+    to { transform: translateX(64px); opacity: 0; }
+}
+
+@keyframes swipeInLeft {
+    from { transform: translateX(-64px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes swipeInRight {
+    from { transform: translateX(64px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
 }
 
 .card-inner {
@@ -359,11 +377,9 @@ body {
     word-break: break-word;
 }
 
-.example {
-    margin-top: 8px;
-    color: var(--tg-theme-hint-color);
-    font-size: 14px;
-    line-height: 1.4;
+
+.tap-hint {
+    display: none;
 }
 
 textarea {
@@ -383,12 +399,6 @@ textarea:focus {
     border-color: var(--tg-theme-button-color);
 }
 
-.tap-hint {
-    margin-top: 16px;
-    font-size: 14px;
-    color: var(--tg-theme-hint-color);
-    text-align: center;
-}
 
 .progress-info {
     background-color: var(--tg-theme-secondary-bg-color);
