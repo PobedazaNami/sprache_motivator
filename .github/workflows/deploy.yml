@@ -47,8 +47,9 @@ jobs:
           CACHE_TTL_SECONDS='2592000'
           # Web App (Mini App) configuration
           WEBAPP_URL="${{ secrets.WEBAPP_URL }}"
-          WEBAPP_HOST="${{ secrets.WEBAPP_HOST }}"
           WEBAPP_PORT="${{ secrets.WEBAPP_PORT }}"
+          # Extract hostname from WEBAPP_URL for nginx-proxy (remove https:// and any path)
+          WEBAPP_HOST=$(echo "${WEBAPP_URL}" | sed 's~https\?://~~' | sed 's~/.*~~')
           SSH_PRIVATE_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
           SSH_HOST='${{ secrets.SSH_HOST }}'
           SSH_USER='${{ secrets.SSH_USER }}'
