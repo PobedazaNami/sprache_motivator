@@ -145,6 +145,7 @@ async def get_sets(request: web.Request) -> web.Response:
             s["card_count"] = card_count
             s["_id"] = str(s["_id"])
             s["created_at"] = s["created_at"].isoformat() if s.get("created_at") else None
+            s["updated_at"] = s["updated_at"].isoformat() if s.get("updated_at") else None
         
         return web.json_response({"sets": sets})
         
