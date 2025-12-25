@@ -1,0 +1,455 @@
+/* Telegram Mini App - Flashcards CSS */
+
+:root {
+    --tg-theme-bg-color: #ffffff;
+    --tg-theme-text-color: #000000;
+    --tg-theme-hint-color: #999999;
+    --tg-theme-link-color: #2481cc;
+    --tg-theme-button-color: #2481cc;
+    --tg-theme-button-text-color: #ffffff;
+    --tg-theme-secondary-bg-color: #f0f0f0;
+    
+    --card-bg: #ffffff;
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    --border-radius: 16px;
+    --transition: 0.3s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+#app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+    padding-bottom: 100px;
+}
+
+/* Screen management */
+.screen {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.screen.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loading screen */
+#loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+}
+
+.loader {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--tg-theme-secondary-bg-color);
+    border-top-color: var(--tg-theme-button-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 12px;
+}
+
+.header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    flex: 1;
+}
+
+/* Buttons */
+.btn-primary, .btn-secondary, .btn-danger, .btn-nav, .btn-back {
+    padding: 12px 20px;
+    border-radius: var(--border-radius);
+    border: none;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background-color: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.btn-secondary {
+    background-color: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
+}
+
+.btn-danger {
+    background-color: #ff3b30;
+    color: #ffffff;
+}
+
+.btn-back {
+    background: transparent;
+    color: var(--tg-theme-link-color);
+    padding: 8px 12px;
+    font-size: 20px;
+}
+
+.btn-nav {
+    background-color: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
+    flex: 1;
+    max-width: 150px;
+}
+
+.btn-nav:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-large {
+    padding: 16px 24px;
+    font-size: 18px;
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+/* Sets list */
+.sets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.set-item {
+    background-color: var(--tg-theme-secondary-bg-color);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.set-item:hover {
+    transform: translateX(4px);
+}
+
+.set-item:active {
+    transform: scale(0.98);
+}
+
+.set-info h3 {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.set-info p {
+    font-size: 14px;
+    color: var(--tg-theme-hint-color);
+}
+
+.set-arrow {
+    font-size: 24px;
+    color: var(--tg-theme-hint-color);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.empty-state p {
+    color: var(--tg-theme-hint-color);
+    margin-bottom: 8px;
+}
+
+/* Set detail */
+.set-actions {
+    margin-bottom: 24px;
+}
+
+.cards-preview {
+    margin-bottom: 24px;
+}
+
+.card-preview-item {
+    background-color: var(--tg-theme-secondary-bg-color);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-preview-item .front {
+    font-weight: 500;
+}
+
+.card-preview-item .back {
+    color: var(--tg-theme-hint-color);
+    font-size: 14px;
+}
+
+.card-preview-item .delete-card {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    opacity: 0.6;
+}
+
+.card-preview-item .delete-card:hover {
+    opacity: 1;
+}
+
+/* Study screen */
+.card-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px 0;
+}
+
+.flashcard {
+    width: 100%;
+    max-width: 350px;
+    height: 250px;
+    perspective: 1000px;
+    cursor: pointer;
+}
+
+.card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.flashcard.flipped .card-inner {
+    transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--card-shadow);
+    text-align: center;
+}
+
+.card-front {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.card-back {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    transform: rotateY(180deg);
+}
+
+.card-front p, .card-back p {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.tap-hint {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--tg-theme-hint-color);
+    text-align: center;
+}
+
+.progress-info {
+    background-color: var(--tg-theme-secondary-bg-color);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.card-navigation {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: var(--tg-theme-bg-color);
+    border-radius: var(--border-radius);
+    padding: 24px;
+    width: 100%;
+    max-width: 400px;
+    animation: modalIn 0.3s ease;
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.modal-content h2 {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--tg-theme-secondary-bg-color);
+    border-radius: 12px;
+    font-size: 16px;
+    margin-bottom: 12px;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    transition: var(--transition);
+}
+
+.modal-content input:focus {
+    outline: none;
+    border-color: var(--tg-theme-button-color);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.modal-actions button {
+    flex: 1;
+}
+
+/* Delete set button */
+#delete-set-btn {
+    width: 100%;
+    margin-top: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-height: 600px) {
+    .flashcard {
+        height: 180px;
+    }
+    
+    .card-front p, .card-back p {
+        font-size: 20px;
+    }
+}
+
+/* Narrow screen adjustments */
+@media (max-width: 360px) {
+    #app {
+        padding: 12px;
+    }
+    
+    .header h1 {
+        font-size: 20px;
+    }
+    
+    .btn-primary, .btn-secondary, .btn-danger {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+    
+    .flashcard {
+        max-width: 280px;
+        height: 200px;
+    }
+    
+    .card-front p, .card-back p {
+        font-size: 18px;
+    }
+    
+    .btn-nav {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    .modal-content {
+        padding: 16px;
+    }
+    
+    .modal-content input {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
+}

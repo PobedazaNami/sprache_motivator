@@ -23,9 +23,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Web app server runner (for cleanup)
+webapp_runner = None
+
 
 async def main():
     """Main bot function"""
+    global webapp_runner
+    
     # Initialize database
     logger.info("Initializing database...")
     logger.info(f"Admin IDs configured: {settings.admin_id_list}")
@@ -46,6 +51,16 @@ async def main():
                 logger.warning("MongoDB URI present but initialization returned False")
         except Exception as e:
             logger.error(f"MongoDB initialization failed: {e}")
+    
+    # Start web app server for Mini App
+    if settings.WEBAPP_URL:
+        logger.info(f"Starting Web App server on port {settings.WEBAPP_PORT}...")
+        try:
+            from bot.webapp.server import start_webapp_server
+            webapp_runner = await start_webapp_server(port=settings.WEBAPP_PORT)
+            logger.info(f"Web App server started. URL: {settings.WEBAPP_URL}")
+        except Exception as e:
+            logger.error(f"Failed to start Web App server: {e}")
     
     # Create bot and dispatcher
     bot = Bot(token=settings.BOT_TOKEN)
@@ -86,6 +101,9 @@ async def main():
         logger.info("Shutting down...")
         scheduler_service.scheduler.shutdown()
         await redis_service.disconnect()
+        # Cleanup web app server
+        if webapp_runner:
+            await webapp_runner.cleanup()
         # Mongo does not require explicit close; relying on motor's internal cleanup.
         await bot.session.close()
 

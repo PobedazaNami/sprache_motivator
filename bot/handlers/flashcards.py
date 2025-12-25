@@ -5,6 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from datetime import datetime, timezone
 from bson import ObjectId
 
+from bot.config import settings
 from bot.models.database import UserStatus, async_session_maker
 from bot.services.database_service import UserService
 from bot.services import mongo_service
@@ -42,7 +43,9 @@ async def flashcards_menu(message: Message, state: FSMContext):
         lang = user.interface_language.value
         text = get_text(lang, "flashcards_menu")
         
-        await message.answer(text, reply_markup=get_flashcards_menu_keyboard(lang))
+        # Check if Mini App is configured
+        webapp_url = settings.WEBAPP_URL
+        await message.answer(text, reply_markup=get_flashcards_menu_keyboard(lang, webapp_url))
 
 
 @router.callback_query(F.data == "flashcards_menu")
@@ -55,7 +58,9 @@ async def flashcards_menu_callback(callback: CallbackQuery, state: FSMContext):
         lang = user.interface_language.value
         text = get_text(lang, "flashcards_menu")
         
-        await callback.message.edit_text(text, reply_markup=get_flashcards_menu_keyboard(lang))
+        # Check if Mini App is configured
+        webapp_url = settings.WEBAPP_URL
+        await callback.message.edit_text(text, reply_markup=get_flashcards_menu_keyboard(lang, webapp_url))
         await callback.answer()
 
 

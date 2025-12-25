@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flashcards</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/css/flashcards.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading screen -->
+        <div id="loading" class="screen active">
+            <div class="loader"></div>
+            <p id="loading-text">Загрузка...</p>
+        </div>
+
+        <!-- Sets list screen -->
+        <div id="sets-screen" class="screen">
+            <div class="header">
+                <h1 id="sets-title">📚 Мои наборы</h1>
+                <button id="create-set-btn" class="btn-primary">
+                    <span>+</span> <span id="create-set-text">Создать набор</span>
+                </button>
+            </div>
+            <div id="sets-list" class="sets-list">
+                <!-- Sets will be rendered here -->
+            </div>
+            <div id="no-sets" class="empty-state" style="display: none;">
+                <div class="empty-icon">📝</div>
+                <p id="no-sets-text">У вас пока нет наборов карточек</p>
+                <p id="no-sets-hint">Создайте первый набор для изучения слов!</p>
+            </div>
+        </div>
+
+        <!-- Set detail screen -->
+        <div id="set-screen" class="screen">
+            <div class="header">
+                <button id="back-to-sets" class="btn-back">←</button>
+                <h1 id="set-name"></h1>
+            </div>
+            <div class="set-actions">
+                <button id="study-btn" class="btn-primary btn-large">
+                    <span>📖</span> <span id="study-text">Изучать</span>
+                </button>
+                <button id="add-card-btn" class="btn-secondary">
+                    <span>+</span> <span id="add-card-text">Добавить карточку</span>
+                </button>
+            </div>
+            <div id="cards-preview" class="cards-preview">
+                <!-- Cards preview will be rendered here -->
+            </div>
+            <button id="delete-set-btn" class="btn-danger">
+                <span id="delete-set-text">🗑 Удалить набор</span>
+            </button>
+        </div>
+
+        <!-- Study screen -->
+        <div id="study-screen" class="screen">
+            <div class="header">
+                <button id="back-to-set" class="btn-back">←</button>
+                <div class="progress-info">
+                    <span id="card-counter">1/10</span>
+                </div>
+            </div>
+            <div class="card-container">
+                <div id="flashcard" class="flashcard">
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <p id="card-front-text"></p>
+                        </div>
+                        <div class="card-back">
+                            <p id="card-back-text"></p>
+                        </div>
+                    </div>
+                </div>
+                <p id="tap-hint" class="tap-hint">Нажмите на карточку, чтобы перевернуть</p>
+            </div>
+            <div class="card-navigation">
+                <button id="prev-card" class="btn-nav" disabled>← <span id="prev-text">Назад</span></button>
+                <button id="next-card" class="btn-nav"><span id="next-text">Далее</span> →</button>
+            </div>
+        </div>
+
+        <!-- Create set modal -->
+        <div id="create-set-modal" class="modal">
+            <div class="modal-content">
+                <h2 id="modal-create-set-title">Создать набор</h2>
+                <input type="text" id="set-name-input" placeholder="Название набора" maxlength="50">
+                <div class="modal-actions">
+                    <button id="cancel-create-set" class="btn-secondary" type="button">
+                        <span id="cancel-text">Отмена</span>
+                    </button>
+                    <button id="confirm-create-set" class="btn-primary" type="button">
+                        <span id="create-text">Создать</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add card modal -->
+        <div id="add-card-modal" class="modal">
+            <div class="modal-content">
+                <h2 id="modal-add-card-title">Добавить карточку</h2>
+                <input type="text" id="card-front-input" placeholder="Лицевая сторона (слово)" maxlength="200">
+                <input type="text" id="card-back-input" placeholder="Обратная сторона (перевод)" maxlength="200">
+                <div class="modal-actions">
+                    <button id="cancel-add-card" class="btn-secondary" type="button">
+                        <span id="cancel-add-text">Отмена</span>
+                    </button>
+                    <button id="confirm-add-card" class="btn-primary" type="button">
+                        <span id="add-text">Добавить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete confirmation modal -->
+        <div id="delete-modal" class="modal">
+            <div class="modal-content">
+                <h2 id="delete-title">Удалить набор?</h2>
+                <p id="delete-warning">Все карточки в этом наборе будут удалены.</p>
+                <div class="modal-actions">
+                    <button id="cancel-delete" class="btn-secondary" type="button">
+                        <span id="cancel-delete-text">Отмена</span>
+                    </button>
+                    <button id="confirm-delete" class="btn-danger" type="button">
+                        <span id="confirm-delete-text">Удалить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/flashcards.js"></script>
+</body>
+</html>
