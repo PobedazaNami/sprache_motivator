@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flashcards</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20251225">
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20251226">
 </head>
 <body>
     <div id="app">
@@ -37,7 +37,10 @@
         <div id="set-screen" class="screen">
             <div class="header">
                 <button id="back-to-sets" class="btn-back">←</button>
-                <h1 id="set-name"></h1>
+                <div class="set-title">
+                    <h1 id="set-name"></h1>
+                    <button id="edit-set-btn" class="btn-icon" type="button" title="Edit">✏️</button>
+                </div>
             </div>
             <div class="set-actions">
                 <button id="study-btn" class="btn-primary btn-large">
@@ -99,6 +102,18 @@
             </div>
         </div>
 
+        <!-- Rename set modal -->
+        <div id="rename-set-modal" class="modal">
+            <div class="modal-content">
+                <h2 id="modal-rename-set-title">Переименовать набор</h2>
+                <input type="text" id="rename-set-input" placeholder="Название набора" maxlength="50">
+                <div class="modal-actions">
+                    <button id="cancel-rename-set" class="btn-secondary" type="button">Отмена</button>
+                    <button id="confirm-rename-set" class="btn-primary" type="button">Сохранить</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Add card modal -->
         <div id="add-card-modal" class="modal">
             <div class="modal-content">
@@ -148,6 +163,6 @@
         </div>
     </div>
 
-    <script src="/static/js/flashcards.js?v=20251225"></script>
+    <script src="/static/js/flashcards.js?v=20251226"></script>
 </body>
 </html>

@@ -239,6 +239,53 @@ async def delete_set(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="Failed to delete set")
 
 
+async def update_set(request: web.Request) -> web.Response:
+    """Update flashcard set name."""
+    user_id = get_user_id_from_request(request)
+
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    set_id = request.match_info.get('set_id')
+
+    if not set_id:
+        raise web.HTTPBadRequest(text="Set ID is required")
+
+    try:
+        flashcard_set = await mongo_service.db().flashcard_sets.find_one({
+            "_id": ObjectId(set_id),
+            "user_id": user_id
+        })
+
+        if not flashcard_set:
+            raise web.HTTPNotFound(text="Set not found")
+
+        data = await request.json()
+        name = data.get("name", "").strip()
+
+        if not name:
+            raise web.HTTPBadRequest(text="Name is required")
+
+        if len(name) > 50:
+            name = name[:50]
+
+        await mongo_service.db().flashcard_sets.update_one(
+            {"_id": ObjectId(set_id), "user_id": user_id},
+            {"$set": {"name": name, "updated_at": datetime.now(timezone.utc)}}
+        )
+
+        return web.json_response({"success": True})
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating set: {e}")
+        raise web.HTTPInternalServerError(text="Failed to update set")
+
+
 async def get_cards(request: web.Request) -> web.Response:
     """Get all cards in a flashcard set."""
     user_id = get_user_id_from_request(request)
@@ -475,6 +522,7 @@ def create_webapp_routes() -> web.Application:
     app.router.add_get('/api/flashcards/user/lang', get_user_lang)
     app.router.add_get('/api/flashcards/sets', get_sets)
     app.router.add_post('/api/flashcards/sets', create_set)
+    app.router.add_put('/api/flashcards/sets/{set_id}', update_set)
     app.router.add_delete('/api/flashcards/sets/{set_id}', delete_set)
     app.router.add_get('/api/flashcards/sets/{set_id}/cards', get_cards)
     app.router.add_post('/api/flashcards/sets/{set_id}/cards', add_card)

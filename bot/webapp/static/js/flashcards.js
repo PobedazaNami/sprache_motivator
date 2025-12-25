@@ -63,7 +63,8 @@ const TEXTS = {
         errorDeleteCard: 'Помилка видалення картки',
         errorEditCard: 'Помилка редагування картки',
         validationEnterName: 'Будь ласка, введіть назву',
-        validationFillBothFields: 'Будь ласка, заповніть обидва поля'
+        validationFillBothFields: 'Будь ласка, заповніть обидва поля',
+        flashcards_rename_set: 'Перейменувати набір'
     },
     ru: {
         loading: 'Загрузка...',
@@ -104,7 +105,8 @@ const TEXTS = {
         errorDeleteCard: 'Ошибка удаления карточки',
         errorEditCard: 'Ошибка редактирования карточки',
         validationEnterName: 'Пожалуйста, введите название',
-        validationFillBothFields: 'Пожалуйста, заполните оба поля'
+        validationFillBothFields: 'Пожалуйста, заполните оба поля',
+        flashcards_rename_set: 'Переименовать набор'
     }
 };
 
@@ -160,6 +162,14 @@ function applyLocalization() {
     document.getElementById('next-text').textContent = t('next');
     const tapHint = document.getElementById('tap-hint');
     if (tapHint) tapHint.textContent = t('tapHint');
+    const renameTitle = document.getElementById('modal-rename-set-title');
+    if (renameTitle) renameTitle.textContent = t('flashcards_rename_set');
+    const renameInput = document.getElementById('rename-set-input');
+    if (renameInput) renameInput.placeholder = t('setNamePlaceholder');
+    const cancelRename = document.getElementById('cancel-rename-set');
+    if (cancelRename) cancelRename.textContent = t('cancel');
+    const confirmRename = document.getElementById('confirm-rename-set');
+    if (confirmRename) confirmRename.textContent = t('flashcards_save');
     updateReverseButton();
 }
 
@@ -194,6 +204,10 @@ async function fetchSets() {
 
 async function createSet(name) {
     return apiRequest('/sets', 'POST', { name });
+}
+
+async function updateSetApi(setId, name) {
+    return apiRequest(`/sets/${setId}`, 'PUT', { name });
 }
 
 async function deleteSetApi(setId) {
@@ -403,6 +417,47 @@ async function handleDeleteSet() {
     } catch (error) {
         console.error('Error deleting set:', error);
         tg.showAlert(t('errorDeleteSet'));
+    }
+}
+
+function openRenameSetModal() {
+    if (!state.currentSet) return;
+    const input = document.getElementById('rename-set-input');
+    if (!input) return;
+    input.value = state.currentSet.name || '';
+    showModal('rename-set-modal');
+    input.focus();
+}
+
+async function handleRenameSet() {
+    if (!state.currentSet) return;
+    const input = document.getElementById('rename-set-input');
+    if (!input) return;
+    const name = input.value.trim();
+
+    if (!name) {
+        tg.showAlert(t('validationEnterName'));
+        return;
+    }
+
+    try {
+        await updateSetApi(state.currentSet._id, name);
+        hideModal('rename-set-modal');
+
+        // Update local state and UI
+        state.currentSet.name = name;
+        document.getElementById('set-name').textContent = name;
+
+        const idx = state.sets.findIndex(s => s._id === state.currentSet._id);
+        if (idx !== -1) {
+            state.sets[idx].name = name;
+        }
+        renderSets();
+
+        tg.HapticFeedback.notificationOccurred('success');
+    } catch (error) {
+        console.error('Error renaming set:', error);
+        tg.showAlert(t('errorCreateSet'));
     }
 }
 
@@ -634,6 +689,10 @@ document.getElementById('delete-set-btn').addEventListener('click', () => showMo
 document.getElementById('cancel-delete').addEventListener('click', () => hideModal('delete-modal'));
 document.getElementById('confirm-delete').addEventListener('click', handleDeleteSet);
 
+document.getElementById('edit-set-btn').addEventListener('click', openRenameSetModal);
+document.getElementById('cancel-rename-set').addEventListener('click', () => hideModal('rename-set-modal'));
+document.getElementById('confirm-rename-set').addEventListener('click', handleRenameSet);
+
 document.getElementById('back-to-set').addEventListener('click', () => {
     showScreen('set-screen');
 });
@@ -646,6 +705,10 @@ document.getElementById('toggle-reverse').addEventListener('click', toggleRevers
 // Handle Enter key in inputs
 document.getElementById('set-name-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleCreateSet();
+});
+
+document.getElementById('rename-set-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleRenameSet();
 });
 
 ['card-front-input', 'card-back-input', 'card-example-input', 'card-front-edit', 'card-back-edit', 'card-example-edit'].forEach(id => {
