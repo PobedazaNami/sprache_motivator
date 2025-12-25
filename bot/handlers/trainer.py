@@ -90,14 +90,19 @@ async def my_progress(message: Message, state: FSMContext):
         
         lang = user.interface_language.value
         
-        # Get streak information
-        streak_info = await mongo_service.get_streak(user.id)
-        
-        # Get mastered sentences count
-        mastered_count = await mongo_service.get_mastered_count(user.id)
-        
-        # Get today's stats
-        today_stats = await mongo_service.get_today_stats(user.id)
+        # MongoDB-backed stats are optional; fall back gracefully if unavailable
+        streak_info = {}
+        mastered_count = 0
+        today_stats = None
+        try:
+            if mongo_service.is_ready():
+                streak_info = await mongo_service.get_streak(user.id)
+                mastered_count = await mongo_service.get_mastered_count(user.id)
+                today_stats = await mongo_service.get_today_stats(user.id)
+        except Exception:
+            streak_info = {}
+            mastered_count = 0
+            today_stats = None
         
         # Build progress message
         text_parts = [get_text(lang, "my_progress_title")]
