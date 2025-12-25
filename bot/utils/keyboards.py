@@ -32,7 +32,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     if getattr(user, "telegram_id", None) in settings.admin_id_list:
         builder.button(text=get_text(lang, "btn_admin"))
     
-    # Layout: main buttons in rows of 2, support/admin on separate rows if present
+    # Layout: 2 columns for main buttons, 1 column for support/admin/flashcards
     builder.adjust(2, 2, 2, 2, 1, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
@@ -354,9 +354,10 @@ def get_flashcards_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
 def get_flashcard_sets_keyboard(sets: list, lang: str) -> InlineKeyboardMarkup:
     """Keyboard showing list of flashcard sets"""
     builder = InlineKeyboardBuilder()
+    cards_word = get_text(lang, "flashcards_cards_count")
     for s in sets:
         set_id = str(s["_id"])
-        builder.button(text=f"📚 {s['name']} ({s.get('card_count', 0)} карт)", callback_data=f"flashcards_view_set_{set_id}")
+        builder.button(text=f"📚 {s['name']} ({s.get('card_count', 0)} {cards_word})", callback_data=f"flashcards_view_set_{set_id}")
     builder.button(text=get_text(lang, "btn_back"), callback_data="flashcards_menu")
     builder.adjust(1)
     return builder.as_markup()
