@@ -27,6 +27,7 @@ body {
     color: var(--tg-theme-text-color);
     min-height: 100vh;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .set-title {
@@ -311,6 +312,21 @@ body {
     height: 250px;
     perspective: 1000px;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+}
+
+.flashcard:focus,
+.flashcard:focus-visible,
+.card-inner:focus,
+.card-inner:focus-visible,
+.card-front:focus,
+.card-front:focus-visible,
+.card-back:focus,
+.card-back:focus-visible {
+    outline: none;
 }
 
 .flashcard.swipe-left {
