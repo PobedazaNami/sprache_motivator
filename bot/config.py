@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # Web App (Mini App)
     WEBAPP_URL: str = ""  # URL where the web app is hosted (e.g., https://yourdomain.com)
     WEBAPP_PORT: int = 8080  # Port for the web app server
+    WEBAPP_HOST: str = ""  # Hostname for nginx-proxy (extracted from WEBAPP_URL)
     
     @property
     def redis_url(self) -> str:
