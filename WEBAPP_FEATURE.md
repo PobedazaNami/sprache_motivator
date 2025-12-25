@@ -82,7 +82,193 @@ WEBAPP_PORT=8080
 2. **Public URL**: The web app must be accessible from the internet
 3. **SSL Certificate**: Valid SSL certificate (Let's Encrypt works fine)
 
-### Nginx Example Configuration
+---
+
+## 🚀 Пошаговая инструкция по развёртыванию
+
+### Предварительные требования
+- Сервер с Ubuntu/Debian (или другой Linux)
+- Домен, направленный на IP сервера (A-запись в DNS)
+- Docker и Docker Compose установлены на сервере
+
+### Шаг 1: Установка Nginx и Certbot (для HTTPS)
+
+```bash
+# Обновляем пакеты
+sudo apt update && sudo apt upgrade -y
+
+# Устанавливаем Nginx
+sudo apt install nginx -y
+
+# Устанавливаем Certbot для Let's Encrypt SSL
+sudo apt install certbot python3-certbot-nginx -y
+```
+
+### Шаг 2: Настройка Nginx
+
+Создайте конфигурацию для вашего домена:
+
+```bash
+sudo nano /etc/nginx/sites-available/yourdomain.com
+```
+
+Вставьте (замените `yourdomain.com` на ваш домен):
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Активируйте конфигурацию:
+
+```bash
+# Создаём символическую ссылку
+sudo ln -s /etc/nginx/sites-available/yourdomain.com /etc/nginx/sites-enabled/
+
+# Проверяем конфигурацию
+sudo nginx -t
+
+# Перезапускаем Nginx
+sudo systemctl restart nginx
+```
+
+### Шаг 3: Получение SSL сертификата (HTTPS)
+
+```bash
+# Получаем сертификат Let's Encrypt (замените yourdomain.com и email)
+sudo certbot --nginx -d yourdomain.com --email your@email.com --agree-tos --non-interactive
+```
+
+Certbot автоматически обновит конфигурацию Nginx для HTTPS.
+
+### Шаг 4: Настройка бота
+
+1. Склонируйте репозиторий на сервер:
+```bash
+git clone https://github.com/PobedazaNami/sprache_motivator.git
+cd sprache_motivator
+```
+
+2. Создайте файл `.env` из примера:
+```bash
+cp .env.example .env
+nano .env
+```
+
+3. Настройте переменные в `.env`:
+```env
+# Telegram Bot Token (от @BotFather)
+BOT_TOKEN=your_telegram_bot_token
+
+# OpenAI API Key
+OPENAI_API_KEY=your_openai_key
+
+# MongoDB (используйте MongoDB Atlas или локальный)
+MONGODB_URI=mongodb://localhost:27017/sprache_motivator
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Admin IDs
+ADMIN_IDS=your_telegram_id
+
+# ⭐ ВАЖНО: Настройка Web App
+WEBAPP_URL=https://yourdomain.com
+WEBAPP_PORT=8080
+```
+
+### Шаг 5: Обновление docker-compose.yml
+
+Добавьте порт 8080 для Web App в docker-compose.yml:
+
+```bash
+nano docker-compose.yml
+```
+
+В секции `bot` добавьте `ports`:
+
+```yaml
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      languagetool:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - LANGUAGETOOL_URL=http://languagetool:8010
+    ports:
+      - "8080:8080"  # ⭐ Добавьте эту строку для Web App
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+```
+
+### Шаг 6: Запуск бота
+
+```bash
+# Собираем и запускаем
+docker-compose up -d --build
+
+# Проверяем логи
+docker-compose logs -f bot
+```
+
+### Шаг 7: Проверка работы
+
+1. Откройте в браузере: `https://yourdomain.com/flashcards`
+   - Вы должны увидеть страницу приложения (будет показывать ошибку аутентификации - это нормально, так как нет Telegram данных)
+
+2. Откройте вашего Telegram бота
+3. Нажмите "🎴 Карточки" / "🎴 Картки"
+4. Нажмите кнопку "📱 Открыть приложение" / "📱 Відкрити додаток"
+5. Приложение должно открыться внутри Telegram!
+
+### Проверка статуса
+
+```bash
+# Проверить статус всех сервисов
+docker-compose ps
+
+# Проверить логи бота
+docker-compose logs bot
+
+# Проверить доступность Web App
+curl -I https://yourdomain.com/flashcards
+```
+
+### Автоматическое обновление SSL сертификата
+
+Certbot автоматически настраивает cron для обновления. Проверить можно так:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+---
+
+### Nginx Example Configuration (Manual SSL)
+
+Если вы настраиваете SSL вручную (не через Certbot):
 
 ```nginx
 server {
