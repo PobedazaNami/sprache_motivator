@@ -1,5 +1,8 @@
 // Telegram Mini App - Flashcards JavaScript
 
+// Constants
+const SWIPE_THRESHOLD_PX = 50;
+
 // Initialize Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.ready();
@@ -45,7 +48,16 @@ const TEXTS = {
         next: 'Далі',
         tapHint: 'Натисніть на картку, щоб перевернути',
         cards: 'карт',
-        noCards: 'Немає карток'
+        noCards: 'Немає карток',
+        // Error and validation messages
+        errorLoadSets: 'Помилка завантаження наборів',
+        errorLoadCards: 'Помилка завантаження карток',
+        errorCreateSet: 'Помилка створення набору',
+        errorDeleteSet: 'Помилка видалення набору',
+        errorAddCard: 'Помилка додавання картки',
+        errorDeleteCard: 'Помилка видалення картки',
+        validationEnterName: 'Будь ласка, введіть назву',
+        validationFillBothFields: 'Будь ласка, заповніть обидва поля'
     },
     ru: {
         loading: 'Загрузка...',
@@ -71,7 +83,16 @@ const TEXTS = {
         next: 'Далее',
         tapHint: 'Нажмите на карточку, чтобы перевернуть',
         cards: 'карт',
-        noCards: 'Нет карточек'
+        noCards: 'Нет карточек',
+        // Error and validation messages
+        errorLoadSets: 'Ошибка загрузки наборов',
+        errorLoadCards: 'Ошибка загрузки карточек',
+        errorCreateSet: 'Ошибка создания набора',
+        errorDeleteSet: 'Ошибка удаления набора',
+        errorAddCard: 'Ошибка добавления карточки',
+        errorDeleteCard: 'Ошибка удаления карточки',
+        validationEnterName: 'Пожалуйста, введите название',
+        validationFillBothFields: 'Пожалуйста, заполните оба поля'
     }
 };
 
@@ -276,7 +297,7 @@ async function loadSets() {
         renderSets();
     } catch (error) {
         console.error('Error loading sets:', error);
-        tg.showAlert('Failed to load sets');
+        tg.showAlert(t('errorLoadSets'));
     }
 }
 
@@ -292,7 +313,7 @@ async function openSet(setId) {
         showScreen('set-screen');
     } catch (error) {
         console.error('Error opening set:', error);
-        tg.showAlert('Failed to load cards');
+        tg.showAlert(t('errorLoadCards'));
     }
 }
 
@@ -301,7 +322,7 @@ async function handleCreateSet() {
     const name = input.value.trim();
     
     if (!name) {
-        tg.showAlert('Please enter a name');
+        tg.showAlert(t('validationEnterName'));
         return;
     }
     
@@ -313,7 +334,7 @@ async function handleCreateSet() {
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) {
         console.error('Error creating set:', error);
-        tg.showAlert('Failed to create set');
+        tg.showAlert(t('errorCreateSet'));
     }
 }
 
@@ -330,7 +351,7 @@ async function handleDeleteSet() {
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) {
         console.error('Error deleting set:', error);
-        tg.showAlert('Failed to delete set');
+        tg.showAlert(t('errorDeleteSet'));
     }
 }
 
@@ -341,7 +362,7 @@ async function handleAddCard() {
     const back = backInput.value.trim();
     
     if (!front || !back) {
-        tg.showAlert('Please fill in both fields');
+        tg.showAlert(t('validationFillBothFields'));
         return;
     }
     
@@ -365,7 +386,7 @@ async function handleAddCard() {
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) {
         console.error('Error adding card:', error);
-        tg.showAlert('Failed to add card');
+        tg.showAlert(t('errorAddCard'));
     }
 }
 
@@ -387,7 +408,7 @@ async function deleteCard(cardId) {
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) {
         console.error('Error deleting card:', error);
-        tg.showAlert('Failed to delete card');
+        tg.showAlert(t('errorDeleteCard'));
     }
 }
 
@@ -489,7 +510,7 @@ document.getElementById('flashcard').addEventListener('touchend', (e) => {
 
 function handleSwipe() {
     const diff = touchStartX - touchEndX;
-    if (Math.abs(diff) > 50) {
+    if (Math.abs(diff) > SWIPE_THRESHOLD_PX) {
         if (diff > 0) {
             nextCard();
         } else {
