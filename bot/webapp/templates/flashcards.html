@@ -62,6 +62,7 @@
                 <div class="progress-info">
                     <span id="card-counter">1/10</span>
                 </div>
+                <button id="toggle-reverse" class="btn-secondary" type="button">↔ Reverse</button>
             </div>
             <div class="card-container">
                 <div id="flashcard" class="flashcard">
@@ -71,6 +72,7 @@
                         </div>
                         <div class="card-back">
                             <p id="card-back-text"></p>
+                            <p id="card-example-text" class="example"></p>
                         </div>
                     </div>
                 </div>
@@ -104,6 +106,7 @@
                 <h2 id="modal-add-card-title">Добавить карточку</h2>
                 <input type="text" id="card-front-input" placeholder="Лицевая сторона (слово)" maxlength="200">
                 <input type="text" id="card-back-input" placeholder="Обратная сторона (перевод)" maxlength="200">
+                <input type="text" id="card-example-input" placeholder="Пример предложения" maxlength="300">
                 <div class="modal-actions">
                     <button id="cancel-add-card" class="btn-secondary" type="button">
                         <span id="cancel-add-text">Отмена</span>

@@ -26,6 +26,8 @@ function applyTheme() {
 const TEXTS = {
     uk: {
         loading: 'Завантаження...',
+        reverseOn: '↔ Реверс: увімкнено',
+        reverseOff: '↔ Реверс: вимкнено',
         mySets: '📚 Мої набори',
         createSet: 'Створити набір',
         noSetsText: 'У вас поки немає наборів карток',
@@ -40,6 +42,7 @@ const TEXTS = {
         addCardTitle: 'Додати картку',
         frontPlaceholder: 'Лицьова сторона (слово)',
         backPlaceholder: 'Зворотна сторона (переклад)',
+        examplePlaceholder: 'Приклад речення',
         add: 'Додати',
         deleteTitle: 'Видалити набір?',
         deleteWarning: 'Всі картки в цьому наборі будуть видалені.',
@@ -61,6 +64,8 @@ const TEXTS = {
     },
     ru: {
         loading: 'Загрузка...',
+        reverseOn: '↔ Реверс: включён',
+        reverseOff: '↔ Реверс: выключен',
         mySets: '📚 Мои наборы',
         createSet: 'Создать набор',
         noSetsText: 'У вас пока нет наборов карточек',
@@ -75,6 +80,7 @@ const TEXTS = {
         addCardTitle: 'Добавить карточку',
         frontPlaceholder: 'Лицевая сторона (слово)',
         backPlaceholder: 'Обратная сторона (перевод)',
+        examplePlaceholder: 'Пример предложения',
         add: 'Добавить',
         deleteTitle: 'Удалить набор?',
         deleteWarning: 'Все карточки в этом наборе будут удалены.',
@@ -103,7 +109,8 @@ let state = {
     sets: [],
     currentSet: null,
     currentCards: [],
-    currentCardIndex: 0
+    currentCardIndex: 0,
+    studyReversed: false
 };
 
 // Get text by key
@@ -128,6 +135,7 @@ function applyLocalization() {
     document.getElementById('modal-add-card-title').textContent = t('addCardTitle');
     document.getElementById('card-front-input').placeholder = t('frontPlaceholder');
     document.getElementById('card-back-input').placeholder = t('backPlaceholder');
+    document.getElementById('card-example-input').placeholder = t('examplePlaceholder');
     document.getElementById('cancel-add-text').textContent = t('cancel');
     document.getElementById('add-text').textContent = t('add');
     document.getElementById('delete-title').textContent = t('deleteTitle');
@@ -137,6 +145,7 @@ function applyLocalization() {
     document.getElementById('prev-text').textContent = t('prev');
     document.getElementById('next-text').textContent = t('next');
     document.getElementById('tap-hint').textContent = t('tapHint');
+    updateReverseButton();
 }
 
 // API functions
@@ -180,8 +189,8 @@ async function fetchCards(setId) {
     return apiRequest(`/sets/${setId}/cards`);
 }
 
-async function addCardApi(setId, front, back) {
-    return apiRequest(`/sets/${setId}/cards`, 'POST', { front, back });
+async function addCardApi(setId, front, back, example) {
+    return apiRequest(`/sets/${setId}/cards`, 'POST', { front, back, example });
 }
 
 async function deleteCardApi(setId, cardId) {
@@ -276,9 +285,20 @@ function renderCards() {
 function renderStudyCard() {
     const card = state.currentCards[state.currentCardIndex];
     if (!card) return;
-    
-    document.getElementById('card-front-text').textContent = card.front;
-    document.getElementById('card-back-text').textContent = card.back;
+    const frontText = state.studyReversed ? card.back : card.front;
+    const backText = state.studyReversed ? card.front : card.back;
+    document.getElementById('card-front-text').textContent = frontText;
+    document.getElementById('card-back-text').textContent = backText;
+    const exampleEl = document.getElementById('card-example-text');
+    if (exampleEl) {
+        if (card.example) {
+            exampleEl.textContent = card.example;
+            exampleEl.style.display = 'block';
+        } else {
+            exampleEl.textContent = '';
+            exampleEl.style.display = 'none';
+        }
+    }
     document.getElementById('card-counter').textContent = `${state.currentCardIndex + 1}/${state.currentCards.length}`;
     
     // Reset flip state
@@ -358,8 +378,10 @@ async function handleDeleteSet() {
 async function handleAddCard() {
     const frontInput = document.getElementById('card-front-input');
     const backInput = document.getElementById('card-back-input');
+    const exampleInput = document.getElementById('card-example-input');
     const front = frontInput.value.trim();
     const back = backInput.value.trim();
+    const example = exampleInput.value.trim();
     
     if (!front || !back) {
         tg.showAlert(t('validationFillBothFields'));
@@ -367,9 +389,10 @@ async function handleAddCard() {
     }
     
     try {
-        await addCardApi(state.currentSet._id, front, back);
+        await addCardApi(state.currentSet._id, front, back, example);
         frontInput.value = '';
         backInput.value = '';
+        exampleInput.value = '';
         hideModal('add-card-modal');
         
         // Reload cards
@@ -416,6 +439,8 @@ function startStudy() {
     if (state.currentCards.length === 0) return;
     
     state.currentCardIndex = 0;
+    state.studyReversed = false;
+    updateReverseButton();
     renderStudyCard();
     showScreen('study-screen');
 }
@@ -440,6 +465,20 @@ function flipCard() {
     const card = document.getElementById('flashcard');
     card.classList.toggle('flipped');
     tg.HapticFeedback.impactOccurred('light');
+}
+
+function toggleReverse() {
+    state.studyReversed = !state.studyReversed;
+    document.getElementById('flashcard').classList.remove('flipped');
+    updateReverseButton();
+    renderStudyCard();
+    tg.HapticFeedback.impactOccurred('light');
+}
+
+function updateReverseButton() {
+    const btn = document.getElementById('toggle-reverse');
+    if (!btn) return;
+    btn.textContent = state.studyReversed ? t('reverseOn') : t('reverseOff');
 }
 
 // Utility functions
@@ -476,6 +515,7 @@ document.getElementById('back-to-set').addEventListener('click', () => {
 document.getElementById('flashcard').addEventListener('click', flipCard);
 document.getElementById('prev-card').addEventListener('click', prevCard);
 document.getElementById('next-card').addEventListener('click', nextCard);
+document.getElementById('toggle-reverse').addEventListener('click', toggleReverse);
 
 // Handle Enter key in inputs
 document.getElementById('set-name-input').addEventListener('keypress', (e) => {

@@ -273,6 +273,7 @@ async def get_cards(request: web.Request) -> web.Response:
         for card in cards:
             card["_id"] = str(card["_id"])
             card["created_at"] = card["created_at"].isoformat() if card.get("created_at") else None
+            card["example"] = card.get("example", "")
         
         return web.json_response({"cards": cards})
         
@@ -311,6 +312,7 @@ async def add_card(request: web.Request) -> web.Response:
         data = await request.json()
         front = data.get("front", "").strip()
         back = data.get("back", "").strip()
+        example = data.get("example", "").strip()
         
         if not front or not back:
             raise web.HTTPBadRequest(text="Front and back are required")
@@ -326,6 +328,7 @@ async def add_card(request: web.Request) -> web.Response:
             "set_id": set_id,
             "front": front,
             "back": back,
+            "example": example,
             "created_at": datetime.now(timezone.utc)
         }
         

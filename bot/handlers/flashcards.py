@@ -25,6 +25,7 @@ class FlashcardStates(StatesGroup):
     creating_set = State()
     adding_card_front = State()
     adding_card_back = State()
+    adding_card_example = State()
 
 
 @router.message(F.text.in_([
@@ -235,7 +236,7 @@ async def add_card_front(message: Message, state: FSMContext):
 
 @router.message(FlashcardStates.adding_card_back)
 async def add_card_back(message: Message, state: FSMContext):
-    """Save the complete card"""
+    """Save back side and ask for example sentence"""
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, message.from_user.id)
         lang = user.interface_language.value
@@ -249,24 +250,50 @@ async def add_card_back(message: Message, state: FSMContext):
         set_id = data.get("set_id")
         front_text = data.get("front_text")
         back_text = message.text.strip()
-        
+
+        await state.update_data(back_text=back_text)
+        await state.set_state(FlashcardStates.adding_card_example)
+
+        text = get_text(lang, "flashcards_enter_example")
+        await message.answer(text)
+
+
+@router.message(FlashcardStates.adding_card_example)
+async def add_card_example(message: Message, state: FSMContext):
+    """Save the complete card including example sentence"""
+    async with async_session_maker() as session:
+        user = await UserService.get_or_create_user(session, message.from_user.id)
+        lang = user.interface_language.value
+
+        if not mongo_service.is_ready():
+            await message.answer(get_text(lang, "error"))
+            await state.clear()
+            return
+
+        data = await state.get_data()
+        set_id = data.get("set_id")
+        front_text = data.get("front_text")
+        back_text = data.get("back_text")
+        example_text = message.text.strip()
+
         # Create the card
         card_doc = {
             "user_id": message.from_user.id,
             "set_id": set_id,
             "front": front_text,
             "back": back_text,
+            "example": example_text,
             "created_at": datetime.now(timezone.utc)
         }
-        
+
         await mongo_service.db().flashcards.insert_one(card_doc)
-        
+
         # Update set's updated_at
         await mongo_service.db().flashcard_sets.update_one(
             {"_id": ObjectId(set_id)},
             {"$set": {"updated_at": datetime.now(timezone.utc)}}
         )
-        
+
         await state.clear()
         text = get_text(lang, "flashcards_card_created")
         await message.answer(text, reply_markup=get_flashcards_menu_keyboard(lang))
