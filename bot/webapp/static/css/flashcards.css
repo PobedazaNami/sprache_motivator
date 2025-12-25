@@ -272,12 +272,6 @@ body {
 
 .flashcard.flipped .card-inner {
     transform: rotateY(180deg);
-
-.example {
-    margin-top: 8px;
-    color: var(--tg-theme-hint-color);
-    font-size: 14px;
-}
 }
 
 .card-front, .card-back {
@@ -295,12 +289,12 @@ body {
 }
 
 .card-front {
-    background: linear-gradient(135deg, #273243 0%, #34435a 100%);
+    background: linear-gradient(135deg, #1b4b5a 0%, #1b4b5a 100%);
     color: white;
 }
 
 .card-back {
-    background: linear-gradient(135deg, #1f2f2c 0%, #2c3f3a 100%);
+    background: linear-gradient(135deg, #0f1f38 0%, #0f1f38 100%);
     color: white;
     transform: rotateY(180deg);
 }
@@ -310,6 +304,30 @@ body {
     font-weight: 600;
     line-height: 1.4;
     word-break: break-word;
+}
+
+.example {
+    margin-top: 8px;
+    color: var(--tg-theme-hint-color);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+textarea {
+    width: 100%;
+    resize: none;
+    min-height: 56px;
+    padding: 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: var(--tg-theme-text-color);
+    font-size: 16px;
+    outline: none;
+}
+
+textarea:focus {
+    border-color: var(--tg-theme-button-color);
 }
 
 .tap-hint {

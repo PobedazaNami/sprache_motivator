@@ -394,6 +394,73 @@ async def delete_card(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="Failed to delete card")
 
 
+async def update_card(request: web.Request) -> web.Response:
+    """Update an existing flashcard."""
+    user_id = get_user_id_from_request(request)
+
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    set_id = request.match_info.get('set_id')
+    card_id = request.match_info.get('card_id')
+
+    if not set_id or not card_id:
+        raise web.HTTPBadRequest(text="Set ID and Card ID are required")
+
+    try:
+        # Verify ownership
+        card = await mongo_service.db().flashcards.find_one({
+            "_id": ObjectId(card_id),
+            "set_id": set_id,
+            "user_id": user_id
+        })
+
+        if not card:
+            raise web.HTTPNotFound(text="Card not found")
+
+        data = await request.json()
+        front = data.get("front", "").strip()
+        back = data.get("back", "").strip()
+        example = data.get("example", "").strip()
+
+        if not front or not back:
+            raise web.HTTPBadRequest(text="Front and back are required")
+
+        if len(front) > 200:
+            front = front[:200]
+        if len(back) > 200:
+            back = back[:200]
+        if len(example) > 300:
+            example = example[:300]
+
+        await mongo_service.db().flashcards.update_one(
+            {"_id": ObjectId(card_id)},
+            {
+                "$set": {
+                    "front": front,
+                    "back": back,
+                    "example": example
+                }
+            }
+        )
+
+        await mongo_service.db().flashcard_sets.update_one(
+            {"_id": ObjectId(set_id)},
+            {"$set": {"updated_at": datetime.now(timezone.utc)}}
+        )
+
+        return web.json_response({"success": True})
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating card: {e}")
+        raise web.HTTPInternalServerError(text="Failed to update card")
+
+
 def create_webapp_routes() -> web.Application:
     """Create and return the web application with all routes."""
     app = web.Application()
@@ -411,6 +478,7 @@ def create_webapp_routes() -> web.Application:
     app.router.add_delete('/api/flashcards/sets/{set_id}', delete_set)
     app.router.add_get('/api/flashcards/sets/{set_id}/cards', get_cards)
     app.router.add_post('/api/flashcards/sets/{set_id}/cards', add_card)
+    app.router.add_put('/api/flashcards/sets/{set_id}/cards/{card_id}', update_card)
     app.router.add_delete('/api/flashcards/sets/{set_id}/cards/{card_id}', delete_card)
     
     return app
