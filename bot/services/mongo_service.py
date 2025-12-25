@@ -33,6 +33,11 @@ async def init() -> bool:
     await _db.mastered_sentences.create_index([("user_id", 1), ("topic", 1)])
     # Index for user streaks (motivation system)
     await _db.user_streaks.create_index([("user_id", 1)], unique=True)
+    # Index for flashcard sets
+    await _db.flashcard_sets.create_index([("user_id", 1), ("created_at", 1)])
+    # Index for flashcards
+    await _db.flashcards.create_index([("set_id", 1), ("created_at", 1)])
+    await _db.flashcards.create_index([("user_id", 1)])
     return True
 
 

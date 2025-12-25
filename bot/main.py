@@ -11,7 +11,7 @@ from bot.models.database import init_db, async_session_maker
 from bot.services.redis_service import redis_service
 from bot.services.database_service import UserService
 from bot.services.scheduler_service import scheduler_service
-from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends, express_trainer
+from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends, express_trainer, flashcards
 from bot.models.database import UserStatus
 from bot.services import mongo_service
 
@@ -67,6 +67,7 @@ async def main():
     dp.include_router(settings_handler.router)
     dp.include_router(friends.router)
     dp.include_router(admin.router)
+    dp.include_router(flashcards.router)
     # Express trainer router before trainer because both have text handlers
     dp.include_router(express_trainer.router)
     # Trainer router last because it has a catch-all text handler

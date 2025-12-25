@@ -22,6 +22,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_daily_trainer"))
     builder.button(text=get_text(lang, "btn_express_trainer"))
     builder.button(text=get_text(lang, "btn_my_progress"))
+    builder.button(text=get_text(lang, "btn_flashcards"))
     builder.button(text=get_text(lang, "btn_saved_words"))
     builder.button(text=get_text(lang, "btn_friends"))
     builder.button(text=get_text(lang, "btn_settings"))
@@ -31,8 +32,8 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     if getattr(user, "telegram_id", None) in settings.admin_id_list:
         builder.button(text=get_text(lang, "btn_admin"))
     
-    # Layout: main buttons in rows of 2, support/admin on separate rows if present
-    builder.adjust(2, 2, 2, 2, 1, 1)
+    # Layout: 2 columns for main feature buttons (4 rows), then 1 column for support (and admin if applicable)
+    builder.adjust(2, 2, 2, 2, 1, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -336,6 +337,75 @@ def get_express_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboar
     # Add random topic button for this level
     builder.button(text=get_text(lang, "btn_random_topic"), callback_data=f"express_set_topic_random_{level.lower()}")
     builder.button(text=get_text(lang, "btn_back"), callback_data="express_set_topic")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+# Flashcard keyboards
+def get_flashcards_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Main flashcards menu keyboard"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_my_sets"), callback_data="flashcards_my_sets")
+    builder.button(text=get_text(lang, "btn_create_set"), callback_data="flashcards_create_set")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_flashcard_sets_keyboard(sets: list, lang: str) -> InlineKeyboardMarkup:
+    """Keyboard showing list of flashcard sets"""
+    builder = InlineKeyboardBuilder()
+    cards_word = get_text(lang, "flashcards_cards_count")
+    for s in sets:
+        set_id = str(s["_id"])
+        builder.button(text=f"📚 {s['name']} ({s.get('card_count', 0)} {cards_word})", callback_data=f"flashcards_view_set_{set_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="flashcards_menu")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_flashcard_set_keyboard(set_id: str, lang: str, has_cards: bool = True) -> InlineKeyboardMarkup:
+    """Keyboard for managing a flashcard set"""
+    builder = InlineKeyboardBuilder()
+    if has_cards:
+        builder.button(text=get_text(lang, "btn_view_cards"), callback_data=f"flashcards_study_{set_id}")
+    builder.button(text=get_text(lang, "btn_add_card"), callback_data=f"flashcards_add_card_{set_id}")
+    builder.button(text=get_text(lang, "btn_delete_set"), callback_data=f"flashcards_delete_set_{set_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data="flashcards_my_sets")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_flashcard_view_keyboard(set_id: str, card_id: str, current: int, total: int, is_flipped: bool, lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for viewing and navigating flashcards"""
+    builder = InlineKeyboardBuilder()
+    
+    # Flip button
+    flip_text = get_text(lang, "btn_flip_card")
+    builder.button(text=flip_text, callback_data=f"flashcards_flip_{set_id}_{card_id}_{1 if is_flipped else 0}")
+    
+    # Navigation buttons
+    nav_buttons = []
+    if current > 1:
+        nav_buttons.append(InlineKeyboardButton(text=get_text(lang, "btn_prev_card"), callback_data=f"flashcards_nav_{set_id}_{current - 1}"))
+    if current < total:
+        nav_buttons.append(InlineKeyboardButton(text=get_text(lang, "btn_next_card"), callback_data=f"flashcards_nav_{set_id}_{current + 1}"))
+    
+    if nav_buttons:
+        builder.row(*nav_buttons)
+    
+    # Delete and back buttons
+    builder.button(text=get_text(lang, "btn_delete_card"), callback_data=f"flashcards_delete_card_{set_id}_{card_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data=f"flashcards_view_set_{set_id}")
+    
+    builder.adjust(1, len(nav_buttons) if nav_buttons else 1, 1, 1)
+    return builder.as_markup()
+
+
+def get_delete_set_confirm_keyboard(set_id: str, lang: str) -> InlineKeyboardMarkup:
+    """Confirmation keyboard for deleting a flashcard set"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_confirm_delete"), callback_data=f"flashcards_confirm_delete_{set_id}")
+    builder.button(text=get_text(lang, "btn_back"), callback_data=f"flashcards_view_set_{set_id}")
     builder.adjust(1)
     return builder.as_markup()
 
