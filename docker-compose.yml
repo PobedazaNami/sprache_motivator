@@ -38,9 +38,24 @@ services:
       - .env
     environment:
       - LANGUAGETOOL_URL=http://languagetool:8010
+      # Optional: enable automatic routing/HTTPS via nginx-proxy + nginx-proxy-acme
+      # Set WEBAPP_HOST and LETSENCRYPT_EMAIL in environment (GitHub Actions/.env)
+      - VIRTUAL_HOST=${WEBAPP_HOST:-}
+      - VIRTUAL_PORT=${WEBAPP_PORT:-8080}
+      - LETSENCRYPT_HOST=${WEBAPP_HOST:-}
+    ports:
+      # Expose the Mini App port (use a free port on the host, e.g. 8083)
+      - "${WEBAPP_PORT:-8080}:${WEBAPP_PORT:-8080}"
+    networks:
+      - default
+      - nginx-proxy
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
 
 volumes:
   redis_data:
+
+networks:
+  nginx-proxy:
+    external: true
