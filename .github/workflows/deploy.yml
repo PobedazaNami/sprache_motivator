@@ -76,9 +76,10 @@ jobs:
           echo "DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES:-08:00,14:00,20:00}" >> .env.tmp
           echo "MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY:-10000}" >> .env.tmp
           echo "CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-2592000}" >> .env.tmp
-          # Add Web App variables if configured (WEBAPP_HOST is NOT added to .env - used only in docker-compose environment)
+          # Add Web App variables if configured
           test -n "${WEBAPP_URL:-}" && echo "WEBAPP_URL=${WEBAPP_URL}" >> .env.tmp || true
           test -n "${WEBAPP_PORT:-}" && echo "WEBAPP_PORT=${WEBAPP_PORT}" >> .env.tmp || true
+          test -n "${WEBAPP_HOST:-}" && echo "WEBAPP_HOST=${WEBAPP_HOST}" >> .env.tmp || true
 
           ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
 
