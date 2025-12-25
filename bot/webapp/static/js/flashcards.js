@@ -521,17 +521,23 @@ function handleSwipe() {
 
 // Initialize app
 async function init() {
+    console.log('Init started');
     applyTheme();
     
     try {
         // Get user language
+        console.log('Fetching user lang...');
         state.lang = await fetchUserLang();
+        console.log('User lang:', state.lang);
         applyLocalization();
         
         // Load sets
+        console.log('Loading sets...');
         await loadSets();
+        console.log('Sets loaded:', state.sets.length);
         
         showScreen('sets-screen');
+        console.log('Init completed');
     } catch (error) {
         console.error('Initialization error:', error);
         // Still show screen with default language
