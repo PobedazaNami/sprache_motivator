@@ -164,8 +164,7 @@ function applyLocalization() {
     document.getElementById('next-text').textContent = t('next');
     const tapHint = document.getElementById('tap-hint');
     if (tapHint) tapHint.textContent = t('tapHint');
-    const shuffleBtn = document.getElementById('shuffle-cards');
-    if (shuffleBtn) shuffleBtn.textContent = t('shuffle');
+    // shuffle and reverse buttons are icon-only, no text update needed
     const renameTitle = document.getElementById('modal-rename-set-title');
     if (renameTitle) renameTitle.textContent = t('flashcards_rename_set');
     const renameInput = document.getElementById('rename-set-input');
@@ -652,7 +651,8 @@ function toggleReverse() {
 function updateReverseButton() {
     const btn = document.getElementById('toggle-reverse');
     if (!btn) return;
-    btn.textContent = state.studyReversed ? t('reverseOn') : t('reverseOff');
+    // Icon-only button; toggle class to indicate state
+    btn.classList.toggle('active', state.studyReversed);
 }
 
 function shuffleArrayInPlace(arr) {
