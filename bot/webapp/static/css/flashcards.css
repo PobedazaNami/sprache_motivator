@@ -4,8 +4,8 @@
     /* Core Theme */
     --bg-color: #0e100f;
     --text-color: #ffffff;
-    --accent-color: #ccff00;
-    --accent-glow: rgba(204, 255, 0, 0.4);
+    --accent-color: #8b5cf6; /* Premium Violet */
+    --accent-glow: rgba(139, 92, 246, 0.4);
     --secondary-bg: rgba(255, 255, 255, 0.1);
     --card-surface: rgba(255, 255, 255, 0.05);
     --card-border: rgba(255, 255, 255, 0.1);
@@ -90,6 +90,16 @@ h1, h2, h3 {
     margin-bottom: 24px;
     gap: 16px;
 }
+/* Main screen header vertical stack */
+#sets-screen .header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+}
+#sets-screen .header h1 {
+    margin-bottom: 8px;
+}
+
 .header h1 {
     font-size: 28px;
     font-weight: 700;
@@ -105,7 +115,7 @@ button {
 
 .btn-primary {
     background-color: var(--accent-color);
-    color: #000;
+    color: #ffffff;
     font-weight: 700;
     padding: 14px 24px;
     border-radius: var(--btn-radius);
@@ -160,7 +170,7 @@ button {
 
 .btn-icon-only.active {
     background-color: var(--accent-color);
-    color: #000;
+    color: #ffffff;
 }
 
 .btn-back {
@@ -245,6 +255,7 @@ button {
     background: var(--card-surface);
     border: 1px solid var(--card-border);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
@@ -259,6 +270,17 @@ button {
     font-weight: 600;
     color: var(--text-color);
     border-color: rgba(255, 255, 255, 0.2);
+}
+
+.card-example {
+    font-size: 1rem;
+    font-weight: 400;
+    margin-top: 16px;
+    color: var(--accent-color);
+    opacity: 0.9;
+    font-family: var(--font-body);
+    font-style: italic;
+    line-height: 1.4;
 }
 
 .card-back {
@@ -296,7 +318,7 @@ button {
 }
 .btn-nav-icon:not(:disabled):active {
     background: var(--accent-color);
-    color: #000;
+    color: #ffffff;
 }
 
 #exit-study-mode {

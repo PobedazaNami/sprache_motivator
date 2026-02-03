@@ -274,11 +274,36 @@ function renderStudyCard() {
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
-    // Example handling
-    const exampleEl = document.getElementById('card-example-below');
+    // Example handling - Inside card front
+    const exampleEl = document.getElementById('card-front-example');
     if (exampleEl) {
+        // Only show example on the "real" front side (when not reversed), 
+        // or decide if example belongs to the source language word.
+        // Usually example is for the `card.front` word.
+        // If state.studyReversed is true, frontText is card.back (translation).
+        // If we want example to always be with the "Question", we show it.
+        // But user said: "example to word in card... always display on front side".
+        // Assuming example corresponds to `card.front`.
+        
+        let shouldShow = false;
         if (card.example) {
+            // If studyReversed is false (Normal mode: Front -> Back), show example on Front? Yes.
+            // If studyReversed is true (Reverse mode: Back -> Front), show example where?
+            // "Always on front side" implies the visible side before flipping.
+            
+            // However, usually example is tied to the source word.
+            // If I see "Dog" (Front), example "I have a dog".
+            // If I see "Собака" (Back as Front), example "I have a dog" gives away the answer?
+            // User request: "always only display on front side".
+            
+            // Let's implement literally: Show on the DOM element .card-front.
             exampleEl.textContent = card.example;
+            if (state.studyReversed && card.example) {
+                 // If reversed, the question is the translation. 
+                 // Showing the example in original language might give a hint.
+                 // But user asked to show it.
+                 // Let's keep it simple: Show it.
+            }
             exampleEl.style.display = 'block';
         } else {
             exampleEl.style.display = 'none';
