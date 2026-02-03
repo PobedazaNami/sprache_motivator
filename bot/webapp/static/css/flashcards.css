@@ -404,32 +404,41 @@ button {
     box-shadow: 0 0 20px rgba(204, 255, 0, 0.1);
 }
 
-/* Navigation inside Study */
-.card-navigation {
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    margin-bottom: 0;
-}
-
-.btn-nav-icon {
-    width: 60px;
-    height: 60px;
+/* Floating Navigation Buttons - GSAP Style */
+.btn-nav-floating {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(20, 20, 20, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 3.5rem;
+    height: 3.5rem;
     border-radius: 50%;
-    background: var(--card-surface);
-    border: 1px solid var(--card-border);
-    color: var(--text-color);
-    font-size: 32px; /* Large arrows */
+    color: var(--accent-color);
+    font-size: 1.8rem;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    opacity: 0.8;
 }
-.btn-nav-icon:disabled {
-    opacity: 0.3;
+
+.btn-nav-left {
+    left: 10px;
 }
-.btn-nav-icon:not(:disabled):active {
-    background: var(--accent-color);
-    color: #ffffff;
+
+.btn-nav-right {
+    right: 10px;
+}
+
+/* Disabled state */
+.btn-nav-floating:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+    filter: grayscale(100%);
 }
 
 #exit-study-mode {
