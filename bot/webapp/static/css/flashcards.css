@@ -452,6 +452,7 @@ button {
     font-size: 2rem;
     font-weight: 600;
     color: var(--text-color);
+    background: rgba(20, 20, 20, 0.95);
     border-color: rgba(255, 255, 255, 0.2);
 }
 
