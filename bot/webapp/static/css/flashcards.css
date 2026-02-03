@@ -14,9 +14,11 @@
     --font-heading: 'Space Grotesk', sans-serif;
     --font-body: 'Inter', sans-serif;
     
-    /* Layout - INCREASED SIZES */
-    --card-width: 320px;
-    --card-height: 520px;
+    /* Layout - MAXIMIZED SIZES */
+    --card-width: 100%;
+    /* Fill available vertical space */
+    --card-height: 100%; 
+    --max-card-width: 360px;
     --border-radius: 24px;
     --btn-radius: 100px; /* Pill shape */
 }
@@ -344,7 +346,7 @@ button {
 #study-screen.active {
     /* Grid Layout */
     display: grid !important;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr;
     gap: 10px;
 }
 
@@ -372,10 +374,10 @@ button {
 
 .flashcard {
     width: 100%;
-    max-width: var(--card-width);
+    max-width: var(--max-card-width);
     height: 100%;
-    max-height: var(--card-height);
-    aspect-ratio: 2/3;
+    /* Removed fixed max-height to fill grid */
+    /* aspect-ratio: 2/3; */
     position: relative;
     cursor: pointer;
     transform-style: preserve-3d;
@@ -436,6 +438,14 @@ button {
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     
     font-family: var(--font-heading);
+    
+    /* Text Overflow - Scrolling */
+    overflow-y: auto;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+    /* Space for floating buttons at bottom */
+    padding: 24px 24px 90px 24px;
 }
 
 .card-front {
@@ -491,11 +501,19 @@ button {
 
 /* Closer to center for one-handed use */
 .btn-nav-left {
-    left: calc(50% - 5rem); /* Center gap */
+    left: calc(50% - 7rem); /* 7rem spacing for center button */
 }
 
 .btn-nav-right {
-    right: calc(50% - 5rem); /* Center gap */
+    right: calc(50% - 7rem); /* 7rem spacing for center button */
+}
+
+.btn-nav-center {
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 59, 48, 0.2); /* Red tint for exit */
+    color: #ff3b30;
+    border-color: rgba(255, 59, 48, 0.3);
 }
 
 /* Disabled state */
@@ -505,27 +523,9 @@ button {
     filter: grayscale(100%);
 }
 
+/* Exit button default styling override */
 #exit-study-mode {
-    width: 100%;
-    background: transparent;
-    border: 1px solid var(--card-border);
-    color: rgba(255, 255, 255, 0.6);
-    padding: 16px;
-    border-radius: var(--btn-radius);
-    font-family: var(--font-heading);
-    font-size: 16px;
-    margin-top: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-#exit-study-mode i {
-    font-size: 20px;
-}
-#exit-study-mode:active {
-    background: rgba(255,255,255,0.05);
-    color: var(--text-color);
+    /* Reset block styles if needed, handled by classes now */
 }
 
 /* Modals */
