@@ -4,8 +4,8 @@
     /* Core Theme */
     --bg-color: #0e100f;
     --text-color: #ffffff;
-    --accent-color: #8b5cf6; /* Premium Violet */
-    --accent-glow: rgba(139, 92, 246, 0.4);
+    --accent-color: #00ff88; /* Premium Green */
+    --accent-glow: rgba(0, 255, 136, 0.4);
     --secondary-bg: rgba(255, 255, 255, 0.1);
     --card-surface: rgba(255, 255, 255, 0.05);
     --card-border: rgba(255, 255, 255, 0.1);

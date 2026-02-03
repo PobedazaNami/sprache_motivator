@@ -12,7 +12,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_13">
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_15">
 </head>
 <body>
     <div id="app">
@@ -98,24 +98,17 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Floating Navigation Buttons -->
+                <button id="prev-card" class="btn-nav-floating btn-nav-left" disabled>
+                    <i class="ph ph-caret-left"></i>
+                </button>
+                <button id="next-card" class="btn-nav-floating btn-nav-right">
+                    <i class="ph ph-caret-right"></i>
+                </button>
             </div>
             
-            <!-- div id="card-example-below" class="example" style="display:none;"></div -->
-            
             <div class="study-footer">
-                <div class="card-navigation">
-                    <!-- Check JS for id references; minimalist icons -->
-                    <button id="prev-card" class="btn-nav-icon" disabled>
-                        <i class="ph ph-caret-left"></i>
-                        <span id="prev-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
-                    </button>
-                    <button id="next-card" class="btn-nav-icon">
-                        <i class="ph ph-caret-right"></i>
-                        <span id="next-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
-                    </button>
-                </div>
-                
-                <!-- New exit button -->
                 <button id="exit-study-mode" class="btn-full-width"><i class="ph ph-arrow-u-up-left"></i> Вернуться к набору</button>
             </div>
         </div>
@@ -201,6 +194,6 @@
         </div>
 
     </div>
-    <script src="/static/js/flashcards.js?v=20260203_13"></script>
+    <script src="/static/js/flashcards.js?v=20260203_14"></script>
 </body>
 </html>
