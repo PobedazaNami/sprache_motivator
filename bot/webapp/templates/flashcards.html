@@ -11,7 +11,8 @@
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_1">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_4">
 </head>
 <body>
     <div id="app">
@@ -24,16 +25,16 @@
         <!-- Sets list screen -->
         <div id="sets-screen" class="screen">
             <div class="header">
-                <h1 id="sets-title">📚 Мои наборы</h1>
+                <h1 id="sets-title"><i class="ph ph-books"></i> Мои наборы</h1>
                 <button id="create-set-btn" class="btn-primary">
-                    <span>+</span> <span id="create-set-text">Создать набор</span>
+                    <i class="ph ph-plus-circle"></i> <span id="create-set-text">Создать набор</span>
                 </button>
             </div>
             <div id="sets-list" class="sets-list">
                 <!-- Sets will be rendered here -->
             </div>
             <div id="no-sets" class="empty-state" style="display: none;">
-                <div class="empty-icon">📝</div>
+                <div class="empty-icon"><i class="ph ph-pencil-slash"></i></div>
                 <p id="no-sets-text">У вас пока нет наборов карточек</p>
                 <p id="no-sets-hint">Создайте первый набор для изучения слов!</p>
             </div>
@@ -42,25 +43,25 @@
         <!-- Set detail screen -->
         <div id="set-screen" class="screen">
             <div class="header">
-                <button id="back-to-sets" class="btn-back">←</button>
+                <button id="back-to-sets" class="btn-back"><i class="ph ph-arrow-left"></i></button>
                 <div class="set-title">
                     <h1 id="set-name"></h1>
-                    <button id="edit-set-btn" class="btn-icon" type="button" title="Edit">✏️</button>
+                    <button id="edit-set-btn" class="btn-icon" type="button" title="Edit"><i class="ph ph-pencil-simple"></i></button>
                 </div>
             </div>
             <div class="set-actions">
                 <button id="study-btn" class="btn-primary btn-large">
-                    <span>📖</span> <span id="study-text">Изучать</span>
+                    <i class="ph ph-student"></i> <span id="study-text">Изучать</span>
                 </button>
                 <button id="add-card-btn" class="btn-secondary">
-                    <span>+</span> <span id="add-card-text">Добавить карточку</span>
+                    <i class="ph ph-plus"></i> <span id="add-card-text">Добавить карточку</span>
                 </button>
             </div>
             <div id="cards-preview" class="cards-preview">
                 <!-- Cards preview will be rendered here -->
             </div>
             <button id="delete-set-btn" class="btn-danger">
-                <span id="delete-set-text">🗑 Удалить набор</span>
+                <span id="delete-set-text"><i class="ph ph-trash"></i> Удалить набор</span>
             </button>
         </div>
 
@@ -68,12 +69,12 @@
         <div id="study-screen" class="screen">
             <div class="header">
                 <!-- Use back-to-set button as a fallback, but primary exit is the bottom button -->
-                <button id="back-to-set" class="btn-back" style="opacity: 0; pointer-events: none;">←</button>
+                <button id="back-to-set" class="btn-back" style="opacity: 0; pointer-events: none;"><i class="ph ph-arrow-left"></i></button>
                 <div class="progress-info">
                     <span id="card-counter">1/10</span>
                 </div>
-                <button id="shuffle-cards" class="btn-icon-only" type="button" title="Shuffle">🔀</button>
-                <button id="toggle-reverse" class="btn-icon-only" type="button" title="Reverse">↔</button>
+                <button id="shuffle-cards" class="btn-icon-only" type="button" title="Shuffle"><i class="ph ph-shuffle"></i></button>
+                <button id="toggle-reverse" class="btn-icon-only" type="button" title="Reverse"><i class="ph ph-arrows-left-right"></i></button>
             </div>
             
             <div class="card-container">
@@ -94,17 +95,17 @@
             <div class="card-navigation">
                 <!-- Check JS for id references; minimalist icons -->
                 <button id="prev-card" class="btn-nav-icon" disabled>
-                    ←
+                    <i class="ph ph-caret-left"></i>
                     <span id="prev-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
                 </button>
                 <button id="next-card" class="btn-nav-icon">
-                    →
+                    <i class="ph ph-caret-right"></i>
                     <span id="next-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
                 </button>
             </div>
             
             <!-- New exit button -->
-            <button id="exit-study-mode" class="btn-full-width">← Вернуться к набору</button>
+            <button id="exit-study-mode" class="btn-full-width"><i class="ph ph-arrow-u-up-left"></i> Вернуться к набору</button>
         </div>
 
         <!-- Create set modal -->
@@ -188,6 +189,6 @@
         </div>
 
     </div>
-    <script src="/static/js/flashcards.js?v=20260203_1"></script>
+    <script src="/static/js/flashcards.js?v=20260203_4"></script>
 </body>
 </html>

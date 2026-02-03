@@ -224,7 +224,7 @@ function renderSets() {
                 <h3>${escapeHtml(set.name)}</h3>
                 <p>${set.card_count || 0} ${t('cards')}</p>
             </div>
-            <span class="set-arrow">›</span>
+            <span class="set-arrow"><i class="ph ph-caret-right"></i></span>
         </div>
     `).join('');
     
@@ -251,8 +251,8 @@ function renderCards() {
                 <span class="back"> — ${escapeHtml(card.back)}</span>
             </div>
             <div class="card-preview-actions">
-                <button class="edit-card btn-icon" data-card-id="${card._id}" title="${t('flashcards_edit_card')}">✏️</button>
-                <button class="delete-card btn-icon" data-card-id="${card._id}" title="${t('delete')}">🗑</button>
+                <button class="edit-card btn-icon" data-card-id="${card._id}" title="${t('flashcards_edit_card')}"><i class="ph ph-pencil-simple"></i></button>
+                <button class="delete-card btn-icon" data-card-id="${card._id}" title="${t('delete')}"><i class="ph ph-trash"></i></button>
             </div>
         </div>
     `).join('');
