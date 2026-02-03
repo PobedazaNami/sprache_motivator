@@ -53,7 +53,9 @@ const TEXTS = {
         errorEditCard: 'Помилка редагування картки',
         validationEnterName: 'Будь ласка, введіть назву',
         validationFillBothFields: 'Будь ласка, заповніть обидва поля',
-        flashcards_rename_set: 'Перейменувати набір'
+        flashcards_rename_set: 'Перейменувати набір',
+        deleteCardTitle: 'Видалити картку?',
+        deleteCardWarning: 'Ви впевнені, що хочете видалити цю картку?'
     },
     ru: {
         loading: 'Загрузка...',
@@ -95,7 +97,9 @@ const TEXTS = {
         errorEditCard: 'Ошибка редактирования карточки',
         validationEnterName: 'Пожалуйста, введите название',
         validationFillBothFields: 'Пожалуйста, заполните оба поля',
-        flashcards_rename_set: 'Переименовать набор'
+        flashcards_rename_set: 'Переименовать набор',
+        deleteCardTitle: 'Удалить карточку?',
+        deleteCardWarning: 'Вы уверены, что хотите удалить эту карточку?'
     }
 };
 
@@ -103,6 +107,7 @@ const TEXTS = {
 let state = {
     userId: null,
     lang: 'ru',
+    pendingDelete: null,
     sets: [],
     currentSet: null,
     currentCards: [],
@@ -259,7 +264,7 @@ function renderCards() {
     
     // Reattach listeners
     cardsPreview.querySelectorAll('.edit-card').forEach(btn => {
-        btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.cardId); });
+        btn.addEventListener('click', (e) => { e.stopPropagation(); confirmD(btn.dataset.cardId); });
     });
     cardsPreview.querySelectorAll('.delete-card').forEach(btn => {
         btn.addEventListener('click', async (e) => { e.stopPropagation(); await deleteCard(btn.dataset.cardId); });
@@ -344,6 +349,39 @@ async function handleDeleteSet() {
         showScreen('sets-screen');
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) { tg.showAlert(t('errorDeleteSet')); }
+}
+
+function confirmDeleteSet() {
+    state.pendingDelete = { type: 'set' };
+    document.getElementById('delete-title').textContent = t('deleteTitle');
+    document.getElementById('delete-warning').textContent = t('deleteWarning');
+    showModal('delete-modal');
+}
+
+function confirmDeleteCard(cardId) {
+    state.pendingDelete = { type: 'card', id: cardId };
+    document.getElementById('delete-title').textContent = t('deleteCardTitle');
+    document.getElementById('delete-warning').textContent = t('deleteCardWarning');
+    showModal('delete-modal');
+}
+
+async function executeDelete() {
+    if (!state.pendingDelete) return;
+    
+    if (state.pendingDelete.type === 'set') {
+        await handleDeleteSet();
+    } else if (state.pendingDelete.type === 'card') {
+        const cardId = state.pendingDelete.id;
+        try {
+            await deleteCardApi(state.currentSet._id, cardId);
+            hideModal('delete-modal');
+            const data = await fetchCards(state.currentSet._id);
+            state.currentCards = data.cards || [];
+            renderCards();
+            tg.HapticFeedback.notificationOccurred('success');
+        } catch (error) { tg.showAlert(t('errorDeleteCard')); }
+    }
+    state.pendingDelete = null;
 }
 
 function openRenameSetModal() {
@@ -562,9 +600,9 @@ function shuffleStudyCards() {
         scale: 0.5, 
         opacity: 0, 
         duration: 0.5, 
-        onComplete: () => {
-             shuffleArrayInPlace(state.currentCards);
-             state.currentCardIndex = 0;
+        onComplete: () => {confirmDeleteSet);
+document.getElementById('cancel-delete').addEventListener('click', () => hideModal('delete-modal'));
+document.getElementById('confirm-delete').addEventListener('click', executeDelete
              state.isFlipped = false;
              renderStudyCard();
              

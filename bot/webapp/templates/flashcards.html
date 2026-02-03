@@ -12,7 +12,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_16">
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_18">
 </head>
 <body>
     <div id="app">
@@ -42,12 +42,13 @@
 
         <!-- Set detail screen -->
         <div id="set-screen" class="screen">
-            <div class="header">
-                <button id="back-to-sets" class="btn-back"><i class="ph ph-arrow-left"></i></button>
-                <div class="set-title">
-                    <h1 id="set-name"></h1>
-                    <button id="edit-set-btn" class="btn-icon" type="button" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+            <div class="header set-header">
+                <button id="back-to-sets" class="btn-nav-small"><i class="ph ph-arrow-left"></i></button>
+                <div class="set-title-container" id="set-name-trigger">
+                    <h1 id="set-name" title="Нажми, чтобы изменить"></h1>
+                    <i class="ph ph-pencil-simple-slash edit-indicator"></i>
                 </div>
+                <div style="width: 40px;"></div> <!-- Spacer for balance if needed -->
             </div>
             <div class="set-actions">
                 <button id="study-btn" class="btn-primary btn-large">
