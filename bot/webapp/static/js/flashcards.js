@@ -600,9 +600,9 @@ function shuffleStudyCards() {
         scale: 0.5, 
         opacity: 0, 
         duration: 0.5, 
-        onComplete: () => {confirmDeleteSet);
-document.getElementById('cancel-delete').addEventListener('click', () => hideModal('delete-modal'));
-document.getElementById('confirm-delete').addEventListener('click', executeDelete
+        onComplete: () => {
+             shuffleArrayInPlace(state.currentCards);
+             state.currentCardIndex = 0;
              state.isFlipped = false;
              renderStudyCard();
              
@@ -633,10 +633,14 @@ document.getElementById('cancel-add-card').addEventListener('click', () => hideM
 document.getElementById('confirm-add-card').addEventListener('click', handleAddCard);
 document.getElementById('cancel-edit-card').addEventListener('click', () => { state.editCardId = null; hideModal('edit-card-modal'); });
 document.getElementById('confirm-edit-card').addEventListener('click', handleEditCard);
-document.getElementById('delete-set-btn').addEventListener('click', () => showModal('delete-modal'));
+
+// Delete handlers (Sets & Cards)
+document.getElementById('delete-set-btn').addEventListener('click', confirmDeleteSet);
 document.getElementById('cancel-delete').addEventListener('click', () => hideModal('delete-modal'));
-document.getElementById('confirm-delete').addEventListener('click', handleDeleteSet);
-document.getElementById('edit-set-btn').addEventListener('click', openRenameSetModal);
+document.getElementById('confirm-delete').addEventListener('click', executeDelete);
+
+// Rename Set
+document.getElementById('set-name-trigger').addEventListener('click', openRenameSetModal);
 document.getElementById('cancel-rename-set').addEventListener('click', () => hideModal('rename-set-modal'));
 document.getElementById('confirm-rename-set').addEventListener('click', handleRenameSet);
 
