@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flashcards</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20251226_5">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_1">
 </head>
 <body>
     <div id="app">
@@ -61,13 +67,15 @@
         <!-- Study screen -->
         <div id="study-screen" class="screen">
             <div class="header">
-                <button id="back-to-set" class="btn-back">←</button>
+                <!-- Use back-to-set button as a fallback, but primary exit is the bottom button -->
+                <button id="back-to-set" class="btn-back" style="opacity: 0; pointer-events: none;">←</button>
                 <div class="progress-info">
                     <span id="card-counter">1/10</span>
                 </div>
                 <button id="shuffle-cards" class="btn-icon-only" type="button" title="Shuffle">🔀</button>
                 <button id="toggle-reverse" class="btn-icon-only" type="button" title="Reverse">↔</button>
             </div>
+            
             <div class="card-container">
                 <div id="flashcard" class="flashcard">
                     <div class="card-inner">
@@ -80,11 +88,23 @@
                     </div>
                 </div>
             </div>
+            
             <div id="card-example-below" class="example" style="display:none;"></div>
+            
             <div class="card-navigation">
-                <button id="prev-card" class="btn-nav" disabled>← <span id="prev-text">Назад</span></button>
-                <button id="next-card" class="btn-nav"><span id="next-text">Далее</span> →</button>
+                <!-- Check JS for id references; minimalist icons -->
+                <button id="prev-card" class="btn-nav-icon" disabled>
+                    ←
+                    <span id="prev-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
+                </button>
+                <button id="next-card" class="btn-nav-icon">
+                    →
+                    <span id="next-text" style="display:none"></span> <!-- Hidden for JS compatibility -->
+                </button>
             </div>
+            
+            <!-- New exit button -->
+            <button id="exit-study-mode" class="btn-full-width">← Вернуться к набору</button>
         </div>
 
         <!-- Create set modal -->
@@ -109,8 +129,12 @@
                 <h2 id="modal-rename-set-title">Переименовать набор</h2>
                 <input type="text" id="rename-set-input" placeholder="Название набора" maxlength="50">
                 <div class="modal-actions">
-                    <button id="cancel-rename-set" class="btn-secondary" type="button">Отмена</button>
-                    <button id="confirm-rename-set" class="btn-primary" type="button">Сохранить</button>
+                    <button id="cancel-rename-set" class="btn-secondary" type="button">
+                        <span id="cancel-text-rename">Отмена</span>
+                    </button>
+                    <button id="confirm-rename-set" class="btn-primary" type="button">
+                        <span id="save-text-rename">Сохранить</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -119,9 +143,9 @@
         <div id="add-card-modal" class="modal">
             <div class="modal-content">
                 <h2 id="modal-add-card-title">Добавить карточку</h2>
-                <textarea id="card-front-input" placeholder="Лицевая сторона (слово)" maxlength="200"></textarea>
-                <textarea id="card-back-input" placeholder="Обратная сторона (перевод)" maxlength="200"></textarea>
-                <textarea id="card-example-input" placeholder="Пример предложения" maxlength="300"></textarea>
+                <textarea id="card-front-input" placeholder="Лицевая сторона (слово)" rows="2"></textarea>
+                <textarea id="card-back-input" placeholder="Обратная сторона (перевод)" rows="2"></textarea>
+                <textarea id="card-example-input" placeholder="Пример предложения" rows="2"></textarea>
                 <div class="modal-actions">
                     <button id="cancel-add-card" class="btn-secondary" type="button">
                         <span id="cancel-add-text">Отмена</span>
@@ -132,21 +156,21 @@
                 </div>
             </div>
         </div>
-
+        
         <!-- Edit card modal -->
         <div id="edit-card-modal" class="modal">
-            <div class="modal-content">
+             <div class="modal-content">
                 <h2 id="modal-edit-card-title">Редактировать карточку</h2>
-                <textarea id="card-front-edit" placeholder="Лицевая сторона (слово)" maxlength="200"></textarea>
-                <textarea id="card-back-edit" placeholder="Обратная сторона (перевод)" maxlength="200"></textarea>
-                <textarea id="card-example-edit" placeholder="Пример предложения" maxlength="300"></textarea>
+                <textarea id="card-front-edit" placeholder="Лицевая сторона (слово)" rows="2"></textarea>
+                <textarea id="card-back-edit" placeholder="Обратная сторона (перевод)" rows="2"></textarea>
+                <textarea id="card-example-edit" placeholder="Пример предложения" rows="2"></textarea>
                 <div class="modal-actions">
                     <button id="cancel-edit-card" class="btn-secondary" type="button">Отмена</button>
                     <button id="confirm-edit-card" class="btn-primary" type="button">Сохранить</button>
                 </div>
             </div>
         </div>
-
+        
         <!-- Delete confirmation modal -->
         <div id="delete-modal" class="modal">
             <div class="modal-content">
@@ -162,8 +186,8 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <script src="/static/js/flashcards.js?v=20251226_5"></script>
+    </div>
+    <script src="/static/js/flashcards.js?v=20260203_1"></script>
 </body>
 </html>
