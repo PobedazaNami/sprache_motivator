@@ -233,8 +233,10 @@ button {
     height: 100dvh; /* Dynamic viewport height for mobile */
     overflow: hidden;
     padding-bottom: 20px;
+}
+#study-screen.active {
     /* Grid Layout */
-    display: grid !important; /* Force grid over flex */
+    display: grid !important;
     grid-template-rows: auto 1fr auto;
     gap: 10px;
 }
