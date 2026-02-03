@@ -21,6 +21,23 @@
     --btn-radius: 100px; /* Pill shape */
 }
 
+/* Specific media query for smaller/shorter screens to prevent scroll */
+@media (max-height: 750px) {
+    :root {
+        --card-height: 380px;
+        --card-width: 260px;
+    }
+    #study-screen {
+        gap: 8px;
+    }
+}
+@media (max-height: 600px) {
+    :root {
+        --card-height: 300px;
+        --card-width: 220px;
+    }
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -213,9 +230,20 @@ button {
 
 /* Study Screen Specifics */
 #study-screen {
-    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile */
     overflow: hidden;
-    padding-bottom: 30px; 
+    padding-bottom: 20px;
+    /* Grid Layout */
+    display: grid !important; /* Force grid over flex */
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+}
+
+.study-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
 }
 
 .card-container {
@@ -223,13 +251,22 @@ button {
     display: flex;
     justify-content: center;
     align-items: center;
-    flex: 1;
-    margin: 20px 0;
+    /* Reset margins as Grid handles spacing */
+    margin: 0;
+    width: 100%;
+    position: relative;
+    /* Ensure it doesn't overflow its grid cell */
+    min-height: 0; 
+    overflow: visible; /* Important for 3D effect not to be clipped */
+    padding: 10px 0; /* Add small breathing room */
 }
 
 .flashcard {
-    width: var(--card-width);
-    height: var(--card-height);
+    width: 100%;
+    max-width: var(--card-width);
+    height: 100%;
+    max-height: var(--card-height);
+    aspect-ratio: 2/3; /* Maintain card shape when scaling down */
     position: relative;
     cursor: pointer;
     transform-style: preserve-3d;
@@ -298,7 +335,7 @@ button {
     display: flex;
     justify-content: center;
     gap: 40px;
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
 .btn-nav-icon {
@@ -330,7 +367,7 @@ button {
     border-radius: var(--btn-radius);
     font-family: var(--font-heading);
     font-size: 16px;
-    margin-top: auto;
+    margin-top: 0;
     display: flex;
     align-items: center;
     justify-content: center;
