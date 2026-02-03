@@ -274,36 +274,11 @@ function renderStudyCard() {
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
-    // Example handling - Inside card front
-    const exampleEl = document.getElementById('card-front-example');
+    // Example handling - On back side
+    const exampleEl = document.getElementById('card-back-example');
     if (exampleEl) {
-        // Only show example on the "real" front side (when not reversed), 
-        // or decide if example belongs to the source language word.
-        // Usually example is for the `card.front` word.
-        // If state.studyReversed is true, frontText is card.back (translation).
-        // If we want example to always be with the "Question", we show it.
-        // But user said: "example to word in card... always display on front side".
-        // Assuming example corresponds to `card.front`.
-        
-        let shouldShow = false;
         if (card.example) {
-            // If studyReversed is false (Normal mode: Front -> Back), show example on Front? Yes.
-            // If studyReversed is true (Reverse mode: Back -> Front), show example where?
-            // "Always on front side" implies the visible side before flipping.
-            
-            // However, usually example is tied to the source word.
-            // If I see "Dog" (Front), example "I have a dog".
-            // If I see "Собака" (Back as Front), example "I have a dog" gives away the answer?
-            // User request: "always only display on front side".
-            
-            // Let's implement literally: Show on the DOM element .card-front.
             exampleEl.textContent = card.example;
-            if (state.studyReversed && card.example) {
-                 // If reversed, the question is the translation. 
-                 // Showing the example in original language might give a hint.
-                 // But user asked to show it.
-                 // Let's keep it simple: Show it.
-            }
             exampleEl.style.display = 'block';
         } else {
             exampleEl.style.display = 'none';
@@ -474,7 +449,7 @@ function nextCard() {
         gsap.to('#flashcard', { 
             x: -window.innerWidth, 
             rotation: -20, 
-            duration: 0.5, 
+            duration: 0.35, 
             ease: "power2.in",
             onComplete: () => {
                 // Update State and DOM
@@ -482,15 +457,13 @@ function nextCard() {
                 state.isFlipped = false;
                 renderStudyCard();
                 
-                // Immediately reset position for entrance but keep it hidden/offscreen if needed?
-                // Actually start from opposite side for swipe effect
                 gsap.set('#flashcard', { x: window.innerWidth, rotation: 20 });
                 
                 // Animate In
                 gsap.to('#flashcard', { 
                     x: 0, 
                     rotation: 0, 
-                    duration: 0.8, 
+                    duration: 0.5, 
                     ease: "power3.out" 
                 });
             }
@@ -505,7 +478,7 @@ function prevCard() {
         gsap.to('#flashcard', { 
             x: window.innerWidth, 
             rotation: 20, 
-            duration: 0.5, 
+            duration: 0.35, 
             ease: "power2.in",
             onComplete: () => {
                 state.currentCardIndex--;
@@ -518,7 +491,7 @@ function prevCard() {
                 gsap.to('#flashcard', { 
                     x: 0, 
                     rotation: 0, 
-                    duration: 0.8, 
+                    duration: 0.5, 
                     ease: "power3.out" 
                 });
             }
@@ -531,16 +504,12 @@ function flipCard() {
     // Toggle state
     state.isFlipped = !state.isFlipped;
     
-    // GSAP Flip
-    // Front is 0deg, Back is 180deg (implied by design). 
-    // We add 180 or set to specific depending on state.
-    // If we want simple toggle:
     const targetRotation = state.isFlipped ? 180 : 0;
     
     gsap.to('#flashcard .card-inner', { 
         rotationY: targetRotation, 
-        duration: 1.2, 
-        ease: "elastic.out(1, 0.75)" 
+        duration: 0.5, 
+        ease: "back.out(1.5)" 
     });
     
     tg.HapticFeedback.impactOccurred('light');
