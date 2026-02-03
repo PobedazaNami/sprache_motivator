@@ -4,8 +4,8 @@
     /* Core Theme */
     --bg-color: #0e100f;
     --text-color: #ffffff;
-    --accent-color: #00ff88; /* Premium Green */
-    --accent-glow: rgba(0, 255, 136, 0.4);
+    --accent-color: #10b981; /* Emerald Green - More Readable */
+    --accent-glow: rgba(16, 185, 129, 0.4);
     --secondary-bg: rgba(255, 255, 255, 0.1);
     --card-surface: rgba(255, 255, 255, 0.05);
     --card-border: rgba(255, 255, 255, 0.1);
@@ -14,18 +14,18 @@
     --font-heading: 'Space Grotesk', sans-serif;
     --font-body: 'Inter', sans-serif;
     
-    /* Layout */
-    --card-width: 300px;
-    --card-height: 450px;
-    --border-radius: 20px;
+    /* Layout - INCREASED SIZES */
+    --card-width: 320px;
+    --card-height: 520px;
+    --border-radius: 24px;
     --btn-radius: 100px; /* Pill shape */
 }
 
-/* Specific media query for smaller/shorter screens to prevent scroll */
+/* Specific media query for smaller/shorter screens */
 @media (max-height: 750px) {
     :root {
-        --card-height: 380px;
-        --card-width: 260px;
+        --card-height: 440px;
+        --card-width: 280px;
     }
     #study-screen {
         gap: 8px;
@@ -33,8 +33,8 @@
 }
 @media (max-height: 600px) {
     :root {
-        --card-height: 300px;
-        --card-width: 220px;
+        --card-height: 340px;
+        --card-width: 240px;
     }
 }
 

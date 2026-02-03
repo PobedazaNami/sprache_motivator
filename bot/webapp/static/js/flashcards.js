@@ -640,16 +640,53 @@ document.getElementById('flashcard').addEventListener('touchend', (e) => {
     }
 }, { passive: true });
 
+// GSAP Button Animations
+function initButtonAnimations() {
+    const btns = document.querySelectorAll('.btn-nav-floating, .btn-full-width, .icon-btn');
+    btns.forEach(btn => {
+        // Hover
+        btn.addEventListener('mouseenter', () => {
+            if (!btn.disabled) {
+                gsap.to(btn, { scale: 1.05, duration: 0.3, ease: 'back.out(1.7)' });
+                // Add glow if it's a floating button
+                if (btn.classList.contains('btn-nav-floating')) {
+                    gsap.to(btn, { boxShadow: "0 0 20px var(--accent-color)", borderColor: "var(--accent-color)", color: "#fff", duration: 0.3 });
+                }
+            }
+        });
+        
+        // Hover out
+        btn.addEventListener('mouseleave', () => {
+            gsap.to(btn, { scale: 1, duration: 0.3, ease: 'power2.out' });
+             if (btn.classList.contains('btn-nav-floating')) {
+                gsap.to(btn, { boxShadow: "0 4px 20px rgba(0,0,0,0.4)", borderColor: "rgba(255,255,255,0.1)", color: "var(--accent-color)", duration: 0.3 });
+            }
+        });
+        
+        // Click press
+        btn.addEventListener('mousedown', () => {
+            if (!btn.disabled) gsap.to(btn, { scale: 0.95, duration: 0.1 });
+        });
+        
+        // Click release
+        btn.addEventListener('mouseup', () => {
+            if (!btn.disabled) gsap.to(btn, { scale: 1.05, duration: 0.4, ease: 'elastic.out(1, 0.3)' });
+        });
+    });
+}
+
 // Initialize app
 async function init() {
     try {
         state.lang = await fetchUserLang();
         applyLocalization();
         await loadSets();
+        initButtonAnimations(); // Initialize animations
         showScreen('sets-screen');
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.remove();
     } catch (error) {
+        console.error(error);
         applyLocalization();
         showScreen('sets-screen');
         const loadingEl = document.getElementById('loading');
