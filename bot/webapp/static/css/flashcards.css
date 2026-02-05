@@ -629,24 +629,24 @@ input:focus, textarea:focus {
 .timer-display {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     background: rgba(16, 185, 129, 0.12);
     border: 1px solid rgba(16, 185, 129, 0.45);
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 10px 16px;
+    border-radius: 24px;
     cursor: pointer;
     transition: all 0.25s ease;
     font-family: var(--font-heading);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--accent-color);
     user-select: none;
-    min-width: 76px;
-    height: 32px;
+    min-width: 92px;
+    height: 40px;
 }
 
 .timer-display i {
-    font-size: 16px;
+    font-size: 18px;
 }
 
 .timer-display:hover {
@@ -706,18 +706,18 @@ input:focus, textarea:focus {
 .timer-setup-inner {
     background: #1a1c1b;
     border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 12px 16px;
+    border-radius: 18px;
+    padding: 14px 16px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     white-space: nowrap;
 }
 
 .timer-label {
     font-family: var(--font-heading);
-    font-size: 13px;
+    font-size: 14px;
     color: rgba(255, 255, 255, 0.5);
     display: flex;
     align-items: center;
@@ -725,14 +725,14 @@ input:focus, textarea:focus {
 }
 
 .timer-label i {
-    font-size: 16px;
+    font-size: 18px;
     color: var(--accent-color);
 }
 
 .timer-range {
     -webkit-appearance: none;
     appearance: none;
-    width: 100px;
+    width: 140px;
     height: 4px;
     background: var(--card-border);
     border-radius: 2px;
@@ -743,8 +743,8 @@ input:focus, textarea:focus {
 .timer-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--accent-color);
     cursor: pointer;
@@ -753,8 +753,8 @@ input:focus, textarea:focus {
 }
 
 .timer-range::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--accent-color);
     cursor: pointer;
@@ -764,16 +764,16 @@ input:focus, textarea:focus {
 
 .timer-range-value {
     font-family: var(--font-heading);
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
     color: var(--accent-color);
-    min-width: 24px;
+    min-width: 28px;
     text-align: center;
 }
 
 .timer-start-btn {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     background: var(--accent-color);
     color: #fff;
@@ -781,7 +781,7 @@ input:focus, textarea:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 18px;
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
@@ -793,8 +793,8 @@ input:focus, textarea:focus {
 }
 
 .timer-close-btn {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.4);
@@ -802,7 +802,7 @@ input:focus, textarea:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
