@@ -178,6 +178,8 @@ h1, h2, h3 {
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     margin-bottom: 16px;
+    position: relative;
+    z-index: 60;
 }
 
 .header-left {
@@ -370,6 +372,7 @@ button {
     margin: 0;
     width: 100%;
     position: relative;
+    z-index: 1;
     /* Ensure it doesn't overflow its grid cell */
     min-height: 0; 
     overflow: visible; /* Important for 3D effect not to be clipped */
@@ -620,6 +623,7 @@ input:focus, textarea:focus {
     top: 12px;
     left: 12px;
     z-index: 50;
+    pointer-events: auto;
 }
 
 .timer-display {
