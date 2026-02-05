@@ -609,3 +609,193 @@ input:focus, textarea:focus {
     display: flex;
     gap: 8px;
 }
+
+/* ========== Study Timer ========== */
+.study-timer {
+    position: relative;
+}
+
+.timer-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card-surface);
+    border: 1px solid var(--card-border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    user-select: none;
+}
+
+.timer-display i {
+    font-size: 16px;
+}
+
+.timer-display:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.timer-display.timer-active {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    box-shadow: 0 0 12px var(--accent-glow);
+    animation: timerPulse 2s ease-in-out infinite;
+}
+
+.timer-display.timer-warning {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+    animation: timerPulse 1s ease-in-out infinite;
+}
+
+.timer-display.timer-danger {
+    border-color: #ff3b30;
+    color: #ff3b30;
+    box-shadow: 0 0 12px rgba(255, 59, 48, 0.4);
+    animation: timerPulse 0.5s ease-in-out infinite;
+}
+
+.timer-display.timer-done {
+    border-color: #ff3b30;
+    color: #ff3b30;
+    background: rgba(255, 59, 48, 0.15);
+    box-shadow: 0 0 20px rgba(255, 59, 48, 0.5);
+    animation: timerFlash 0.6s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+@keyframes timerFlash {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+/* Timer Setup Dropdown */
+.timer-setup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    z-index: 200;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.timer-setup-inner {
+    background: #1a1c1b;
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+}
+
+.timer-label {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.timer-label i {
+    font-size: 16px;
+    color: var(--accent-color);
+}
+
+.timer-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 4px;
+    background: var(--card-border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.timer-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--accent-glow);
+    border: 2px solid #fff;
+}
+
+.timer-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--accent-glow);
+    border: 2px solid #fff;
+}
+
+.timer-range-value {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent-color);
+    min-width: 24px;
+    text-align: center;
+}
+
+.timer-start-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    color: #fff;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.timer-start-btn:hover {
+    box-shadow: 0 0 12px var(--accent-glow);
+    transform: scale(1.1);
+}
+
+.timer-close-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.timer-close-btn:hover {
+    color: #ff3b30;
+    border-color: #ff3b30;
+}

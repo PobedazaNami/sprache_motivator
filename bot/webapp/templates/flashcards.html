@@ -12,7 +12,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260203_18">
+    <link rel="stylesheet" href="/static/css/flashcards.css?v=20260205_01">
 </head>
 <body>
     <div id="app">
@@ -71,6 +71,23 @@
             <div class="header study-header">
                 <div class="header-left">
                     <button id="back-to-set" class="btn-back" style="opacity: 0; pointer-events: none;"><i class="ph ph-arrow-left"></i></button>
+                    <!-- Study Timer -->
+                    <div id="study-timer" class="study-timer">
+                        <div id="timer-display" class="timer-display" title="Нажмите чтобы установить таймер">
+                            <i class="ph ph-timer"></i>
+                            <span id="timer-text">00:00</span>
+                        </div>
+                    </div>
+                    <!-- Timer Setup Modal -->
+                    <div id="timer-setup" class="timer-setup" style="display:none;">
+                        <div class="timer-setup-inner">
+                            <label class="timer-label"><i class="ph ph-clock-countdown"></i> мин</label>
+                            <input type="range" id="timer-range" class="timer-range" min="1" max="60" value="5">
+                            <span id="timer-range-value" class="timer-range-value">5</span>
+                            <button id="timer-start-btn" class="timer-start-btn"><i class="ph ph-play"></i></button>
+                            <button id="timer-close-btn" class="timer-close-btn"><i class="ph ph-x"></i></button>
+                        </div>
+                    </div>
                 </div>
                 <div class="header-center">
                     <div class="progress-badge">
@@ -196,6 +213,6 @@
         </div>
 
     </div>
-    <script src="/static/js/flashcards.js?v=20260203_14"></script>
+    <script src="/static/js/flashcards.js?v=20260205_01"></script>
 </body>
 </html>

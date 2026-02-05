@@ -465,6 +465,131 @@ async function handleEditCard() {
 }
 
 // ------------------------------------
+// STUDY TIMER LOGIC
+// ------------------------------------
+
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+
+function initTimer() {
+    const display = document.getElementById('timer-display');
+    const setup = document.getElementById('timer-setup');
+    const range = document.getElementById('timer-range');
+    const rangeValue = document.getElementById('timer-range-value');
+    const startBtn = document.getElementById('timer-start-btn');
+    const closeBtn = document.getElementById('timer-close-btn');
+
+    // Toggle setup panel on click
+    display.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (timerRunning) {
+            // If timer is running, click stops it and resets
+            stopTimer();
+            return;
+        }
+        setup.style.display = setup.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // Range slider value update
+    range.addEventListener('input', () => {
+        rangeValue.textContent = range.value;
+    });
+
+    // Start timer
+    startBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const minutes = parseInt(range.value, 10);
+        startTimer(minutes);
+        setup.style.display = 'none';
+    });
+
+    // Close setup without starting
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setup.style.display = 'none';
+    });
+
+    // Close setup when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!setup.contains(e.target) && !display.contains(e.target)) {
+            setup.style.display = 'none';
+        }
+    });
+}
+
+function startTimer(minutes) {
+    stopTimer(); // clear any existing
+    timerSeconds = minutes * 60;
+    timerRunning = true;
+    updateTimerDisplay();
+    updateTimerStyle();
+
+    timerInterval = setInterval(() => {
+        timerSeconds--;
+        updateTimerDisplay();
+        updateTimerStyle();
+
+        if (timerSeconds <= 0) {
+            timerSeconds = 0;
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerRunning = false;
+            onTimerDone();
+        }
+    }, 1000);
+
+    tg.HapticFeedback.impactOccurred('light');
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    timerRunning = false;
+    timerSeconds = 0;
+    updateTimerDisplay();
+    resetTimerStyle();
+}
+
+function updateTimerDisplay() {
+    const m = Math.floor(timerSeconds / 60);
+    const s = timerSeconds % 60;
+    const text = document.getElementById('timer-text');
+    text.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function updateTimerStyle() {
+    const display = document.getElementById('timer-display');
+    display.classList.remove('timer-active', 'timer-warning', 'timer-danger', 'timer-done');
+    if (!timerRunning) return;
+    if (timerSeconds <= 10) {
+        display.classList.add('timer-danger');
+    } else if (timerSeconds <= 30) {
+        display.classList.add('timer-warning');
+    } else {
+        display.classList.add('timer-active');
+    }
+}
+
+function resetTimerStyle() {
+    const display = document.getElementById('timer-display');
+    display.classList.remove('timer-active', 'timer-warning', 'timer-danger', 'timer-done');
+}
+
+function onTimerDone() {
+    const display = document.getElementById('timer-display');
+    display.classList.add('timer-done');
+    document.getElementById('timer-text').textContent = '00:00';
+    tg.HapticFeedback.notificationOccurred('warning');
+    // Auto-remove done state after 5 seconds
+    setTimeout(() => {
+        display.classList.remove('timer-done');
+    }, 5000);
+}
+
+// ------------------------------------
 // CHANGED ANIMATION LOGIC (GSAP)
 // ------------------------------------
 
@@ -554,6 +679,10 @@ function flipCard() {
 }
 
 function exitStudyMode() {
+    // Stop and reset the timer
+    stopTimer();
+    document.getElementById('timer-setup').style.display = 'none';
+
     // Animate removal then switch screen
     gsap.to('#flashcard', {
         scale: 0.8,
@@ -724,6 +853,7 @@ async function init() {
         applyLocalization();
         await loadSets();
         initButtonAnimations(); // Initialize animations
+        initTimer(); // Initialize study timer
         showScreen('sets-screen');
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.remove();
