@@ -100,8 +100,15 @@ async def serve_flashcards_app(request: web.Request) -> web.Response:
     
     if not html_path.exists():
         raise web.HTTPNotFound(text="App not found")
-    
-    return web.FileResponse(html_path)
+
+    return web.FileResponse(
+        html_path,
+        headers={
+            "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+    )
 
 
 async def get_user_lang(request: web.Request) -> web.Response:
