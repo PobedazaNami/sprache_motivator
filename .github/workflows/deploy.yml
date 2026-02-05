@@ -101,6 +101,6 @@ jobs:
 
           # Run docker compose commands on remote host. Avoid nested bash -c to prevent parsing issues with parentheses/newlines.
           # Added: docker compose pull + docker image prune to ensure fresh images are used
-          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} 'set -euo pipefail && cd '"${DEPLOY_PATH}"' && /usr/bin/docker compose down || true && /usr/bin/docker image prune -f && /usr/bin/docker compose build --no-cache --pull bot && /usr/bin/docker compose up -d && echo "--- docker compose ps ---" && /usr/bin/docker compose ps && echo "--- bot logs (last 300 lines) ---" && /usr/bin/docker compose logs --tail=300 bot || true'
+          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} 'set -euo pipefail && cd '"${DEPLOY_PATH}"' && echo "==> Stopping containers..." && /usr/bin/docker compose down || true && echo "==> Pruning images..." && /usr/bin/docker image prune -f && echo "==> Building bot image..." && /usr/bin/docker compose build --no-cache --pull bot && echo "==> Starting containers..." && /usr/bin/docker compose up -d && echo "--- docker compose ps ---" && /usr/bin/docker compose ps && echo "--- bot logs (last 300 lines) ---" && /usr/bin/docker compose logs --tail=300 bot || true'
 
           rm -f ~/.ssh/deploy_key .env.tmp
