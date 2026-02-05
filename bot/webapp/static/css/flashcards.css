@@ -182,6 +182,9 @@ h1, h2, h3 {
 
 .header-left {
     justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .header-center {
@@ -613,6 +616,7 @@ input:focus, textarea:focus {
 /* ========== Study Timer ========== */
 .study-timer {
     position: relative;
+    z-index: 5;
 }
 
 .timer-display {
@@ -630,6 +634,8 @@ input:focus, textarea:focus {
     font-weight: 600;
     color: rgba(255, 255, 255, 0.5);
     user-select: none;
+    min-width: 76px;
+    height: 32px;
 }
 
 .timer-display i {
