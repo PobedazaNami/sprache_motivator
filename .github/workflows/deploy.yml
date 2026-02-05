@@ -28,61 +28,46 @@ jobs:
           echo "All required secrets present"
           # MongoDB is optional; if configured it will be passed through during deploy
 
-      - name: Deploy to server
+      - name: Prepare SSH and env
         run: |
           set -euo pipefail
-          # Assign variables from GitHub contexts
-          TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-          OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
-          # Admin ID for @reeziat
-          ADMIN_IDS='662790795'
-          # MongoDB URI (use secret if provided, otherwise use default)
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p 22 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
           MONGODB_URI="${{ secrets.MongoDB }}"
           MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017/sprache_motivator}"
-          REDIS_HOST='redis'
-          REDIS_PORT='6379'
-          MAX_CONCURRENT_USERS='100'
-          DAILY_TRAINER_TIMES='08:00,14:00,20:00'
-          MAX_TOKENS_PER_USER_DAILY='10000'
-          CACHE_TTL_SECONDS='2592000'
-          # Web App (Mini App) configuration
           WEBAPP_URL="${{ secrets.WEBAPP_URL }}"
           WEBAPP_PORT="${{ secrets.WEBAPP_PORT }}"
-          # Extract hostname from WEBAPP_URL for nginx-proxy (remove https:// and any path)
           WEBAPP_HOST=$(echo "${WEBAPP_URL}" | sed 's~https\?://~~' | sed 's~/.*~~')
-          SSH_PRIVATE_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
-          SSH_HOST='${{ secrets.SSH_HOST }}'
-          SSH_USER='${{ secrets.SSH_USER }}'
-          SSH_PORT='22'
-          DEPLOY_PATH='/opt/sprache_motivator'
-
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p ${SSH_PORT:-22} -H ${SSH_HOST} >> ~/.ssh/known_hosts
-
-          if [ -f requirements.txt ]; then
-            echo "Local requirements.txt sha256:"; (sha256sum requirements.txt || shasum -a 256 requirements.txt) || true
-          fi
 
           : > .env.tmp
-          echo "BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" >> .env.tmp
-          echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env.tmp
-          echo "ADMIN_IDS=${ADMIN_IDS}" >> .env.tmp
+          echo "BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env.tmp
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env.tmp
+          echo "ADMIN_IDS=662790795" >> .env.tmp
           echo "MONGODB_URI=${MONGODB_URI}" >> .env.tmp
-          echo "REDIS_HOST=${REDIS_HOST:-redis}" >> .env.tmp
-          echo "REDIS_PORT=${REDIS_PORT:-6379}" >> .env.tmp
-          echo "MAX_CONCURRENT_USERS=${MAX_CONCURRENT_USERS:-100}" >> .env.tmp
-          echo "DAILY_TRAINER_TIMES=${DAILY_TRAINER_TIMES:-08:00,14:00,20:00}" >> .env.tmp
-          echo "MAX_TOKENS_PER_USER_DAILY=${MAX_TOKENS_PER_USER_DAILY:-10000}" >> .env.tmp
-          echo "CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-2592000}" >> .env.tmp
-          # Add Web App variables if configured
+          echo "REDIS_HOST=redis" >> .env.tmp
+          echo "REDIS_PORT=6379" >> .env.tmp
+          echo "MAX_CONCURRENT_USERS=100" >> .env.tmp
+          echo "DAILY_TRAINER_TIMES=08:00,14:00,20:00" >> .env.tmp
+          echo "MAX_TOKENS_PER_USER_DAILY=10000" >> .env.tmp
+          echo "CACHE_TTL_SECONDS=2592000" >> .env.tmp
           test -n "${WEBAPP_URL:-}" && echo "WEBAPP_URL=${WEBAPP_URL}" >> .env.tmp || true
           test -n "${WEBAPP_PORT:-}" && echo "WEBAPP_PORT=${WEBAPP_PORT}" >> .env.tmp || true
           test -n "${WEBAPP_HOST:-}" && echo "WEBAPP_HOST=${WEBAPP_HOST}" >> .env.tmp || true
+          echo "==> .env.tmp created"
 
-          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "mkdir -p ${DEPLOY_PATH}"
+      - name: Test SSH connection
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 22 -o ConnectTimeout=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'SSH OK'; uname -a"
 
+      - name: Create deploy dir
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /opt/sprache_motivator"
+
+      - name: Rsync files to server
+        run: |
           rsync -avz --delete --checksum \
             --exclude='.git' \
             --exclude='.github' \
@@ -92,15 +77,32 @@ jobs:
             --exclude='.pytest_cache' \
             --exclude='logs/*' \
             --exclude='.gitignore' \
-            -e "ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22}" \
-            ./ ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/
+            -e "ssh -i ~/.ssh/deploy_key -p 22" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/sprache_motivator/
 
-          scp -i ~/.ssh/deploy_key -P ${SSH_PORT:-22} .env.tmp ${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/.env
+      - name: Upload .env
+        run: |
+          scp -i ~/.ssh/deploy_key -P 22 .env.tmp ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/sprache_motivator/.env
 
-          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} "grep -i '^openai' ${DEPLOY_PATH}/requirements.txt || echo 'openai entry not found'; (sha256sum ${DEPLOY_PATH}/requirements.txt || shasum -a 256 ${DEPLOY_PATH}/requirements.txt || true) 2>/dev/null"
+      - name: Docker build and deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s <<'REMOTE'
+          set -euo pipefail
+          cd /opt/sprache_motivator
+          echo "==> Stopping containers..."
+          /usr/bin/docker compose down || true
+          echo "==> Pruning images..."
+          /usr/bin/docker image prune -f
+          echo "==> Building bot image..."
+          /usr/bin/docker compose build --no-cache --pull bot
+          echo "==> Starting containers..."
+          /usr/bin/docker compose up -d
+          echo "==> docker compose ps:"
+          /usr/bin/docker compose ps
+          echo "==> bot logs (last 300 lines):"
+          /usr/bin/docker compose logs --tail=300 bot || true
+          REMOTE
 
-          # Run docker compose commands on remote host. Avoid nested bash -c to prevent parsing issues with parentheses/newlines.
-          # Added: docker compose pull + docker image prune to ensure fresh images are used
-          ssh -i ~/.ssh/deploy_key -p ${SSH_PORT:-22} ${SSH_USER}@${SSH_HOST} 'set -euo pipefail && cd '"${DEPLOY_PATH}"' && echo "==> Stopping containers..." && /usr/bin/docker compose down || true && echo "==> Pruning images..." && /usr/bin/docker image prune -f && echo "==> Building bot image..." && /usr/bin/docker compose build --no-cache --pull bot && echo "==> Starting containers..." && /usr/bin/docker compose up -d && echo "--- docker compose ps ---" && /usr/bin/docker compose ps && echo "--- bot logs (last 300 lines) ---" && /usr/bin/docker compose logs --tail=300 bot || true'
-
-          rm -f ~/.ssh/deploy_key .env.tmp
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key .env.tmp
