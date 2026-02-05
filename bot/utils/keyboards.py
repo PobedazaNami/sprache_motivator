@@ -1,4 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from time import time
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from bot.locales.texts import get_text
 from typing import Any, Optional
@@ -350,7 +351,7 @@ def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) ->
     if webapp_url:
         builder.button(
             text=get_text(lang, "btn_open_webapp"),
-            web_app=WebAppInfo(url=f"{webapp_url}/flashcards")
+            web_app=WebAppInfo(url=f"{webapp_url}/flashcards?v={int(time())}")
         )
 
     builder.adjust(1)
