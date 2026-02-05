@@ -475,10 +475,12 @@ let timerRunning = false;
 function initTimer() {
     const display = document.getElementById('timer-display');
     const setup = document.getElementById('timer-setup');
-    const range = document.getElementById('timer-range');
     const rangeValue = document.getElementById('timer-range-value');
+    const minusBtn = document.getElementById('timer-minus');
+    const plusBtn = document.getElementById('timer-plus');
     const startBtn = document.getElementById('timer-start-btn');
     const closeBtn = document.getElementById('timer-close-btn');
+    let selectedMinutes = 5;
 
     // Toggle setup panel on click
     display.addEventListener('click', (e) => {
@@ -491,16 +493,31 @@ function initTimer() {
         setup.style.display = setup.style.display === 'none' ? 'block' : 'none';
     });
 
-    // Range slider value update
-    range.addEventListener('input', () => {
-        rangeValue.textContent = range.value;
+    const clampMinutes = (value) => Math.min(60, Math.max(1, value));
+    const updateMinutesUI = () => {
+        rangeValue.textContent = selectedMinutes;
+    };
+
+    // Step -5 minutes
+    minusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedMinutes = clampMinutes(selectedMinutes - 5);
+        updateMinutesUI();
+        tg.HapticFeedback.impactOccurred('light');
+    });
+
+    // Step +5 minutes
+    plusBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedMinutes = clampMinutes(selectedMinutes + 5);
+        updateMinutesUI();
+        tg.HapticFeedback.impactOccurred('light');
     });
 
     // Start timer
     startBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const minutes = parseInt(range.value, 10);
-        startTimer(minutes);
+        startTimer(selectedMinutes);
         setup.style.display = 'none';
     });
 
@@ -516,6 +533,8 @@ function initTimer() {
             setup.style.display = 'none';
         }
     });
+
+    updateMinutesUI();
 }
 
 function startTimer(minutes) {
