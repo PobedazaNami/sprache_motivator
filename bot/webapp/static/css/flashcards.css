@@ -345,6 +345,7 @@ button {
     height: 100dvh; /* Dynamic viewport height for mobile */
     overflow: hidden;
     padding-bottom: 20px;
+    position: relative;
 }
 #study-screen.active {
     /* Grid Layout */
@@ -615,16 +616,18 @@ input:focus, textarea:focus {
 
 /* ========== Study Timer ========== */
 .study-timer {
-    position: relative;
-    z-index: 5;
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 50;
 }
 
 .timer-display {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: var(--card-surface);
-    border: 1px solid var(--card-border);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.45);
     padding: 6px 12px;
     border-radius: 20px;
     cursor: pointer;
@@ -632,7 +635,7 @@ input:focus, textarea:focus {
     font-family: var(--font-heading);
     font-size: 14px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--accent-color);
     user-select: none;
     min-width: 76px;
     height: 32px;
