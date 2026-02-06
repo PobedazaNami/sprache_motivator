@@ -341,26 +341,25 @@ function renderStudyCard() {
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
-    // Image handling on study card
+    // Image handling on study card - ONLY on front side
     const frontImgWrapper = document.getElementById('card-front-image-wrapper');
     const backImgWrapper = document.getElementById('card-back-image-wrapper');
     const frontImg = document.getElementById('card-front-image');
-    const backImg = document.getElementById('card-back-image');
     
     if (card.has_image && state.currentSet) {
         const imgUrl = getCardImageUrl(state.currentSet._id, card._id) + '?h=' + tg.initData.substring(0, 20);
         frontImg.src = imgUrl;
-        backImg.src = imgUrl;
         frontImgWrapper.style.display = '';
-        backImgWrapper.style.display = '';
-        // Add auth header via fetch for the images
+        // Add auth header via fetch for the image
         loadAuthImage(frontImg, state.currentSet._id, card._id);
-        loadAuthImage(backImg, state.currentSet._id, card._id);
     } else {
         frontImgWrapper.style.display = 'none';
-        backImgWrapper.style.display = 'none';
         frontImg.src = '';
-        backImg.src = '';
+    }
+    
+    // Always hide back image wrapper
+    if (backImgWrapper) {
+        backImgWrapper.style.display = 'none';
     }
     
     // Example handling - On back side

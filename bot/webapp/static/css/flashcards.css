@@ -174,8 +174,8 @@ h1, h2, h3 {
 
 /* Study Screen Header Layout */
 .study-header {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
+    justify-content: center;
     align-items: center;
     margin-bottom: 16px;
     position: relative;
@@ -183,18 +183,20 @@ h1, h2, h3 {
 }
 
 .header-left {
-    justify-self: start;
+    position: absolute;
+    left: 0;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
 .header-center {
-    justify-self: center;
+    flex: 0 0 auto;
 }
 
 .header-right {
-    justify-self: end;
+    position: absolute;
+    right: 0;
     display: flex;
     gap: 10px;
 }
