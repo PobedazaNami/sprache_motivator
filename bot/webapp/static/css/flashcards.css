@@ -919,8 +919,8 @@ input:focus, textarea:focus {
 }
 
 .card-study-image {
-    width: 200px;
-    height: 200px;
+    width: 150px;
+    height: 150px;
     object-fit: cover;
     border-radius: 14px;
     border: 2px solid var(--card-border);
