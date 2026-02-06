@@ -184,7 +184,7 @@ h1, h2, h3 {
 
 .header-left {
     position: absolute;
-    left: -8px;
+    left: -20px;
     display: flex;
     align-items: center;
     gap: 10px;
