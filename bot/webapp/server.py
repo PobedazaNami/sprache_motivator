@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aiohttp import web
+from bson import ObjectId
 
 from bot.config import settings
 from bot.services import mongo_service, cloudinary_service
@@ -540,7 +541,6 @@ async def upload_card_image(request: web.Request) -> web.Response:
     try:
         # Verify card exists and belongs to user
         if mongo_service.is_ready():
-            from bson import ObjectId
             card = await mongo_service.db().flashcards.find_one({
                 "_id": ObjectId(card_id),
                 "set_id": set_id,
@@ -584,7 +584,6 @@ async def upload_card_image(request: web.Request) -> web.Response:
 
         # Store Cloudinary URL in MongoDB (if available)
         if mongo_service.is_ready():
-            from bson import ObjectId
             await mongo_service.db().flashcards.update_one(
                 {"_id": ObjectId(card_id)},
                 {"$set": {
@@ -620,7 +619,6 @@ async def get_card_image(request: web.Request) -> web.Response:
         # Try to get URL from MongoDB first
         image_url = None
         if mongo_service.is_ready():
-            from bson import ObjectId
             card = await mongo_service.db().flashcards.find_one(
                 {"_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id},
                 {"image_url": 1}
@@ -662,7 +660,6 @@ async def delete_card_image(request: web.Request) -> web.Response:
     try:
         # Verify ownership
         if mongo_service.is_ready():
-            from bson import ObjectId
             card = await mongo_service.db().flashcards.find_one({
                 "_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id
             })
@@ -675,7 +672,6 @@ async def delete_card_image(request: web.Request) -> web.Response:
 
         # Remove URL from MongoDB
         if mongo_service.is_ready():
-            from bson import ObjectId
             await mongo_service.db().flashcards.update_one(
                 {"_id": ObjectId(card_id)},
                 {"$unset": {"image_url": "", "cloudinary_public_id": ""}}
