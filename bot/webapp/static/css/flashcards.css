@@ -463,6 +463,8 @@ button {
     color: var(--text-color);
     background: rgba(20, 20, 20, 0.95);
     border-color: rgba(255, 255, 255, 0.2);
+    justify-content: flex-start;
+    padding-top: 20px;
 }
 
 .card-example {
@@ -641,8 +643,10 @@ input:focus, textarea:focus {
     font-weight: 600;
     color: var(--accent-color);
     user-select: none;
-    min-width: 92px;
+    width: 92px;
     height: 40px;
+    font-variant-numeric: tabular-nums;
+    justify-content: center;
 }
 
 .timer-display i {
