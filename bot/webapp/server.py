@@ -553,7 +553,7 @@ async def upload_card_image(request: web.Request) -> web.Response:
             if field is None or field.name != 'image':
                 raise web.HTTPBadRequest(text="Image field is required")
             raw = await field.read(decode=False)
-            mime = field.content_type or 'image/jpeg'
+            mime = field.headers.get('Content-Type', 'image/jpeg')
         else:
             # JSON with base64
             data = await request.json()
