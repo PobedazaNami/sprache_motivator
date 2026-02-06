@@ -619,9 +619,7 @@ input:focus, textarea:focus {
 
 /* ========== Study Timer ========== */
 .study-timer {
-    position: absolute;
-    top: 12px;
-    left: 12px;
+    position: relative;
     z-index: 50;
     pointer-events: auto;
 }

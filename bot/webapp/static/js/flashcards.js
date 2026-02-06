@@ -317,10 +317,10 @@ function renderCards() {
     
     // Reattach listeners
     cardsPreview.querySelectorAll('.edit-card').forEach(btn => {
-        btn.addEventListener('click', (e) => { e.stopPropagation(); confirmD(btn.dataset.cardId); });
+        btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.cardId); });
     });
     cardsPreview.querySelectorAll('.delete-card').forEach(btn => {
-        btn.addEventListener('click', async (e) => { e.stopPropagation(); await deleteCard(btn.dataset.cardId); });
+        btn.addEventListener('click', (e) => { e.stopPropagation(); confirmDeleteCard(btn.dataset.cardId); });
     });
 }
 
