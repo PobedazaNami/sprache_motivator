@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import logging
+import base64
 from urllib.parse import parse_qsl
 from datetime import datetime, timezone
 from pathlib import Path
@@ -328,6 +329,10 @@ async def get_cards(request: web.Request) -> web.Response:
             card["_id"] = str(card["_id"])
             card["created_at"] = card["created_at"].isoformat() if card.get("created_at") else None
             card["example"] = card.get("example", "")
+            card["has_image"] = bool(card.get("image_data"))
+            # Don't send image_data in list – too heavy; use separate endpoint
+            card.pop("image_data", None)
+            card.pop("image_mime", None)
         
         return web.json_response({"cards": cards})
         
@@ -515,9 +520,144 @@ async def update_card(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(text="Failed to update card")
 
 
+# ---- Card Image endpoints ----
+
+MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB after base64
+
+
+async def upload_card_image(request: web.Request) -> web.Response:
+    """Upload an image for a flashcard (base64 encoded, stored in MongoDB)."""
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    set_id = request.match_info.get('set_id')
+    card_id = request.match_info.get('card_id')
+    if not set_id or not card_id:
+        raise web.HTTPBadRequest(text="Set ID and Card ID are required")
+
+    try:
+        # Verify ownership
+        card = await mongo_service.db().flashcards.find_one({
+            "_id": ObjectId(card_id),
+            "set_id": set_id,
+            "user_id": user_id
+        })
+        if not card:
+            raise web.HTTPNotFound(text="Card not found")
+
+        # Read multipart or JSON body
+        content_type = request.content_type
+
+        if 'multipart' in content_type:
+            reader = await request.multipart()
+            field = await reader.next()
+            if field is None or field.name != 'image':
+                raise web.HTTPBadRequest(text="Image field is required")
+            raw = await field.read(decode=False)
+            mime = field.content_type or 'image/jpeg'
+        else:
+            # JSON with base64
+            data = await request.json()
+            b64 = data.get('image_data', '')
+            mime = data.get('mime', 'image/jpeg')
+            if not b64:
+                raise web.HTTPBadRequest(text="image_data is required")
+            raw = base64.b64decode(b64)
+
+        if len(raw) > MAX_IMAGE_SIZE:
+            raise web.HTTPBadRequest(text="Image too large (max 2MB)")
+
+        # Store as binary in Mongo
+        import bson.binary as bson_binary
+        image_bin = bson_binary.Binary(raw)
+
+        await mongo_service.db().flashcards.update_one(
+            {"_id": ObjectId(card_id)},
+            {"$set": {"image_data": image_bin, "image_mime": mime}}
+        )
+
+        return web.json_response({"success": True})
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading card image: {e}")
+        raise web.HTTPInternalServerError(text="Failed to upload image")
+
+
+async def get_card_image(request: web.Request) -> web.Response:
+    """Serve a card's image as binary."""
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    set_id = request.match_info.get('set_id')
+    card_id = request.match_info.get('card_id')
+
+    try:
+        card = await mongo_service.db().flashcards.find_one(
+            {"_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id},
+            {"image_data": 1, "image_mime": 1}
+        )
+        if not card or not card.get("image_data"):
+            raise web.HTTPNotFound(text="Image not found")
+
+        image_bytes = bytes(card["image_data"])
+        mime = card.get("image_mime", "image/jpeg")
+
+        return web.Response(
+            body=image_bytes,
+            content_type=mime,
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting card image: {e}")
+        raise web.HTTPInternalServerError(text="Failed to get image")
+
+
+async def delete_card_image(request: web.Request) -> web.Response:
+    """Delete a card's image."""
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    set_id = request.match_info.get('set_id')
+    card_id = request.match_info.get('card_id')
+
+    try:
+        card = await mongo_service.db().flashcards.find_one({
+            "_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id
+        })
+        if not card:
+            raise web.HTTPNotFound(text="Card not found")
+
+        await mongo_service.db().flashcards.update_one(
+            {"_id": ObjectId(card_id)},
+            {"$unset": {"image_data": "", "image_mime": ""}}
+        )
+
+        return web.json_response({"success": True})
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting card image: {e}")
+        raise web.HTTPInternalServerError(text="Failed to delete image")
+
+
 def create_webapp_routes() -> web.Application:
     """Create and return the web application with all routes."""
-    app = web.Application()
+    app = web.Application(client_max_size=4 * 1024 * 1024)  # 4MB max body
     
     # Static files
     app.router.add_static('/static', STATIC_DIR, name='static')
@@ -535,6 +675,10 @@ def create_webapp_routes() -> web.Application:
     app.router.add_post('/api/flashcards/sets/{set_id}/cards', add_card)
     app.router.add_put('/api/flashcards/sets/{set_id}/cards/{card_id}', update_card)
     app.router.add_delete('/api/flashcards/sets/{set_id}/cards/{card_id}', delete_card)
+    # Card image routes
+    app.router.add_post('/api/flashcards/sets/{set_id}/cards/{card_id}/image', upload_card_image)
+    app.router.add_get('/api/flashcards/sets/{set_id}/cards/{card_id}/image', get_card_image)
+    app.router.add_delete('/api/flashcards/sets/{set_id}/cards/{card_id}/image', delete_card_image)
     
     return app
 

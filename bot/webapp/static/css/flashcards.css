@@ -805,3 +805,123 @@ input:focus, textarea:focus {
     color: #ff3b30;
     border-color: #ff3b30;
 }
+
+/* ========== Card Image Styles ========== */
+
+/* Image upload area in modals */
+.image-upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.image-upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px dashed rgba(16, 185, 129, 0.4);
+    color: var(--accent-color);
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.image-upload-btn i {
+    font-size: 22px;
+}
+
+.image-upload-btn:hover,
+.image-upload-btn:active {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: var(--accent-color);
+}
+
+.image-upload-btn.uploading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Image preview in modal */
+.image-preview-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 12px var(--accent-glow);
+    flex-shrink: 0;
+}
+
+.image-preview-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.image-remove-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ff3b30;
+    border: none;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s;
+}
+
+.image-remove-btn:hover {
+    background: rgba(255, 59, 48, 0.3);
+    transform: scale(1.1);
+}
+
+/* Study card image */
+.card-image-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 0 0 12px 0;
+    flex-shrink: 0;
+}
+
+.card-study-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 2px solid var(--card-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Card preview image indicator */
+.card-preview-image-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-color);
+    font-size: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}

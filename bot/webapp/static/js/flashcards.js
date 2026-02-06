@@ -55,7 +55,11 @@ const TEXTS = {
         validationFillBothFields: 'Будь ласка, заповніть обидва поля',
         flashcards_rename_set: 'Перейменувати набір',
         deleteCardTitle: 'Видалити картку?',
-        deleteCardWarning: 'Ви впевнені, що хочете видалити цю картку?'
+        deleteCardWarning: 'Ви впевнені, що хочете видалити цю картку?',
+        photoObject: 'Сфотографувати об’єкт',
+        uploadingImage: 'Завантаження...',
+        errorUploadImage: 'Помилка завантаження зображення',
+        errorDeleteImage: 'Помилка видалення зображення'
     },
     ru: {
         loading: 'Загрузка...',
@@ -99,7 +103,11 @@ const TEXTS = {
         validationFillBothFields: 'Пожалуйста, заполните оба поля',
         flashcards_rename_set: 'Переименовать набор',
         deleteCardTitle: 'Удалить карточку?',
-        deleteCardWarning: 'Вы уверены, что хотите удалить эту карточку?'
+        deleteCardWarning: 'Вы уверены, что хотите удалить эту карточку?',
+        photoObject: 'Сфотографировать объект',
+        uploadingImage: 'Загрузка...',
+        errorUploadImage: 'Ошибка загрузки изображения',
+        errorDeleteImage: 'Ошибка удаления изображения'
     }
 };
 
@@ -195,6 +203,50 @@ async function fetchCards(setId) { return apiRequest(`/sets/${setId}/cards`); }
 async function addCardApi(setId, front, back, example) { return apiRequest(`/sets/${setId}/cards`, 'POST', { front, back, example }); }
 async function deleteCardApi(setId, cardId) { return apiRequest(`/sets/${setId}/cards/${cardId}`, 'DELETE'); }
 async function updateCardApi(setId, cardId, front, back, example) { return apiRequest(`/sets/${setId}/cards/${cardId}`, 'PUT', { front, back, example }); }
+
+// Image API
+async function uploadCardImage(setId, cardId, file) {
+    const resized = await resizeImageFile(file, 600);
+    const formData = new FormData();
+    formData.append('image', resized, 'photo.jpg');
+    const response = await fetch(`${API_BASE}/sets/${setId}/cards/${cardId}/image`, {
+        method: 'POST',
+        headers: { 'X-Telegram-Init-Data': tg.initData },
+        body: formData
+    });
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    return response.json();
+}
+function getCardImageUrl(setId, cardId) {
+    return `${API_BASE}/sets/${setId}/cards/${cardId}/image`;
+}
+async function deleteCardImageApi(setId, cardId) { return apiRequest(`/sets/${setId}/cards/${cardId}/image`, 'DELETE'); }
+
+// Resize image before uploading (max dimension, returns Blob)
+function resizeImageFile(file, maxDim) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width, h = img.height;
+                if (w > maxDim || h > maxDim) {
+                    if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                    else { w = Math.round(w * maxDim / h); h = maxDim; }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.82);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
 async function fetchUserLang() {
     try {
         const data = await apiRequest('/user/lang');
@@ -252,6 +304,7 @@ function renderCards() {
     cardsPreview.innerHTML = state.currentCards.map(card => `
         <div class="card-preview-item" data-card-id="${card._id}">
             <div>
+                ${card.has_image ? '<span class="card-preview-image-badge"><i class="ph ph-image"></i></span>' : ''}
                 <span class="front">${escapeHtml(card.front)}</span>
                 <span class="back"> — ${escapeHtml(card.back)}</span>
             </div>
@@ -279,6 +332,28 @@ function renderStudyCard() {
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
+    // Image handling on study card
+    const frontImgWrapper = document.getElementById('card-front-image-wrapper');
+    const backImgWrapper = document.getElementById('card-back-image-wrapper');
+    const frontImg = document.getElementById('card-front-image');
+    const backImg = document.getElementById('card-back-image');
+    
+    if (card.has_image && state.currentSet) {
+        const imgUrl = getCardImageUrl(state.currentSet._id, card._id) + '?h=' + tg.initData.substring(0, 20);
+        frontImg.src = imgUrl;
+        backImg.src = imgUrl;
+        frontImgWrapper.style.display = '';
+        backImgWrapper.style.display = '';
+        // Add auth header via fetch for the images
+        loadAuthImage(frontImg, state.currentSet._id, card._id);
+        loadAuthImage(backImg, state.currentSet._id, card._id);
+    } else {
+        frontImgWrapper.style.display = 'none';
+        backImgWrapper.style.display = 'none';
+        frontImg.src = '';
+        backImg.src = '';
+    }
+    
     // Example handling - On back side
     const exampleEl = document.getElementById('card-back-example');
     if (exampleEl) {
@@ -297,6 +372,53 @@ function renderStudyCard() {
 
     document.getElementById('prev-card').disabled = state.currentCardIndex === 0;
     document.getElementById('next-card').disabled = state.currentCardIndex === state.currentCards.length - 1;
+}
+
+// Load image with auth header (since images need X-Telegram-Init-Data)
+async function loadAuthImage(imgEl, setId, cardId) {
+    try {
+        const resp = await fetch(getCardImageUrl(setId, cardId), {
+            headers: { 'X-Telegram-Init-Data': tg.initData }
+        });
+        if (!resp.ok) { imgEl.parentElement.style.display = 'none'; return; }
+        const blob = await resp.blob();
+        imgEl.src = URL.createObjectURL(blob);
+    } catch {
+        imgEl.parentElement.style.display = 'none';
+    }
+}
+
+// ---- Image in Edit Modal ----
+let editImagePendingFile = null;
+let editImageRemoved = false;
+
+function initEditImageHandlers() {
+    const input = document.getElementById('edit-image-input');
+    const removeBtn = document.getElementById('edit-image-remove');
+    
+    input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        editImagePendingFile = file;
+        editImageRemoved = false;
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            document.getElementById('edit-image-img').src = ev.target.result;
+            document.getElementById('edit-image-preview').style.display = '';
+            document.getElementById('edit-image-label').style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    });
+    
+    removeBtn.addEventListener('click', () => {
+        editImagePendingFile = null;
+        editImageRemoved = true;
+        document.getElementById('edit-image-img').src = '';
+        document.getElementById('edit-image-preview').style.display = 'none';
+        document.getElementById('edit-image-label').style.display = '';
+        document.getElementById('edit-image-input').value = '';
+    });
 }
 
 // Data Actions
@@ -444,6 +566,25 @@ function openEditModal(cardId) {
     document.getElementById('card-front-edit').value = card.front || '';
     document.getElementById('card-back-edit').value = card.back || '';
     document.getElementById('card-example-edit').value = card.example || '';
+    
+    // Reset image state
+    editImagePendingFile = null;
+    editImageRemoved = false;
+    document.getElementById('edit-image-input').value = '';
+    document.getElementById('edit-image-text').textContent = t('photoObject');
+    
+    if (card.has_image && state.currentSet) {
+        // Load existing image preview
+        const img = document.getElementById('edit-image-img');
+        loadAuthImage(img, state.currentSet._id, cardId);
+        document.getElementById('edit-image-preview').style.display = '';
+        document.getElementById('edit-image-label').style.display = 'none';
+    } else {
+        document.getElementById('edit-image-preview').style.display = 'none';
+        document.getElementById('edit-image-label').style.display = '';
+        document.getElementById('edit-image-img').src = '';
+    }
+    
     showModal('edit-card-modal');
 }
 
@@ -455,6 +596,28 @@ async function handleEditCard() {
     if (!front || !back) { tg.showAlert(t('validationFillBothFields')); return; }
     try {
         await updateCardApi(state.currentSet._id, state.editCardId, front, back, example);
+        
+        // Handle image changes
+        if (editImageRemoved) {
+            try { await deleteCardImageApi(state.currentSet._id, state.editCardId); } catch(e) { console.warn('Image delete failed:', e); }
+        }
+        if (editImagePendingFile) {
+            const label = document.getElementById('edit-image-label');
+            const origText = document.getElementById('edit-image-text').textContent;
+            document.getElementById('edit-image-text').textContent = t('uploadingImage');
+            label.classList.add('uploading');
+            try {
+                await uploadCardImage(state.currentSet._id, state.editCardId, editImagePendingFile);
+            } catch(e) {
+                console.error('Image upload failed:', e);
+                tg.showAlert(t('errorUploadImage'));
+            }
+            label.classList.remove('uploading');
+            document.getElementById('edit-image-text').textContent = origText;
+        }
+        editImagePendingFile = null;
+        editImageRemoved = false;
+        
         hideModal('edit-card-modal');
         state.editCardId = null;
         const data = await fetchCards(state.currentSet._id);
@@ -873,6 +1036,7 @@ async function init() {
         await loadSets();
         initButtonAnimations(); // Initialize animations
         initTimer(); // Initialize study timer
+        initEditImageHandlers(); // Initialize image upload handlers
         showScreen('sets-screen');
         const loadingEl = document.getElementById('loading');
         if (loadingEl) loadingEl.remove();
