@@ -14,10 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from aiohttp import web
-from bson import ObjectId
 
 from bot.config import settings
-from bot.services import mongo_service
+from bot.services import mongo_service, cloudinary_service
 from bot.services.database_service import UserService
 from bot.models.database import async_session_maker
 
@@ -526,12 +525,12 @@ MAX_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB after base64
 
 
 async def upload_card_image(request: web.Request) -> web.Response:
-    """Upload an image for a flashcard (base64 encoded, stored in MongoDB)."""
+    """Upload an image for a flashcard to Cloudinary."""
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not mongo_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Database unavailable")
+    if not cloudinary_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
@@ -539,14 +538,16 @@ async def upload_card_image(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Set ID and Card ID are required")
 
     try:
-        # Verify ownership
-        card = await mongo_service.db().flashcards.find_one({
-            "_id": ObjectId(card_id),
-            "set_id": set_id,
-            "user_id": user_id
-        })
-        if not card:
-            raise web.HTTPNotFound(text="Card not found")
+        # Verify card exists and belongs to user
+        if mongo_service.is_ready():
+            from bson import ObjectId
+            card = await mongo_service.db().flashcards.find_one({
+                "_id": ObjectId(card_id),
+                "set_id": set_id,
+                "user_id": user_id
+            })
+            if not card:
+                raise web.HTTPNotFound(text="Card not found")
 
         # Read multipart or JSON body
         content_type = request.content_type
@@ -568,18 +569,34 @@ async def upload_card_image(request: web.Request) -> web.Response:
             raw = base64.b64decode(b64)
 
         if len(raw) > MAX_IMAGE_SIZE:
-            raise web.HTTPBadRequest(text="Image too large (max 2MB)")
+            raise web.HTTPRequestEntityTooLarge(text="Image too large (max 2MB)")
 
-        # Store as binary in Mongo
-        import bson.binary as bson_binary
-        image_bin = bson_binary.Binary(raw)
-
-        await mongo_service.db().flashcards.update_one(
-            {"_id": ObjectId(card_id)},
-            {"$set": {"image_data": image_bin, "image_mime": mime}}
+        # Upload to Cloudinary with unique public_id
+        public_id = f"user_{user_id}_card_{card_id}"
+        result = await cloudinary_service.upload_image(
+            image_data=raw,
+            public_id=public_id,
+            format=mime.split('/')[-1] if '/' in mime else 'jpg'
         )
 
-        return web.json_response({"success": True})
+        if not result:
+            raise web.HTTPInternalServerError(text="Failed to upload image")
+
+        # Store Cloudinary URL in MongoDB (if available)
+        if mongo_service.is_ready():
+            from bson import ObjectId
+            await mongo_service.db().flashcards.update_one(
+                {"_id": ObjectId(card_id)},
+                {"$set": {
+                    "image_url": result.get('secure_url'),
+                    "cloudinary_public_id": result.get('public_id')
+                }}
+            )
+
+        return web.json_response({
+            "success": True,
+            "url": result.get('secure_url')
+        })
 
     except web.HTTPException:
         raise
@@ -589,32 +606,40 @@ async def upload_card_image(request: web.Request) -> web.Response:
 
 
 async def get_card_image(request: web.Request) -> web.Response:
-    """Serve a card's image as binary."""
+    """Get card's image URL from Cloudinary."""
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not mongo_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Database unavailable")
+    if not cloudinary_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
 
     try:
-        card = await mongo_service.db().flashcards.find_one(
-            {"_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id},
-            {"image_data": 1, "image_mime": 1}
-        )
-        if not card or not card.get("image_data"):
+        # Try to get URL from MongoDB first
+        image_url = None
+        if mongo_service.is_ready():
+            from bson import ObjectId
+            card = await mongo_service.db().flashcards.find_one(
+                {"_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id},
+                {"image_url": 1}
+            )
+            if card:
+                image_url = card.get("image_url")
+        
+        # If not in DB, generate URL from Cloudinary
+        if not image_url:
+            public_id = f"user_{user_id}_card_{card_id}"
+            image_url = await cloudinary_service.get_image_url(public_id)
+        
+        if not image_url:
             raise web.HTTPNotFound(text="Image not found")
 
-        image_bytes = bytes(card["image_data"])
-        mime = card.get("image_mime", "image/jpeg")
-
-        return web.Response(
-            body=image_bytes,
-            content_type=mime,
-            headers={"Cache-Control": "public, max-age=86400"}
-        )
+        # Return JSON with URL (client will load it)
+        return web.json_response({
+            "url": image_url
+        })
 
     except web.HTTPException:
         raise
@@ -624,29 +649,39 @@ async def get_card_image(request: web.Request) -> web.Response:
 
 
 async def delete_card_image(request: web.Request) -> web.Response:
-    """Delete a card's image."""
+    """Delete a card's image from Cloudinary."""
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not mongo_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Database unavailable")
+    if not cloudinary_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
 
     try:
-        card = await mongo_service.db().flashcards.find_one({
-            "_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id
-        })
-        if not card:
-            raise web.HTTPNotFound(text="Card not found")
+        # Verify ownership
+        if mongo_service.is_ready():
+            from bson import ObjectId
+            card = await mongo_service.db().flashcards.find_one({
+                "_id": ObjectId(card_id), "set_id": set_id, "user_id": user_id
+            })
+            if not card:
+                raise web.HTTPNotFound(text="Card not found")
 
-        await mongo_service.db().flashcards.update_one(
-            {"_id": ObjectId(card_id)},
-            {"$unset": {"image_data": "", "image_mime": ""}}
-        )
+        # Delete from Cloudinary
+        public_id = f"user_{user_id}_card_{card_id}"
+        deleted = await cloudinary_service.delete_image(public_id)
 
-        return web.json_response({"success": True})
+        # Remove URL from MongoDB
+        if mongo_service.is_ready():
+            from bson import ObjectId
+            await mongo_service.db().flashcards.update_one(
+                {"_id": ObjectId(card_id)},
+                {"$unset": {"image_url": "", "cloudinary_public_id": ""}}
+            )
+
+        return web.json_response({"success": deleted})
 
     except web.HTTPException:
         raise

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     STRIPE_PAYMENT_LINK: str = ""  # Stripe payment link for €4/month subscription (translator only)
     ADMIN_CONTACT: str = "@reeziat"  # Admin contact for support
     
+    # Cloudinary (для хранения изображений карточек)
+    CLOUDINARY_URL: str = ""  # cloudinary://api_key:api_secret@cloud_name
+    CLOUDINARY_FOLDER: str = "sprache_motivator_flashcards"  # Папка для изображений карточек
+    
     # Web App (Mini App)
     WEBAPP_URL: str = ""  # URL where the web app is hosted (e.g., https://yourdomain.com)
     WEBAPP_PORT: int = 8080  # Port for the web app server

@@ -13,7 +13,7 @@ from bot.services.database_service import UserService
 from bot.services.scheduler_service import scheduler_service
 from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends, express_trainer, flashcards
 from bot.models.database import UserStatus
-from bot.services import mongo_service
+from bot.services import mongo_service, cloudinary_service
 
 
 # Configure logging
@@ -51,6 +51,17 @@ async def main():
                 logger.warning("MongoDB URI present but initialization returned False")
         except Exception as e:
             logger.error(f"MongoDB initialization failed: {e}")
+    
+    # Initialize Cloudinary for image storage
+    logger.info("Initializing Cloudinary for image storage...")
+    try:
+        initialized = cloudinary_service.init()
+        if initialized:
+            logger.info("Cloudinary initialized successfully")
+        else:
+            logger.warning("CLOUDINARY_URL not configured - image upload will be disabled")
+    except Exception as e:
+        logger.error(f"Cloudinary initialization failed: {e}")
     
     # Start web app server for Mini App
     if settings.WEBAPP_URL:

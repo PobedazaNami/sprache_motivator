@@ -107,7 +107,11 @@ const TEXTS = {
         photoObject: 'Сфотографировать объект',
         uploadingImage: 'Загрузка...',
         errorUploadImage: 'Ошибка загрузки изображения',
-        errorDeleteImage: 'Ошибка удаления изображения'
+        errorDeleteImage: 'Ошибка удаления изображения',
+        errorDatabaseUnavailable: 'База данных недоступна. Изображения не могут быть сохранены.',
+        errorImageTooLarge: 'Изображение слишком большое (макс 2МБ).',
+        errorDatabaseUnavailable: 'База данных недоступна. Изображения не могут быть сохранены.',
+        errorImageTooLarge: 'Изображение слишком большое (макс 2МБ).'
     }
 };
 
@@ -214,7 +218,12 @@ async function uploadCardImage(setId, cardId, file) {
         headers: { 'X-Telegram-Init-Data': tg.initData },
         body: formData
     });
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    if (!response.ok) {
+        const statusText = response.status === 503 ? 'Service Unavailable (MongoDB)' : 
+                          response.status === 413 ? 'Image Too Large' : 
+                          `HTTP ${response.status}`;
+        throw new Error(statusText);
+    }
     return response.json();
 }
 function getCardImageUrl(setId, cardId) {
@@ -374,16 +383,24 @@ function renderStudyCard() {
     document.getElementById('next-card').disabled = state.currentCardIndex === state.currentCards.length - 1;
 }
 
-// Load image with auth header (since images need X-Telegram-Init-Data)
+// Load image with auth header (API returns Cloudinary URL)
 async function loadAuthImage(imgEl, setId, cardId) {
     try {
         const resp = await fetch(getCardImageUrl(setId, cardId), {
             headers: { 'X-Telegram-Init-Data': tg.initData }
         });
-        if (!resp.ok) { imgEl.parentElement.style.display = 'none'; return; }
-        const blob = await resp.blob();
-        imgEl.src = URL.createObjectURL(blob);
-    } catch {
+        if (!resp.ok) { 
+            imgEl.parentElement.style.display = 'none'; 
+            return; 
+        }
+        const data = await resp.json();
+        if (data.url) {
+            imgEl.src = data.url;  // Cloudinary URL - no auth needed
+        } else {
+            imgEl.parentElement.style.display = 'none';
+        }
+    } catch (e) {
+        console.error('Error loading image:', e);
         imgEl.parentElement.style.display = 'none';
     }
 }
@@ -610,7 +627,14 @@ async function handleEditCard() {
                 await uploadCardImage(state.currentSet._id, state.editCardId, editImagePendingFile);
             } catch(e) {
                 console.error('Image upload failed:', e);
-                tg.showAlert(t('errorUploadImage'));
+                // Check if it's a 503 (service unavailable - MongoDB)
+                if (e.message && e.message.includes('503')) {
+                    tg.showAlert(t('errorDatabaseUnavailable'));
+                } else if (e.message && e.message.includes('413')) {
+                    tg.showAlert(t('errorImageTooLarge'));
+                } else {
+                    tg.showAlert(t('errorUploadImage') + ' ' + (e.message || ''));
+                }
             }
             label.classList.remove('uploading');
             document.getElementById('edit-image-text').textContent = origText;
