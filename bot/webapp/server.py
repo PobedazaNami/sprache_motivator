@@ -527,8 +527,6 @@ async def upload_card_image(request: web.Request) -> web.Response:
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not cloudinary_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
@@ -606,8 +604,6 @@ async def get_card_image(request: web.Request) -> web.Response:
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not cloudinary_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
@@ -648,8 +644,6 @@ async def delete_card_image(request: web.Request) -> web.Response:
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
-    if not cloudinary_service.is_ready():
-        raise web.HTTPServiceUnavailable(text="Image storage unavailable")
 
     set_id = request.match_info.get('set_id')
     card_id = request.match_info.get('card_id')
