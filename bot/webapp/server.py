@@ -329,10 +329,7 @@ async def get_cards(request: web.Request) -> web.Response:
             card["_id"] = str(card["_id"])
             card["created_at"] = card["created_at"].isoformat() if card.get("created_at") else None
             card["example"] = card.get("example", "")
-            card["has_image"] = bool(card.get("image_data"))
-            # Don't send image_data in list – too heavy; use separate endpoint
-            card.pop("image_data", None)
-            card.pop("image_mime", None)
+            card["has_image"] = bool(card.get("image_url"))
         
         return web.json_response({"cards": cards})
         
