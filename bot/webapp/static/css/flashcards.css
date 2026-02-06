@@ -184,7 +184,7 @@ h1, h2, h3 {
 
 .header-left {
     position: absolute;
-    left: 0;
+    left: -8px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -463,8 +463,6 @@ button {
     color: var(--text-color);
     background: rgba(20, 20, 20, 0.95);
     border-color: rgba(255, 255, 255, 0.2);
-    justify-content: flex-start;
-    padding-top: 20px;
 }
 
 .card-example {
@@ -647,6 +645,12 @@ input:focus, textarea:focus {
     height: 40px;
     font-variant-numeric: tabular-nums;
     justify-content: center;
+}
+
+#timer-text {
+    display: inline-block;
+    min-width: 48px;
+    text-align: center;
 }
 
 .timer-display i {
@@ -903,6 +907,15 @@ input:focus, textarea:focus {
     justify-content: center;
     padding: 0 0 12px 0;
     flex-shrink: 0;
+}
+
+/* Front image pinned to top without moving text */
+#card-front-image-wrapper {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0;
 }
 
 .card-study-image {
