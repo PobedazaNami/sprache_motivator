@@ -2,6 +2,7 @@
 
 // Constants
 const SWIPE_THRESHOLD_PX = 50;
+const GLOBAL_REVIEW_THRESHOLD_PX = 110;
 
 // Initialize Telegram WebApp
 const tg = window.Telegram.WebApp;
@@ -21,9 +22,8 @@ const TEXTS = {
         startGlobalStudy: 'ПОЧАТИ',
         dueNow: 'Зараз доступно {count} карток до повторення',
         noDueCards: 'Зараз немає карток для повторення',
-        globalKnow: 'Знаю',
-        globalDontKnow: 'Не знаю',
-        globalSkip: 'Пропустити',
+        swipeKnow: 'Зрозуміло',
+        swipeDontKnow: 'Вчити знову',
         sessionSummary: 'Сесію завершено · Знаю: {correct} · Не знаю: {incorrect} · Всього: {total}',
         deckLabel: 'Набір',
         reverseOn: '↔ Реверс: увімкнено',
@@ -80,9 +80,8 @@ const TEXTS = {
         startGlobalStudy: 'ПОЧАТИ',
         dueNow: 'Сейчас доступно {count} карточек к повторению',
         noDueCards: 'Сейчас нет карточек для повторения',
-        globalKnow: 'Знаю',
-        globalDontKnow: 'Не знаю',
-        globalSkip: 'Пропустить',
+        swipeKnow: 'Понятно',
+        swipeDontKnow: 'Учить снова',
         sessionSummary: 'Сессия завершена · Знаю: {correct} · Не знаю: {incorrect} · Всего: {total}',
         deckLabel: 'Колода',
         reverseOn: '↔ Реверс: включён',
@@ -151,7 +150,17 @@ let state = {
     studyReversed: false,
     isFlipped: false,
     editCardId: null,
-    sessionStats: { correct: 0, incorrect: 0 }
+    sessionStats: { correct: 0, incorrect: 0 },
+    drag: {
+        active: false,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        deltaX: 0,
+        deltaY: 0,
+        moved: false,
+        suppressClickUntil: 0,
+    }
 };
 
 // Get text by key
@@ -173,9 +182,8 @@ function applyLocalization() {
     document.getElementById('stat-learning-label').textContent = t('practiceStat');
     document.getElementById('stat-known-label').textContent = t('knownStat');
     document.getElementById('start-global-study-text').textContent = t('startGlobalStudy');
-    document.getElementById('global-know-text').textContent = t('globalKnow');
-    document.getElementById('global-dontknow-text').textContent = t('globalDontKnow');
-    document.getElementById('global-skip-text').textContent = t('globalSkip');
+    document.getElementById('swipe-badge-know').textContent = t('swipeKnow');
+    document.getElementById('swipe-badge-dontknow').textContent = t('swipeDontKnow');
     document.getElementById('no-sets-text').textContent = t('noSetsText');
     document.getElementById('no-sets-hint').textContent = t('noSetsHint');
     document.getElementById('study-text').textContent = t('study');
@@ -330,6 +338,23 @@ function showSessionSummary(correct, incorrect, total) {
     const el = document.getElementById('session-summary');
     el.textContent = t('sessionSummary', { correct, incorrect, total });
     el.style.display = 'block';
+}
+
+function resetSwipeBadges() {
+    gsap.set('#swipe-badge-know', { opacity: 0, scale: 0.92 });
+    gsap.set('#swipe-badge-dontknow', { opacity: 0, scale: 0.92 });
+}
+
+function animateGsap(target, props) {
+    return new Promise((resolve) => {
+        gsap.to(target, {
+            ...props,
+            onComplete: () => {
+                props.onComplete?.();
+                resolve();
+            },
+        });
+    });
 }
 
 // Render Logic
@@ -550,7 +575,8 @@ function updateStudyModeUI() {
     const timer = document.getElementById('study-timer');
     const timerSetup = document.getElementById('timer-setup');
     const context = document.getElementById('study-card-context');
-    const actions = document.getElementById('global-session-actions');
+    const studyScreen = document.getElementById('study-screen');
+    const flashcard = document.getElementById('flashcard');
     const currentCard = state.currentCards[state.currentCardIndex];
 
     prevBtn.style.display = isGlobal ? 'none' : '';
@@ -558,14 +584,14 @@ function updateStudyModeUI() {
     headerRight.style.display = isGlobal ? 'none' : 'flex';
     timer.style.display = isGlobal ? 'none' : '';
     timerSetup.style.display = 'none';
+    studyScreen.classList.toggle('global-study-mode', isGlobal);
+    flashcard.classList.toggle('global-swipe-enabled', isGlobal);
 
     if (isGlobal) {
         context.textContent = currentCard?.set_name ? `${t('deckLabel')}: ${currentCard.set_name}` : '';
         context.style.display = currentCard?.set_name ? 'block' : 'none';
-        actions.style.display = state.isFlipped ? 'grid' : 'none';
     } else {
         context.style.display = 'none';
-        actions.style.display = 'none';
     }
 }
 
@@ -587,6 +613,7 @@ async function startGlobalStudySession() {
         state.studyReversed = false;
         state.isFlipped = false;
         state.sessionStats = { correct: 0, incorrect: 0 };
+        resetSwipeBadges();
         renderStudyCard();
         updateStudyModeUI();
         showScreen('study-screen');
@@ -600,6 +627,7 @@ async function startGlobalStudySession() {
 async function finishGlobalStudySession() {
     const total = state.sessionStats.correct + state.sessionStats.incorrect;
     stopTimer();
+    resetSwipeBadges();
     await loadSets();
     await loadDashboard();
     showSessionSummary(state.sessionStats.correct, state.sessionStats.incorrect, total);
@@ -630,6 +658,7 @@ async function handleGlobalSessionReview(result) {
 
         state.currentCardIndex += 1;
         state.isFlipped = false;
+        resetSwipeBadges();
         renderStudyCard();
         updateStudyModeUI();
         gsap.fromTo('#flashcard', { x: 80, opacity: 0.5 }, { x: 0, opacity: 1, duration: 0.35, ease: 'power2.out' });
@@ -638,19 +667,6 @@ async function handleGlobalSessionReview(result) {
         console.error('Error reviewing global session card:', error);
         tg.showAlert(t('errorEditCard'));
     }
-}
-
-async function skipGlobalSessionCard() {
-    if (state.currentCardIndex >= state.currentCards.length - 1) {
-        await finishGlobalStudySession();
-        return;
-    }
-
-    state.currentCardIndex += 1;
-    state.isFlipped = false;
-    renderStudyCard();
-    updateStudyModeUI();
-    tg.HapticFeedback.impactOccurred('light');
 }
 
 // Handlers for Sets and Cards (keeping logic identical)
@@ -1068,6 +1084,7 @@ function prevCard() {
 }
 
 function flipCard() {
+    if (Date.now() < state.drag.suppressClickUntil) return;
     // Toggle state
     state.isFlipped = !state.isFlipped;
     
@@ -1095,6 +1112,7 @@ function exitStudyMode() {
         opacity: 0,
         duration: 0.3,
         onComplete: () => {
+            resetSwipeBadges();
             if (state.studyMode === 'global') {
                 state.studyMode = 'set';
                 showScreen('sets-screen');
@@ -1193,11 +1211,12 @@ document.getElementById('exit-study-mode').addEventListener('click', exitStudyMo
 document.getElementById('back-to-set').addEventListener('click', exitStudyMode);
 
 document.getElementById('flashcard').addEventListener('click', flipCard);
+document.getElementById('flashcard').addEventListener('pointerdown', onGlobalPointerDown);
+document.getElementById('flashcard').addEventListener('pointermove', onGlobalPointerMove);
+document.getElementById('flashcard').addEventListener('pointerup', onGlobalPointerUp);
+document.getElementById('flashcard').addEventListener('pointercancel', onGlobalPointerUp);
 document.getElementById('prev-card').addEventListener('click', prevCard);
 document.getElementById('next-card').addEventListener('click', nextCard);
-document.getElementById('global-know-btn').addEventListener('click', () => handleGlobalSessionReview('know'));
-document.getElementById('global-dontknow-btn').addEventListener('click', () => handleGlobalSessionReview('dontknow'));
-document.getElementById('global-skip-btn').addEventListener('click', skipGlobalSessionCard);
 document.getElementById('shuffle-cards').addEventListener('click', shuffleStudyCards);
 document.getElementById('toggle-reverse').addEventListener('click', toggleReverse);
 
@@ -1220,6 +1239,9 @@ let touchStartX = 0;
 let touchEndX = 0;
 document.getElementById('flashcard').addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
 document.getElementById('flashcard').addEventListener('touchend', (e) => {
+    if (state.studyMode === 'global') {
+        return;
+    }
     touchEndX = e.changedTouches[0].screenX;
     const diff = touchStartX - touchEndX;
     if (Math.abs(diff) > SWIPE_THRESHOLD_PX) {
@@ -1227,6 +1249,90 @@ document.getElementById('flashcard').addEventListener('touchend', (e) => {
         else prevCard();
     }
 }, { passive: true });
+
+function updateGlobalSwipeVisuals(deltaX, deltaY) {
+    const rotation = deltaX * 0.05;
+    gsap.set('#flashcard', { x: deltaX, y: deltaY * 0.12, rotation });
+
+    const positiveOpacity = Math.min(Math.abs(Math.max(deltaX, 0)) / GLOBAL_REVIEW_THRESHOLD_PX, 1);
+    const negativeOpacity = Math.min(Math.abs(Math.min(deltaX, 0)) / GLOBAL_REVIEW_THRESHOLD_PX, 1);
+    gsap.set('#swipe-badge-know', { opacity: positiveOpacity, scale: 0.92 + positiveOpacity * 0.08 });
+    gsap.set('#swipe-badge-dontknow', { opacity: negativeOpacity, scale: 0.92 + negativeOpacity * 0.08 });
+}
+
+function resetGlobalSwipePosition(animated = true) {
+    resetSwipeBadges();
+    if (animated) {
+        gsap.to('#flashcard', { x: 0, y: 0, rotation: 0, duration: 0.22, ease: 'power2.out' });
+    } else {
+        gsap.set('#flashcard', { x: 0, y: 0, rotation: 0 });
+    }
+}
+
+async function resolveGlobalSwipe(result, direction) {
+    state.drag.active = false;
+    state.drag.moved = false;
+    state.drag.suppressClickUntil = Date.now() + 250;
+    resetSwipeBadges();
+    const exitX = direction === 'right' ? window.innerWidth * 1.2 : -window.innerWidth * 1.2;
+    await animateGsap('#flashcard', { x: exitX, rotation: direction === 'right' ? 18 : -18, duration: 0.22, ease: 'power2.in' });
+    gsap.set('#flashcard', { x: 0, y: 0, rotation: 0 });
+    await handleGlobalSessionReview(result);
+}
+
+function onGlobalPointerDown(e) {
+    if (state.studyMode !== 'global') return;
+    state.drag.active = true;
+    state.drag.pointerId = e.pointerId;
+    state.drag.startX = e.clientX;
+    state.drag.startY = e.clientY;
+    state.drag.deltaX = 0;
+    state.drag.deltaY = 0;
+    state.drag.moved = false;
+    document.getElementById('flashcard').setPointerCapture?.(e.pointerId);
+}
+
+function onGlobalPointerMove(e) {
+    if (state.studyMode !== 'global' || !state.drag.active || state.drag.pointerId !== e.pointerId) return;
+    state.drag.deltaX = e.clientX - state.drag.startX;
+    state.drag.deltaY = e.clientY - state.drag.startY;
+
+    if (Math.abs(state.drag.deltaX) < 6 && Math.abs(state.drag.deltaY) < 6) {
+        return;
+    }
+
+    state.drag.moved = true;
+    updateGlobalSwipeVisuals(state.drag.deltaX, state.drag.deltaY);
+}
+
+async function onGlobalPointerUp(e) {
+    if (state.studyMode !== 'global' || state.drag.pointerId !== e.pointerId) return;
+    document.getElementById('flashcard').releasePointerCapture?.(e.pointerId);
+
+    if (!state.drag.active) return;
+
+    const deltaX = state.drag.deltaX;
+    state.drag.active = false;
+    state.drag.pointerId = null;
+
+    if (!state.drag.moved) {
+        resetGlobalSwipePosition(false);
+        return;
+    }
+
+    if (deltaX >= GLOBAL_REVIEW_THRESHOLD_PX) {
+        await resolveGlobalSwipe('know', 'right');
+        return;
+    }
+
+    if (deltaX <= -GLOBAL_REVIEW_THRESHOLD_PX) {
+        await resolveGlobalSwipe('dontknow', 'left');
+        return;
+    }
+
+    state.drag.suppressClickUntil = Date.now() + 180;
+    resetGlobalSwipePosition();
+}
 
 // GSAP Button Animations
 function initButtonAnimations() {

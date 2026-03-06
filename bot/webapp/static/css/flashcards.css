@@ -465,43 +465,6 @@ button {
     color: rgba(255,255,255,0.72);
 }
 
-.global-session-actions {
-    margin-top: 14px;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.btn-eval {
-    min-height: 58px;
-    border-radius: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    font-family: var(--font-heading);
-    font-size: 14px;
-    font-weight: 700;
-    border: 1px solid transparent;
-}
-
-.btn-eval-primary {
-    color: #ecfdf5;
-    background: linear-gradient(135deg, #10b981, #059669);
-}
-
-.btn-eval-secondary {
-    color: #fee2e2;
-    background: rgba(239, 68, 68, 0.18);
-    border-color: rgba(239, 68, 68, 0.28);
-}
-
-.btn-eval-neutral {
-    color: rgba(255,255,255,0.88);
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.12);
-}
-
 @media (max-width: 420px) {
     .dashboard-stats {
         gap: 8px;
@@ -515,10 +478,6 @@ button {
     .dashboard-value {
         font-size: 28px;
     }
-
-    .global-session-actions {
-        grid-template-columns: 1fr;
-    }
 }
 
 .flashcard {
@@ -531,6 +490,40 @@ button {
     cursor: pointer;
     transform-style: preserve-3d;
     z-index: 10;
+}
+
+.flashcard.global-swipe-enabled {
+    touch-action: none;
+}
+
+.swipe-badge {
+    position: absolute;
+    top: 28px;
+    padding: 10px 20px;
+    border-radius: 18px;
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 20;
+    background: rgba(255,255,255,0.92);
+}
+
+.swipe-badge-know {
+    left: 24px;
+    color: #16a34a;
+    border: 3px solid rgba(22, 163, 74, 0.8);
+    transform: rotate(-14deg);
+}
+
+.swipe-badge-dontknow {
+    right: 24px;
+    color: #dc2626;
+    border: 3px solid rgba(220, 38, 38, 0.8);
+    transform: rotate(14deg);
 }
 
 /* Card Stack Background Effect */
@@ -593,8 +586,7 @@ button {
     overflow-wrap: break-word;
     word-break: break-word;
     hyphens: auto;
-    /* Space for floating buttons at bottom */
-    padding: 24px 24px 90px 24px;
+    padding: 24px;
 }
 
 .card-front {
@@ -624,6 +616,22 @@ button {
     background: rgba(20, 20, 20, 0.95);
     border: 1px solid var(--accent-color);
     box-shadow: 0 0 20px rgba(204, 255, 0, 0.1);
+}
+
+#study-screen.global-study-mode .btn-nav-left,
+#study-screen.global-study-mode .btn-nav-right,
+#study-screen.global-study-mode .btn-nav-center {
+    display: none;
+}
+
+#study-screen.global-study-mode .card-front,
+#study-screen.global-study-mode .card-back {
+    padding-bottom: 28px;
+}
+
+#study-screen.global-study-mode #back-to-set {
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 
 /* Floating Navigation Buttons - GSAP Style */
