@@ -15,6 +15,17 @@ tg.setBackgroundColor('#0e100f');
 const TEXTS = {
     uk: {
         loading: 'Завантаження...',
+        learnStat: 'Вчити',
+        practiceStat: 'Практикувати',
+        knownStat: 'Навчився',
+        startGlobalStudy: 'ПОЧАТИ',
+        dueNow: 'Зараз доступно {count} карток до повторення',
+        noDueCards: 'Зараз немає карток для повторення',
+        globalKnow: 'Знаю',
+        globalDontKnow: 'Не знаю',
+        globalSkip: 'Пропустити',
+        sessionSummary: 'Сесію завершено · Знаю: {correct} · Не знаю: {incorrect} · Всього: {total}',
+        deckLabel: 'Набір',
         reverseOn: '↔ Реверс: увімкнено',
         reverseOff: '↔ Реверс: вимкнено',
         shuffle: '🔀 Перемішати',
@@ -63,6 +74,17 @@ const TEXTS = {
     },
     ru: {
         loading: 'Загрузка...',
+        learnStat: 'Учить',
+        practiceStat: 'Практиковать',
+        knownStat: 'Изучил',
+        startGlobalStudy: 'ПОЧАТИ',
+        dueNow: 'Сейчас доступно {count} карточек к повторению',
+        noDueCards: 'Сейчас нет карточек для повторения',
+        globalKnow: 'Знаю',
+        globalDontKnow: 'Не знаю',
+        globalSkip: 'Пропустить',
+        sessionSummary: 'Сессия завершена · Знаю: {correct} · Не знаю: {incorrect} · Всего: {total}',
+        deckLabel: 'Колода',
         reverseOn: '↔ Реверс: включён',
         reverseOff: '↔ Реверс: выключен',
         shuffle: '🔀 Перемешать',
@@ -121,17 +143,25 @@ let state = {
     lang: 'ru',
     pendingDelete: null,
     sets: [],
+    dashboard: { new: 0, learning: 0, known: 0, due: 0 },
     currentSet: null,
     currentCards: [],
     currentCardIndex: 0,
+    studyMode: 'set',
     studyReversed: false,
     isFlipped: false,
-    editCardId: null
+    editCardId: null,
+    sessionStats: { correct: 0, incorrect: 0 }
 };
 
 // Get text by key
-function t(key) {
-    return TEXTS[state.lang]?.[key] || TEXTS['ru'][key] || key;
+function t(key, params = null) {
+    let template = TEXTS[state.lang]?.[key] || TEXTS['ru'][key] || key;
+    if (!params) return template;
+    for (const [name, value] of Object.entries(params)) {
+        template = template.replaceAll(`{${name}}`, value);
+    }
+    return template;
 }
 
 // Apply localization
@@ -139,6 +169,13 @@ function applyLocalization() {
     document.getElementById('loading-text').textContent = t('loading');
     document.getElementById('sets-title').textContent = t('mySets');
     document.getElementById('create-set-text').textContent = t('createSet');
+    document.getElementById('stat-new-label').textContent = t('learnStat');
+    document.getElementById('stat-learning-label').textContent = t('practiceStat');
+    document.getElementById('stat-known-label').textContent = t('knownStat');
+    document.getElementById('start-global-study-text').textContent = t('startGlobalStudy');
+    document.getElementById('global-know-text').textContent = t('globalKnow');
+    document.getElementById('global-dontknow-text').textContent = t('globalDontKnow');
+    document.getElementById('global-skip-text').textContent = t('globalSkip');
     document.getElementById('no-sets-text').textContent = t('noSetsText');
     document.getElementById('no-sets-hint').textContent = t('noSetsHint');
     document.getElementById('study-text').textContent = t('study');
@@ -179,6 +216,7 @@ function applyLocalization() {
     if (cancelRename) cancelRename.textContent = t('cancel');
     const confirmRename = document.getElementById('confirm-rename-set');
     if (confirmRename) confirmRename.textContent = t('flashcards_save');
+    renderDashboard();
     updateReverseButton();
 }
 
@@ -200,6 +238,9 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
 }
 
 async function fetchSets() { return apiRequest('/sets'); }
+async function fetchDashboard() { return apiRequest('/dashboard'); }
+async function fetchGlobalSession() { return apiRequest('/session'); }
+async function reviewGlobalSessionCard(cardId, result) { return apiRequest('/session/review', 'POST', { card_id: cardId, result }); }
 async function createSet(name) { return apiRequest('/sets', 'POST', { name }); }
 async function updateSetApi(setId, name) { return apiRequest(`/sets/${setId}`, 'PUT', { name }); }
 async function deleteSetApi(setId) { return apiRequest(`/sets/${setId}`, 'DELETE'); }
@@ -272,6 +313,25 @@ function showScreen(screenId) {
 function showModal(modalId) { document.getElementById(modalId).classList.add('active'); }
 function hideModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
 
+function renderDashboard() {
+    document.getElementById('stat-new-value').textContent = state.dashboard.new || 0;
+    document.getElementById('stat-learning-value').textContent = state.dashboard.learning || 0;
+    document.getElementById('stat-known-value').textContent = state.dashboard.known || 0;
+    document.getElementById('dashboard-due-text').textContent = t('dueNow', { count: state.dashboard.due || 0 });
+}
+
+function hideSessionSummary() {
+    const el = document.getElementById('session-summary');
+    el.style.display = 'none';
+    el.textContent = '';
+}
+
+function showSessionSummary(correct, incorrect, total) {
+    const el = document.getElementById('session-summary');
+    el.textContent = t('sessionSummary', { correct, incorrect, total });
+    el.style.display = 'block';
+}
+
 // Render Logic
 function renderSets() {
     const setsList = document.getElementById('sets-list');
@@ -336,8 +396,9 @@ function renderCards() {
 function renderStudyCard() {
     const card = state.currentCards[state.currentCardIndex];
     if (!card) return;
-    const frontText = state.studyReversed ? card.back : card.front;
-    const backText = state.studyReversed ? card.front : card.back;
+    const isGlobal = state.studyMode === 'global';
+    const frontText = !isGlobal && state.studyReversed ? card.back : card.front;
+    const backText = !isGlobal && state.studyReversed ? card.front : card.back;
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
@@ -346,12 +407,13 @@ function renderStudyCard() {
     const backImgWrapper = document.getElementById('card-back-image-wrapper');
     const frontImg = document.getElementById('card-front-image');
     
-    if (card.has_image && state.currentSet) {
-        const imgUrl = getCardImageUrl(state.currentSet._id, card._id) + '?h=' + tg.initData.substring(0, 20);
+    const currentSetId = isGlobal ? card.set_id : state.currentSet?._id;
+    if (card.has_image && currentSetId) {
+        const imgUrl = getCardImageUrl(currentSetId, card._id) + '?h=' + tg.initData.substring(0, 20);
         frontImg.src = imgUrl;
         frontImgWrapper.style.display = '';
         // Add auth header via fetch for the image
-        loadAuthImage(frontImg, state.currentSet._id, card._id);
+        loadAuthImage(frontImg, currentSetId, card._id);
     } else {
         frontImgWrapper.style.display = 'none';
         frontImg.src = '';
@@ -380,6 +442,7 @@ function renderStudyCard() {
 
     document.getElementById('prev-card').disabled = state.currentCardIndex === 0;
     document.getElementById('next-card').disabled = state.currentCardIndex === state.currentCards.length - 1;
+    updateStudyModeUI();
 }
 
 // Load image with auth header (API returns Cloudinary URL)
@@ -449,8 +512,24 @@ async function loadSets() {
     }
 }
 
+async function loadDashboard() {
+    try {
+        const data = await fetchDashboard();
+        state.dashboard = {
+            new: data.new || 0,
+            learning: data.learning || 0,
+            known: data.known || 0,
+            due: data.due || 0,
+        };
+        renderDashboard();
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
 async function openSet(setId) {
     try {
+        hideSessionSummary();
         state.currentSet = state.sets.find(s => s._id === setId);
         document.getElementById('set-name').textContent = state.currentSet?.name || '';
         const data = await fetchCards(setId);
@@ -463,6 +542,117 @@ async function openSet(setId) {
     }
 }
 
+function updateStudyModeUI() {
+    const isGlobal = state.studyMode === 'global';
+    const prevBtn = document.getElementById('prev-card');
+    const nextBtn = document.getElementById('next-card');
+    const headerRight = document.querySelector('.header-right');
+    const timer = document.getElementById('study-timer');
+    const timerSetup = document.getElementById('timer-setup');
+    const context = document.getElementById('study-card-context');
+    const actions = document.getElementById('global-session-actions');
+    const currentCard = state.currentCards[state.currentCardIndex];
+
+    prevBtn.style.display = isGlobal ? 'none' : '';
+    nextBtn.style.display = isGlobal ? 'none' : '';
+    headerRight.style.display = isGlobal ? 'none' : 'flex';
+    timer.style.display = isGlobal ? 'none' : '';
+    timerSetup.style.display = 'none';
+
+    if (isGlobal) {
+        context.textContent = currentCard?.set_name ? `${t('deckLabel')}: ${currentCard.set_name}` : '';
+        context.style.display = currentCard?.set_name ? 'block' : 'none';
+        actions.style.display = state.isFlipped ? 'grid' : 'none';
+    } else {
+        context.style.display = 'none';
+        actions.style.display = 'none';
+    }
+}
+
+async function startGlobalStudySession() {
+    try {
+        hideSessionSummary();
+        const data = await fetchGlobalSession();
+        const cards = data.cards || [];
+
+        if (cards.length === 0) {
+            tg.showAlert(t('noDueCards'));
+            return;
+        }
+
+        state.currentSet = null;
+        state.currentCards = cards;
+        state.currentCardIndex = 0;
+        state.studyMode = 'global';
+        state.studyReversed = false;
+        state.isFlipped = false;
+        state.sessionStats = { correct: 0, incorrect: 0 };
+        renderStudyCard();
+        updateStudyModeUI();
+        showScreen('study-screen');
+        gsap.from('#flashcard', { y: 100, opacity: 0, duration: 0.8, ease: 'back.out(1.7)' });
+    } catch (error) {
+        console.error('Error starting global session:', error);
+        tg.showAlert(t('errorLoadCards'));
+    }
+}
+
+async function finishGlobalStudySession() {
+    const total = state.sessionStats.correct + state.sessionStats.incorrect;
+    stopTimer();
+    await loadSets();
+    await loadDashboard();
+    showSessionSummary(state.sessionStats.correct, state.sessionStats.incorrect, total);
+    state.studyMode = 'set';
+    state.currentCards = [];
+    state.currentCardIndex = 0;
+    state.isFlipped = false;
+    showScreen('sets-screen');
+    tg.HapticFeedback.notificationOccurred('success');
+}
+
+async function handleGlobalSessionReview(result) {
+    const card = state.currentCards[state.currentCardIndex];
+    if (!card) return;
+
+    try {
+        await reviewGlobalSessionCard(card._id, result);
+        if (result === 'know') {
+            state.sessionStats.correct += 1;
+        } else {
+            state.sessionStats.incorrect += 1;
+        }
+
+        if (state.currentCardIndex >= state.currentCards.length - 1) {
+            await finishGlobalStudySession();
+            return;
+        }
+
+        state.currentCardIndex += 1;
+        state.isFlipped = false;
+        renderStudyCard();
+        updateStudyModeUI();
+        gsap.fromTo('#flashcard', { x: 80, opacity: 0.5 }, { x: 0, opacity: 1, duration: 0.35, ease: 'power2.out' });
+        tg.HapticFeedback.notificationOccurred('success');
+    } catch (error) {
+        console.error('Error reviewing global session card:', error);
+        tg.showAlert(t('errorEditCard'));
+    }
+}
+
+async function skipGlobalSessionCard() {
+    if (state.currentCardIndex >= state.currentCards.length - 1) {
+        await finishGlobalStudySession();
+        return;
+    }
+
+    state.currentCardIndex += 1;
+    state.isFlipped = false;
+    renderStudyCard();
+    updateStudyModeUI();
+    tg.HapticFeedback.impactOccurred('light');
+}
+
 // Handlers for Sets and Cards (keeping logic identical)
 async function handleCreateSet() {
     const input = document.getElementById('set-name-input');
@@ -473,6 +663,7 @@ async function handleCreateSet() {
         input.value = '';
         hideModal('create-set-modal');
         await loadSets();
+        await loadDashboard();
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) { tg.showAlert(t('errorCreateSet')); }
 }
@@ -484,6 +675,7 @@ async function handleDeleteSet() {
         hideModal('delete-modal');
         state.currentSet = null;
         await loadSets();
+        await loadDashboard();
         showScreen('sets-screen');
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) { tg.showAlert(t('errorDeleteSet')); }
@@ -516,6 +708,7 @@ async function executeDelete() {
             const data = await fetchCards(state.currentSet._id);
             state.currentCards = data.cards || [];
             renderCards();
+            await loadDashboard();
             tg.HapticFeedback.notificationOccurred('success');
         } catch (error) { tg.showAlert(t('errorDeleteCard')); }
     }
@@ -561,6 +754,7 @@ async function handleAddCard() {
         const data = await fetchCards(state.currentSet._id);
         state.currentCards = data.cards || [];
         renderCards();
+        await loadDashboard();
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) { tg.showAlert(t('errorAddCard')); }
 }
@@ -571,6 +765,7 @@ async function deleteCard(cardId) {
         const data = await fetchCards(state.currentSet._id);
         state.currentCards = data.cards || [];
         renderCards();
+        await loadDashboard();
         tg.HapticFeedback.notificationOccurred('success');
     } catch (error) { tg.showAlert(t('errorDeleteCard')); }
 }
@@ -800,11 +995,13 @@ function onTimerDone() {
 
 function startStudy() {
     if (state.currentCards.length === 0) return;
+    state.studyMode = 'set';
     state.currentCardIndex = 0;
     state.studyReversed = false;
     state.isFlipped = false;
     updateReverseButton();
     renderStudyCard();
+    updateStudyModeUI();
     showScreen('study-screen');
     
     // Entrance animation for the card
@@ -812,6 +1009,7 @@ function startStudy() {
 }
 
 function nextCard() {
+    if (state.studyMode !== 'set') return;
     if (state.currentCardIndex < state.currentCards.length - 1) {
         // Animate Out
         gsap.to('#flashcard', { 
@@ -841,6 +1039,7 @@ function nextCard() {
 }
 
 function prevCard() {
+    if (state.studyMode !== 'set') return;
     if (state.currentCardIndex > 0) {
         // Animate Out
         gsap.to('#flashcard', { 
@@ -879,6 +1078,8 @@ function flipCard() {
         duration: 0.5, 
         ease: "back.out(1.5)" 
     });
+
+    updateStudyModeUI();
     
     tg.HapticFeedback.impactOccurred('light');
 }
@@ -894,7 +1095,12 @@ function exitStudyMode() {
         opacity: 0,
         duration: 0.3,
         onComplete: () => {
-            showScreen('set-screen');
+            if (state.studyMode === 'global') {
+                state.studyMode = 'set';
+                showScreen('sets-screen');
+            } else {
+                showScreen('set-screen');
+            }
             // Reset for next time
             gsap.set('#flashcard', { scale: 1, opacity: 1, x: 0, rotation: 0 });
         }
@@ -902,6 +1108,7 @@ function exitStudyMode() {
 }
 
 function toggleReverse() {
+    if (state.studyMode !== 'set') return;
     state.studyReversed = !state.studyReversed;
     state.isFlipped = false;
     updateReverseButton();
@@ -915,7 +1122,7 @@ function toggleReverse() {
 function updateReverseButton() {
     const btn = document.getElementById('toggle-reverse');
     if (!btn) return;
-    btn.classList.toggle('active', state.studyReversed);
+    btn.classList.toggle('active', state.studyMode === 'set' && state.studyReversed);
 }
 
 function shuffleArrayInPlace(arr) {
@@ -926,6 +1133,7 @@ function shuffleArrayInPlace(arr) {
 }
 
 function shuffleStudyCards() {
+    if (state.studyMode !== 'set') return;
     if (!state.currentCards || state.currentCards.length < 2) return;
     
     // Animation specific to shuffle
@@ -958,6 +1166,7 @@ function escapeHtml(text) {
 
 // Event listeners
 document.getElementById('create-set-btn').addEventListener('click', () => showModal('create-set-modal'));
+document.getElementById('start-global-study-btn').addEventListener('click', startGlobalStudySession);
 document.getElementById('cancel-create-set').addEventListener('click', () => hideModal('create-set-modal'));
 document.getElementById('confirm-create-set').addEventListener('click', handleCreateSet);
 document.getElementById('back-to-sets').addEventListener('click', () => { state.currentSet = null; showScreen('sets-screen'); });
@@ -986,6 +1195,9 @@ document.getElementById('back-to-set').addEventListener('click', exitStudyMode);
 document.getElementById('flashcard').addEventListener('click', flipCard);
 document.getElementById('prev-card').addEventListener('click', prevCard);
 document.getElementById('next-card').addEventListener('click', nextCard);
+document.getElementById('global-know-btn').addEventListener('click', () => handleGlobalSessionReview('know'));
+document.getElementById('global-dontknow-btn').addEventListener('click', () => handleGlobalSessionReview('dontknow'));
+document.getElementById('global-skip-btn').addEventListener('click', skipGlobalSessionCard);
 document.getElementById('shuffle-cards').addEventListener('click', shuffleStudyCards);
 document.getElementById('toggle-reverse').addEventListener('click', toggleReverse);
 
@@ -996,8 +1208,8 @@ document.getElementById('rename-set-input').addEventListener('keypress', (e) => 
 // Keyboard navigation
 document.addEventListener('keydown', (e) => {
     if (document.getElementById('study-screen').classList.contains('active')) {
-        if (e.key === 'ArrowLeft') prevCard();
-        else if (e.key === 'ArrowRight') nextCard();
+        if (e.key === 'ArrowLeft' && state.studyMode === 'set') prevCard();
+        else if (e.key === 'ArrowRight' && state.studyMode === 'set') nextCard();
         else if (e.key === ' ') flipCard();
         else if (e.key === 'Escape') exitStudyMode();
     }
@@ -1056,7 +1268,7 @@ async function init() {
     try {
         state.lang = await fetchUserLang();
         applyLocalization();
-        await loadSets();
+        await Promise.all([loadSets(), loadDashboard()]);
         initButtonAnimations(); // Initialize animations
         initTimer(); // Initialize study timer
         initEditImageHandlers(); // Initialize image upload handlers

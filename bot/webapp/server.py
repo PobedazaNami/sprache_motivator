@@ -10,8 +10,9 @@ import json
 import logging
 import base64
 from urllib.parse import parse_qsl
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import random
 
 from aiohttp import web
 from bson import ObjectId
@@ -93,6 +94,130 @@ def get_user_id_from_request(request: web.Request) -> int | None:
     return None
 
 
+def get_srs_status(card: dict) -> str:
+    """Normalize SRS status for cards created before SRS fields existed."""
+    return card.get("srs_status") or "new"
+
+
+def get_next_srs_interval(current_interval: int) -> int:
+    """Return the next review interval for a known card."""
+    if current_interval <= 0:
+        return 1
+    if current_interval == 1:
+        return 3
+    if current_interval == 3:
+        return 7
+    if current_interval == 7:
+        return 14
+    if current_interval == 14:
+        return 30
+    return current_interval * 2
+
+
+def is_due_flashcard(card: dict, now: datetime) -> bool:
+    """Return True if a card should appear in the global review session."""
+    status = get_srs_status(card)
+    if status == "new":
+        return True
+
+    next_review = card.get("srs_next_review")
+    if next_review is None:
+        return True
+
+    return next_review <= now
+
+
+def build_srs_review_update(card: dict, result: str) -> dict:
+    """Build the MongoDB update document for a self-rated flashcard review."""
+    now = datetime.now(timezone.utc)
+    current_interval = int(card.get("srs_interval", 0) or 0)
+
+    if result == "know":
+        next_interval = get_next_srs_interval(current_interval)
+        status = "known" if next_interval >= 7 else "learning"
+        return {
+            "$set": {
+                "srs_status": status,
+                "srs_interval": next_interval,
+                "srs_next_review": now + timedelta(days=next_interval),
+            },
+            "$inc": {"srs_correct": 1},
+        }
+
+    return {
+        "$set": {
+            "srs_status": "learning",
+            "srs_interval": 1,
+            "srs_next_review": now + timedelta(days=1),
+        },
+        "$inc": {"srs_incorrect": 1},
+    }
+
+
+async def get_dashboard_payload(user_id: int) -> dict:
+    """Return aggregate flashcard stats for the mini app dashboard."""
+    now = datetime.now(timezone.utc)
+    collection = mongo_service.db().flashcards
+
+    new_count = await collection.count_documents(
+        {
+            "user_id": user_id,
+            "$or": [
+                {"srs_status": {"$exists": False}},
+                {"srs_status": "new"},
+            ],
+        }
+    )
+    learning_count = await collection.count_documents({"user_id": user_id, "srs_status": "learning"})
+    known_count = await collection.count_documents({"user_id": user_id, "srs_status": "known"})
+    due_count = await collection.count_documents(
+        {
+            "user_id": user_id,
+            "$or": [
+                {"srs_status": {"$exists": False}},
+                {"srs_status": "new"},
+                {"srs_next_review": {"$exists": False}},
+                {"srs_next_review": {"$lte": now}},
+            ],
+        }
+    )
+
+    return {
+        "new": new_count,
+        "learning": learning_count,
+        "known": known_count,
+        "due": due_count,
+    }
+
+
+async def get_due_session_cards(user_id: int, limit: int = 50) -> list[dict]:
+    """Return due/new cards from all sets for a mini app study session."""
+    now = datetime.now(timezone.utc)
+    cards = await mongo_service.db().flashcards.find({"user_id": user_id}).to_list(length=5000)
+    user_sets = await mongo_service.db().flashcard_sets.find({"user_id": user_id}).to_list(length=500)
+    set_names = {str(item["_id"]): item.get("name", "") for item in user_sets}
+
+    due_cards = []
+    for card in cards:
+        if not is_due_flashcard(card, now):
+            continue
+        due_cards.append(
+            {
+                "_id": str(card["_id"]),
+                "set_id": card.get("set_id"),
+                "set_name": set_names.get(card.get("set_id"), ""),
+                "front": card.get("front", ""),
+                "back": card.get("back", ""),
+                "example": card.get("example", ""),
+                "has_image": bool(card.get("image_url")),
+                "srs_status": get_srs_status(card),
+            }
+        )
+
+    random.shuffle(due_cards)
+    return due_cards[:limit]
+
+
 # Routes
 
 async def serve_flashcards_app(request: web.Request) -> web.Response:
@@ -127,6 +252,79 @@ async def get_user_lang(request: web.Request) -> web.Response:
     except Exception as e:
         logger.error(f"Error getting user lang: {e}")
         return web.json_response({"lang": "ru"})
+
+
+async def get_dashboard(request: web.Request) -> web.Response:
+    """Get dashboard stats for the flashcards mini app."""
+    user_id = get_user_id_from_request(request)
+
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    try:
+        return web.json_response(await get_dashboard_payload(user_id))
+    except Exception as e:
+        logger.error(f"Error getting flashcards dashboard: {e}")
+        raise web.HTTPInternalServerError(text="Failed to get dashboard")
+
+
+async def get_global_session(request: web.Request) -> web.Response:
+    """Get due cards for the global SRS study session in the mini app."""
+    user_id = get_user_id_from_request(request)
+
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    try:
+        cards = await get_due_session_cards(user_id)
+        return web.json_response({"cards": cards})
+    except Exception as e:
+        logger.error(f"Error getting flashcards session cards: {e}")
+        raise web.HTTPInternalServerError(text="Failed to get session cards")
+
+
+async def review_global_session_card(request: web.Request) -> web.Response:
+    """Review a card from the global SRS session."""
+    user_id = get_user_id_from_request(request)
+
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database unavailable")
+
+    try:
+        data = await request.json()
+        card_id = (data.get("card_id") or "").strip()
+        result = (data.get("result") or "").strip()
+
+        if not card_id or result not in {"know", "dontknow"}:
+            raise web.HTTPBadRequest(text="card_id and valid result are required")
+
+        card = await mongo_service.db().flashcards.find_one({
+            "_id": ObjectId(card_id),
+            "user_id": user_id,
+        })
+
+        if not card:
+            raise web.HTTPNotFound(text="Card not found")
+
+        update_doc = build_srs_review_update(card, result)
+        await mongo_service.db().flashcards.update_one({"_id": ObjectId(card_id)}, update_doc)
+
+        return web.json_response({"success": True})
+
+    except web.HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reviewing flashcard in session: {e}")
+        raise web.HTTPInternalServerError(text="Failed to review card")
 
 
 async def get_sets(request: web.Request) -> web.Response:
@@ -689,6 +887,9 @@ def create_webapp_routes() -> web.Application:
     
     # API routes
     app.router.add_get('/api/flashcards/user/lang', get_user_lang)
+    app.router.add_get('/api/flashcards/dashboard', get_dashboard)
+    app.router.add_get('/api/flashcards/session', get_global_session)
+    app.router.add_post('/api/flashcards/session/review', review_global_session_card)
     app.router.add_get('/api/flashcards/sets', get_sets)
     app.router.add_post('/api/flashcards/sets', create_set)
     app.router.add_put('/api/flashcards/sets/{set_id}', update_set)

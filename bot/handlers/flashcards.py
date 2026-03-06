@@ -2,8 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from datetime import datetime, timezone, timedelta
-import random
+from datetime import datetime, timezone
 from bson import ObjectId
 
 from bot.config import settings
@@ -16,9 +15,7 @@ from bot.utils.keyboards import (
     get_flashcard_sets_keyboard,
     get_flashcard_set_keyboard,
     get_flashcard_view_keyboard,
-    get_delete_set_confirm_keyboard,
-    get_fc_session_front_keyboard,
-    get_fc_session_back_keyboard,
+    get_delete_set_confirm_keyboard
 )
 
 router = Router()
@@ -29,177 +26,6 @@ class FlashcardStates(StatesGroup):
     adding_card_front = State()
     adding_card_back = State()
     adding_card_example = State()
-
-
-class FlashcardSessionStates(StatesGroup):
-    in_session = State()
-
-
-def get_default_srs_status(card: dict) -> str:
-    """Return a normalized SRS status for cards created before SRS fields existed."""
-    return card.get("srs_status") or "new"
-
-
-def is_due_card(card: dict, now: datetime) -> bool:
-    """Return True when a card should be shown in the global study session."""
-    status = get_default_srs_status(card)
-    if status == "new":
-        return True
-
-    next_review = card.get("srs_next_review")
-    if next_review is None:
-        return True
-
-    return next_review <= now
-
-
-async def get_flashcards_stats(user_id: int) -> dict:
-    """Aggregate flashcard statistics for the dashboard."""
-    now = datetime.now(timezone.utc)
-    collection = mongo_service.db().flashcards
-
-    new_count = await collection.count_documents(
-        {
-            "user_id": user_id,
-            "$or": [
-                {"srs_status": {"$exists": False}},
-                {"srs_status": "new"},
-            ],
-        }
-    )
-    learning_count = await collection.count_documents({"user_id": user_id, "srs_status": "learning"})
-    known_count = await collection.count_documents({"user_id": user_id, "srs_status": "known"})
-    due_count = await collection.count_documents(
-        {
-            "user_id": user_id,
-            "$or": [
-                {"srs_status": {"$exists": False}},
-                {"srs_status": "new"},
-                {"srs_next_review": {"$exists": False}},
-                {"srs_next_review": {"$lte": now}},
-            ],
-        }
-    )
-
-    return {
-        "new": new_count,
-        "learning": learning_count,
-        "known": known_count,
-        "due": due_count,
-    }
-
-
-async def get_flashcards_dashboard_text(lang: str, user_id: int) -> str:
-    """Build dashboard text for the flashcards home screen."""
-    stats = await get_flashcards_stats(user_id)
-    return get_text(
-        lang,
-        "fc_stats_header",
-        new=stats["new"],
-        learning=stats["learning"],
-        known=stats["known"],
-        due=stats["due"],
-    )
-
-
-async def get_due_cards(user_id: int, limit: int = 50) -> list[dict]:
-    """Return due cards from all sets, shuffled for a study session."""
-    now = datetime.now(timezone.utc)
-    cards = await mongo_service.db().flashcards.find({"user_id": user_id}).to_list(length=5000)
-    due_cards = [card for card in cards if is_due_card(card, now)]
-    random.shuffle(due_cards)
-    return due_cards[:limit]
-
-
-def get_next_interval(current_interval: int) -> int:
-    """Advance the card interval using a simple DuoCards-like schedule."""
-    if current_interval <= 0:
-        return 1
-    if current_interval == 1:
-        return 3
-    if current_interval == 3:
-        return 7
-    if current_interval == 7:
-        return 14
-    if current_interval == 14:
-        return 30
-    return current_interval * 2
-
-
-def build_srs_update(card: dict, known: bool) -> dict:
-    """Build a MongoDB update document for a self-rated flashcard answer."""
-    now = datetime.now(timezone.utc)
-    current_interval = int(card.get("srs_interval", 0) or 0)
-
-    if known:
-        next_interval = get_next_interval(current_interval)
-        status = "known" if next_interval >= 7 else "learning"
-        return {
-            "$set": {
-                "srs_status": status,
-                "srs_interval": next_interval,
-                "srs_next_review": now + timedelta(days=next_interval),
-            },
-            "$inc": {"srs_correct": 1},
-        }
-
-    return {
-        "$set": {
-            "srs_status": "learning",
-            "srs_interval": 1,
-            "srs_next_review": now + timedelta(days=1),
-        },
-        "$inc": {"srs_incorrect": 1},
-    }
-
-
-async def show_session_card(message, card: dict, current: int, total: int, is_flipped: bool, lang: str):
-    """Render a flashcard inside the global SRS session."""
-    if is_flipped:
-        text = get_text(lang, "fc_session_card_back", current=current, total=total, front=card["front"], back=card["back"])
-        keyboard = get_fc_session_back_keyboard(lang)
-    else:
-        text = get_text(lang, "fc_session_card_front", current=current, total=total, front=card["front"])
-        keyboard = get_fc_session_front_keyboard(lang)
-
-    try:
-        await message.edit_text(text, reply_markup=keyboard)
-    except Exception:
-        await message.answer(text, reply_markup=keyboard)
-
-
-async def show_session_current_card(message, state: FSMContext, lang: str):
-    """Load and show the current card from session state."""
-    data = await state.get_data()
-    queue = data.get("session_queue", [])
-    index = data.get("session_index", 0)
-
-    if index >= len(queue):
-        summary = get_text(
-            lang,
-            "fc_session_complete",
-            correct=data.get("session_correct", 0),
-            incorrect=data.get("session_incorrect", 0),
-            total=len(queue),
-        )
-        await state.clear()
-        await message.edit_text(summary, reply_markup=get_flashcards_menu_keyboard(lang, settings.WEBAPP_URL))
-        return
-
-    card = await mongo_service.db().flashcards.find_one({"_id": ObjectId(queue[index])})
-    if not card:
-        await state.update_data(session_index=index + 1)
-        await show_session_current_card(message, state, lang)
-        return
-
-    await show_session_card(message, card, index + 1, len(queue), False, lang)
-
-
-async def advance_session(message, state: FSMContext, lang: str):
-    """Move session to the next card and render it."""
-    data = await state.get_data()
-    await state.update_data(session_index=data.get("session_index", 0) + 1)
-    await show_session_current_card(message, state, lang)
 
 
 @router.message(F.text.in_([
@@ -216,7 +42,7 @@ async def flashcards_menu(message: Message, state: FSMContext):
             return
         
         lang = user.interface_language.value
-        text = await get_flashcards_dashboard_text(lang, message.from_user.id)
+        text = get_text(lang, "flashcards_menu")
         
         # Check if Mini App is configured
         webapp_url = settings.WEBAPP_URL
@@ -231,154 +57,11 @@ async def flashcards_menu_callback(callback: CallbackQuery, state: FSMContext):
     async with async_session_maker() as session:
         user = await UserService.get_or_create_user(session, callback.from_user.id)
         lang = user.interface_language.value
-        text = await get_flashcards_dashboard_text(lang, callback.from_user.id)
+        text = get_text(lang, "flashcards_menu")
         
         # Check if Mini App is configured
         webapp_url = settings.WEBAPP_URL
         await callback.message.edit_text(text, reply_markup=get_flashcards_menu_keyboard(lang, webapp_url))
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_start")
-async def start_flashcards_session(callback: CallbackQuery, state: FSMContext):
-    """Start a global flashcard review session across all decks."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        if not mongo_service.is_ready():
-            await callback.answer(get_text(lang, "error"), show_alert=True)
-            return
-
-        due_cards = await get_due_cards(callback.from_user.id)
-        if not due_cards:
-            await state.clear()
-            await callback.message.edit_text(
-                get_text(lang, "fc_session_empty"),
-                reply_markup=get_flashcards_menu_keyboard(lang, settings.WEBAPP_URL),
-            )
-            await callback.answer()
-            return
-
-        await state.set_state(FlashcardSessionStates.in_session)
-        await state.update_data(
-            session_queue=[str(card["_id"]) for card in due_cards],
-            session_index=0,
-            session_correct=0,
-            session_incorrect=0,
-        )
-        await show_session_card(callback.message, due_cards[0], 1, len(due_cards), False, lang)
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_flip")
-async def flip_session_card(callback: CallbackQuery, state: FSMContext):
-    """Flip the current card inside an SRS session."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        data = await state.get_data()
-        queue = data.get("session_queue", [])
-        index = data.get("session_index", 0)
-
-        if index >= len(queue):
-            await callback.answer(get_text(lang, "error"), show_alert=True)
-            return
-
-        card = await mongo_service.db().flashcards.find_one({"_id": ObjectId(queue[index])})
-        if not card:
-            await advance_session(callback.message, state, lang)
-            await callback.answer()
-            return
-
-        await show_session_card(callback.message, card, index + 1, len(queue), True, lang)
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_know")
-async def mark_session_card_known(callback: CallbackQuery, state: FSMContext):
-    """Mark the current session card as known and schedule the next review."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        data = await state.get_data()
-        queue = data.get("session_queue", [])
-        index = data.get("session_index", 0)
-
-        if index >= len(queue):
-            await callback.answer(get_text(lang, "error"), show_alert=True)
-            return
-
-        card = await mongo_service.db().flashcards.find_one({"_id": ObjectId(queue[index])})
-        if card:
-            await mongo_service.db().flashcards.update_one(
-                {"_id": card["_id"], "user_id": callback.from_user.id},
-                build_srs_update(card, known=True),
-            )
-
-        await state.update_data(session_correct=data.get("session_correct", 0) + 1)
-        await advance_session(callback.message, state, lang)
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_dontknow")
-async def mark_session_card_unknown(callback: CallbackQuery, state: FSMContext):
-    """Mark the current session card as unknown and reset it for near-term review."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        data = await state.get_data()
-        queue = data.get("session_queue", [])
-        index = data.get("session_index", 0)
-
-        if index >= len(queue):
-            await callback.answer(get_text(lang, "error"), show_alert=True)
-            return
-
-        card = await mongo_service.db().flashcards.find_one({"_id": ObjectId(queue[index])})
-        if card:
-            await mongo_service.db().flashcards.update_one(
-                {"_id": card["_id"], "user_id": callback.from_user.id},
-                build_srs_update(card, known=False),
-            )
-
-        await state.update_data(session_incorrect=data.get("session_incorrect", 0) + 1)
-        await advance_session(callback.message, state, lang)
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_skip")
-async def skip_session_card(callback: CallbackQuery, state: FSMContext):
-    """Skip the current session card without updating its SRS state."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        await advance_session(callback.message, state, lang)
-        await callback.answer()
-
-
-@router.callback_query(F.data == "fc_session_exit")
-async def exit_flashcards_session(callback: CallbackQuery, state: FSMContext):
-    """Exit the current flashcard session and show the partial results."""
-    async with async_session_maker() as session:
-        user = await UserService.get_or_create_user(session, callback.from_user.id)
-        lang = user.interface_language.value
-
-        data = await state.get_data()
-        queue = data.get("session_queue", [])
-        summary = get_text(
-            lang,
-            "fc_session_exit",
-            correct=data.get("session_correct", 0),
-            incorrect=data.get("session_incorrect", 0),
-            total=min(data.get("session_index", 0), len(queue)),
-        )
-        await state.clear()
-        await callback.message.edit_text(summary, reply_markup=get_flashcards_menu_keyboard(lang, settings.WEBAPP_URL))
         await callback.answer()
 
 
