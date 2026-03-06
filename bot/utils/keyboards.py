@@ -346,6 +346,8 @@ def get_express_topic_selection_keyboard(lang: str, level: str) -> InlineKeyboar
 def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """Main flashcards menu keyboard with optional Web App button"""
     builder = InlineKeyboardBuilder()
+
+    builder.button(text=get_text(lang, "btn_fc_start_session"), callback_data="fc_session_start")
     
     # Add Web App button if URL is configured
     if webapp_url:
@@ -353,6 +355,9 @@ def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) ->
             text=get_text(lang, "btn_open_webapp"),
             web_app=WebAppInfo(url=f"{webapp_url}/flashcards?v={int(time())}")
         )
+
+    builder.button(text=get_text(lang, "btn_my_sets"), callback_data="flashcards_my_sets")
+    builder.button(text=get_text(lang, "btn_create_set"), callback_data="flashcards_create_set")
 
     builder.adjust(1)
     return builder.as_markup()
@@ -414,5 +419,25 @@ def get_delete_set_confirm_keyboard(set_id: str, lang: str) -> InlineKeyboardMar
     builder.button(text=get_text(lang, "btn_confirm_delete"), callback_data=f"flashcards_confirm_delete_{set_id}")
     builder.button(text=get_text(lang, "btn_back"), callback_data=f"flashcards_view_set_{set_id}")
     builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_fc_session_front_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for the front side of an SRS flashcard session item"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_fc_flip"), callback_data="fc_session_flip")
+    builder.button(text=get_text(lang, "btn_fc_exit_session"), callback_data="fc_session_exit")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_fc_session_back_keyboard(lang: str) -> InlineKeyboardMarkup:
+    """Keyboard for the back side of an SRS flashcard session item"""
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text(lang, "btn_fc_know"), callback_data="fc_session_know")
+    builder.button(text=get_text(lang, "btn_fc_dontknow"), callback_data="fc_session_dontknow")
+    builder.button(text=get_text(lang, "btn_fc_skip"), callback_data="fc_session_skip")
+    builder.button(text=get_text(lang, "btn_fc_exit_session"), callback_data="fc_session_exit")
+    builder.adjust(2, 2)
     return builder.as_markup()
 
