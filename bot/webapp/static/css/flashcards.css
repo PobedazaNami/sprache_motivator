@@ -494,6 +494,14 @@ button {
 
 .flashcard.global-swipe-enabled {
     touch-action: none;
+    user-select: none;
+}
+
+.flashcard.global-swipe-enabled,
+.flashcard.global-swipe-enabled .card-inner,
+.flashcard.global-swipe-enabled .card-front,
+.flashcard.global-swipe-enabled .card-back {
+    touch-action: none;
 }
 
 .swipe-badge {
@@ -627,6 +635,8 @@ button {
 #study-screen.global-study-mode .card-front,
 #study-screen.global-study-mode .card-back {
     padding-bottom: 28px;
+    overflow: hidden;
+    user-select: none;
 }
 
 #study-screen.global-study-mode #back-to-set {

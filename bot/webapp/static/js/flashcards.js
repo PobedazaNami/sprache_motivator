@@ -1237,9 +1237,36 @@ document.addEventListener('keydown', (e) => {
 // Swipe support
 let touchStartX = 0;
 let touchEndX = 0;
-document.getElementById('flashcard').addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+document.getElementById('flashcard').addEventListener('touchstart', (e) => {
+    if (state.studyMode === 'global') {
+        const touch = e.changedTouches[0];
+        beginGlobalDrag(touch.identifier, touch.screenX, touch.screenY);
+        return;
+    }
+    touchStartX = e.changedTouches[0].screenX;
+}, { passive: true });
+document.getElementById('flashcard').addEventListener('touchmove', (e) => {
+    if (state.studyMode !== 'global' || !state.drag.active) {
+        return;
+    }
+
+    const touch = Array.from(e.changedTouches).find((item) => item.identifier === state.drag.pointerId)
+        || Array.from(e.touches).find((item) => item.identifier === state.drag.pointerId);
+
+    if (!touch) {
+        return;
+    }
+
+    e.preventDefault();
+    updateGlobalDrag(touch.screenX, touch.screenY);
+}, { passive: false });
 document.getElementById('flashcard').addEventListener('touchend', (e) => {
     if (state.studyMode === 'global') {
+        const touch = Array.from(e.changedTouches).find((item) => item.identifier === state.drag.pointerId);
+        if (touch) {
+            e.preventDefault();
+            finishGlobalDrag();
+        }
         return;
     }
     touchEndX = e.changedTouches[0].screenX;
@@ -1280,22 +1307,20 @@ async function resolveGlobalSwipe(result, direction) {
     await handleGlobalSessionReview(result);
 }
 
-function onGlobalPointerDown(e) {
+function beginGlobalDrag(pointerId, startX, startY) {
     if (state.studyMode !== 'global') return;
     state.drag.active = true;
-    state.drag.pointerId = e.pointerId;
-    state.drag.startX = e.clientX;
-    state.drag.startY = e.clientY;
+    state.drag.pointerId = pointerId;
+    state.drag.startX = startX;
+    state.drag.startY = startY;
     state.drag.deltaX = 0;
     state.drag.deltaY = 0;
     state.drag.moved = false;
-    document.getElementById('flashcard').setPointerCapture?.(e.pointerId);
 }
 
-function onGlobalPointerMove(e) {
-    if (state.studyMode !== 'global' || !state.drag.active || state.drag.pointerId !== e.pointerId) return;
-    state.drag.deltaX = e.clientX - state.drag.startX;
-    state.drag.deltaY = e.clientY - state.drag.startY;
+function updateGlobalDrag(currentX, currentY) {
+    state.drag.deltaX = currentX - state.drag.startX;
+    state.drag.deltaY = currentY - state.drag.startY;
 
     if (Math.abs(state.drag.deltaX) < 6 && Math.abs(state.drag.deltaY) < 6) {
         return;
@@ -1305,10 +1330,7 @@ function onGlobalPointerMove(e) {
     updateGlobalSwipeVisuals(state.drag.deltaX, state.drag.deltaY);
 }
 
-async function onGlobalPointerUp(e) {
-    if (state.studyMode !== 'global' || state.drag.pointerId !== e.pointerId) return;
-    document.getElementById('flashcard').releasePointerCapture?.(e.pointerId);
-
+async function finishGlobalDrag() {
     if (!state.drag.active) return;
 
     const deltaX = state.drag.deltaX;
@@ -1332,6 +1354,23 @@ async function onGlobalPointerUp(e) {
 
     state.drag.suppressClickUntil = Date.now() + 180;
     resetGlobalSwipePosition();
+}
+
+function onGlobalPointerDown(e) {
+    if (state.studyMode !== 'global') return;
+    beginGlobalDrag(e.pointerId, e.screenX, e.screenY);
+    document.getElementById('flashcard').setPointerCapture?.(e.pointerId);
+}
+
+function onGlobalPointerMove(e) {
+    if (state.studyMode !== 'global' || !state.drag.active || state.drag.pointerId !== e.pointerId) return;
+    updateGlobalDrag(e.screenX, e.screenY);
+}
+
+async function onGlobalPointerUp(e) {
+    if (state.studyMode !== 'global' || state.drag.pointerId !== e.pointerId) return;
+    document.getElementById('flashcard').releasePointerCapture?.(e.pointerId);
+    await finishGlobalDrag();
 }
 
 // GSAP Button Animations
