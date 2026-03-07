@@ -902,6 +902,35 @@ input:focus, textarea:focus {
     white-space: nowrap;
 }
 
+@media (max-width: 640px) {
+    .timer-setup {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 78px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(calc(100vw - 24px), 470px);
+        margin-top: 0;
+    }
+
+    .timer-setup-inner {
+        width: 100%;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px 12px;
+    }
+
+    .timer-step-btn,
+    .timer-start-btn,
+    .timer-close-btn {
+        flex: 0 0 44px;
+    }
+
+    .timer-range-value {
+        min-width: 28px;
+        text-align: center;
+    }
+}
+
 .timer-label {
     font-family: var(--font-heading);
     font-size: 14px;
