@@ -421,8 +421,8 @@ function renderStudyCard() {
     const card = state.currentCards[state.currentCardIndex];
     if (!card) return;
     const isGlobal = state.studyMode === 'global';
-    const frontText = !isGlobal && state.studyReversed ? card.back : card.front;
-    const backText = !isGlobal && state.studyReversed ? card.front : card.back;
+    const frontText = state.studyReversed ? card.back : card.front;
+    const backText = state.studyReversed ? card.front : card.back;
     document.getElementById('card-front-text').textContent = frontText;
     document.getElementById('card-back-text').textContent = backText;
     
@@ -578,10 +578,10 @@ function updateStudyModeUI() {
     const flashcard = document.getElementById('flashcard');
     const currentCard = state.currentCards[state.currentCardIndex];
 
-    prevBtn.style.display = isGlobal ? 'none' : '';
-    nextBtn.style.display = isGlobal ? 'none' : '';
-    headerRight.style.display = isGlobal ? 'none' : 'flex';
-    timer.style.display = isGlobal ? 'none' : '';
+    prevBtn.style.display = '';
+    nextBtn.style.display = '';
+    headerRight.style.display = 'flex';
+    timer.style.display = '';
     timerSetup.style.display = 'none';
     studyScreen.classList.toggle('global-study-mode', isGlobal);
     flashcard.classList.toggle('global-swipe-enabled', isGlobal);
@@ -1024,7 +1024,6 @@ function startStudy() {
 }
 
 function nextCard() {
-    if (state.studyMode !== 'set') return;
     if (state.currentCardIndex < state.currentCards.length - 1) {
         // Animate Out
         gsap.to('#flashcard', { 
@@ -1054,7 +1053,6 @@ function nextCard() {
 }
 
 function prevCard() {
-    if (state.studyMode !== 'set') return;
     if (state.currentCardIndex > 0) {
         // Animate Out
         gsap.to('#flashcard', { 
@@ -1126,7 +1124,6 @@ function exitStudyMode() {
 }
 
 function toggleReverse() {
-    if (state.studyMode !== 'set') return;
     state.studyReversed = !state.studyReversed;
     state.isFlipped = false;
     updateReverseButton();
@@ -1140,7 +1137,7 @@ function toggleReverse() {
 function updateReverseButton() {
     const btn = document.getElementById('toggle-reverse');
     if (!btn) return;
-    btn.classList.toggle('active', state.studyMode === 'set' && state.studyReversed);
+    btn.classList.toggle('active', state.studyReversed);
 }
 
 function shuffleArrayInPlace(arr) {
@@ -1151,7 +1148,6 @@ function shuffleArrayInPlace(arr) {
 }
 
 function shuffleStudyCards() {
-    if (state.studyMode !== 'set') return;
     if (!state.currentCards || state.currentCards.length < 2) return;
     
     // Animation specific to shuffle

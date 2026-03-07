@@ -626,12 +626,6 @@ button {
     box-shadow: 0 0 20px rgba(204, 255, 0, 0.1);
 }
 
-#study-screen.global-study-mode .btn-nav-left,
-#study-screen.global-study-mode .btn-nav-right,
-#study-screen.global-study-mode .btn-nav-center {
-    display: none;
-}
-
 #study-screen.global-study-mode .card-front,
 #study-screen.global-study-mode .card-back {
     padding-bottom: 28px;
