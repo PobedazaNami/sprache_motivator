@@ -1111,10 +1111,11 @@ function exitStudyMode() {
         scale: 0.8,
         opacity: 0,
         duration: 0.3,
-        onComplete: () => {
+        onComplete: async () => {
             resetSwipeBadges();
             if (state.studyMode === 'global') {
                 state.studyMode = 'set';
+                await Promise.all([loadSets(), loadDashboard()]);
                 showScreen('sets-screen');
             } else {
                 showScreen('set-screen');
