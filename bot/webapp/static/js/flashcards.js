@@ -322,7 +322,7 @@ function showModal(modalId) { document.getElementById(modalId).classList.add('ac
 function hideModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
 
 function renderDashboard() {
-    document.getElementById('stat-new-value').textContent = state.dashboard.new || 0;
+    document.getElementById('stat-new-value').textContent = state.dashboard.due || 0;
     document.getElementById('stat-learning-value').textContent = state.dashboard.learning || 0;
     document.getElementById('stat-known-value').textContent = state.dashboard.known || 0;
 }
