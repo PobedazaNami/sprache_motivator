@@ -333,8 +333,9 @@ button {
 
 .dashboard-stats {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
     gap: 10px;
+    align-items: stretch;
 }
 
 .dashboard-stat {
@@ -345,7 +346,11 @@ button {
     border: 1px solid rgba(255,255,255,0.08);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    overflow: hidden;
 }
 
 .dashboard-label {
@@ -353,12 +358,39 @@ button {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     opacity: 0.8;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .dashboard-value {
     font-family: var(--font-heading);
     font-size: 34px;
     line-height: 1;
+    text-align: center;
+}
+
+@media (max-width: 420px) {
+    .dashboard-stats {
+        grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.24fr) minmax(0, 0.88fr);
+        gap: 8px;
+    }
+
+    .dashboard-stat {
+        min-height: 88px;
+        padding: 12px 10px;
+    }
+
+    .dashboard-label {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+    }
+
+    .dashboard-value {
+        font-size: 32px;
+    }
 }
 
 .stat-learn .dashboard-value {
