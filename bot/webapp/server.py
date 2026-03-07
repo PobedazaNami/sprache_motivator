@@ -138,10 +138,9 @@ def build_srs_review_update(card: dict, result: str) -> dict:
 
     if result == "know":
         next_interval = get_next_srs_interval(current_interval)
-        status = "known" if next_interval >= 7 else "learning"
         return {
             "$set": {
-                "srs_status": status,
+                "srs_status": "known",
                 "srs_interval": next_interval,
                 "srs_next_review": now + timedelta(days=next_interval),
             },
