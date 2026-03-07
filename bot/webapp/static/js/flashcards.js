@@ -464,8 +464,8 @@ function renderStudyCard() {
     // Note: state.isFlipped reset is handled in navigation logic
     gsap.set('#flashcard .card-inner', { rotationY: 0 });
 
-    document.getElementById('prev-card').disabled = state.currentCardIndex === 0;
-    document.getElementById('next-card').disabled = state.currentCardIndex === state.currentCards.length - 1;
+    document.getElementById('prev-card').disabled = isGlobal ? false : state.currentCardIndex === 0;
+    document.getElementById('next-card').disabled = isGlobal ? false : state.currentCardIndex === state.currentCards.length - 1;
     updateStudyModeUI();
 }
 
@@ -1024,6 +1024,11 @@ function startStudy() {
 }
 
 function nextCard() {
+    if (state.studyMode === 'global') {
+        resolveGlobalSwipe('know', 'right');
+        return;
+    }
+
     if (state.currentCardIndex < state.currentCards.length - 1) {
         // Animate Out
         gsap.to('#flashcard', { 
@@ -1053,6 +1058,11 @@ function nextCard() {
 }
 
 function prevCard() {
+    if (state.studyMode === 'global') {
+        resolveGlobalSwipe('dontknow', 'left');
+        return;
+    }
+
     if (state.currentCardIndex > 0) {
         // Animate Out
         gsap.to('#flashcard', { 
