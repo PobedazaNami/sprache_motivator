@@ -325,7 +325,6 @@ function renderDashboard() {
     document.getElementById('stat-new-value').textContent = state.dashboard.new || 0;
     document.getElementById('stat-learning-value').textContent = state.dashboard.learning || 0;
     document.getElementById('stat-known-value').textContent = state.dashboard.known || 0;
-    document.getElementById('dashboard-due-text').textContent = t('dueNow', { count: state.dashboard.due || 0 });
 }
 
 function hideSessionSummary() {
