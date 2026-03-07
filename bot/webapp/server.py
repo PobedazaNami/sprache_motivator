@@ -124,6 +124,10 @@ def is_due_flashcard(card: dict, now: datetime) -> bool:
     if next_review is None:
         return True
 
+    # Old cards may have naive datetimes stored — treat them as UTC
+    if next_review.tzinfo is None:
+        next_review = next_review.replace(tzinfo=timezone.utc)
+
     return next_review <= now
 
 
