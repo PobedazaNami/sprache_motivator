@@ -69,6 +69,14 @@ def _today_midnight_utc() -> datetime:
     return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _ensure_utc_datetime(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 async def update_daily_stats(
     user_id: int,
     quality_percentage: int,
@@ -485,9 +493,7 @@ async def update_streak(user_id: int) -> Tuple[int, bool, Optional[int]]:
     longest_streak = streak_doc.get("longest_streak", 0)
     milestones_achieved = streak_doc.get("milestones_achieved", [])
     
-    # Normalize last_activity to UTC if it's offset-naive
-    if last_activity and last_activity.tzinfo is None:
-        last_activity = last_activity.replace(tzinfo=timezone.utc)
+    last_activity = _ensure_utc_datetime(last_activity)
     
     # Already updated today
     if last_activity and last_activity >= today:
@@ -540,7 +546,7 @@ async def get_streak(user_id: int) -> Dict:
     # Check if streak is still active
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
-    last_activity = streak_doc.get("last_activity_date")
+    last_activity = _ensure_utc_datetime(streak_doc.get("last_activity_date"))
     
     # If last activity was before yesterday, streak is broken
     if last_activity and last_activity < yesterday:
@@ -568,7 +574,7 @@ async def check_comeback_needed(user_id: int) -> bool:
     if not streak_doc:
         return False
     
-    last_activity = streak_doc.get("last_activity_date")
+    last_activity = _ensure_utc_datetime(streak_doc.get("last_activity_date"))
     if not last_activity:
         return False
     

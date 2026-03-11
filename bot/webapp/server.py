@@ -24,6 +24,12 @@ from bot.models.database import async_session_maker
 
 logger = logging.getLogger(__name__)
 
+
+class IgnoreBadHttpNoiseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info[1] if record.exc_info else None
+        return exc.__class__.__name__ not in {"BadStatusLine", "BadHttpMessage"}
+
 # Get the webapp directory path
 WEBAPP_DIR = Path(__file__).parent
 STATIC_DIR = WEBAPP_DIR / "static"
@@ -97,6 +103,24 @@ def get_user_id_from_request(request: web.Request) -> int | None:
 def get_srs_status(card: dict) -> str:
     """Normalize SRS status for cards created before SRS fields existed."""
     return card.get("srs_status") or "new"
+
+
+def serialize_mongo_value(value):
+    """Convert BSON/Python values to JSON-safe primitives."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [serialize_mongo_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: serialize_mongo_value(item) for key, item in value.items()}
+    return value
+
+
+def serialize_mongo_document(document: dict) -> dict:
+    """Convert a MongoDB document to a JSON-safe dict."""
+    return {key: serialize_mongo_value(value) for key, value in document.items()}
 
 
 def get_next_srs_interval(current_interval: int) -> int:
@@ -526,11 +550,11 @@ async def get_cards(request: web.Request) -> web.Response:
         ).sort("created_at", 1).to_list(length=1000)
         
         # Convert ObjectId to string
-        for card in cards:
-            card["_id"] = str(card["_id"])
-            card["created_at"] = card["created_at"].isoformat() if card.get("created_at") else None
-            card["example"] = card.get("example", "")
-            card["has_image"] = bool(card.get("image_url"))
+        for index, card in enumerate(cards):
+            serialized_card = serialize_mongo_document(card)
+            serialized_card["example"] = serialized_card.get("example", "")
+            serialized_card["has_image"] = bool(serialized_card.get("image_url"))
+            cards[index] = serialized_card
         
         return web.json_response({"cards": cards})
         
@@ -911,6 +935,10 @@ def create_webapp_routes() -> web.Application:
 
 async def start_webapp_server(host: str = "0.0.0.0", port: int = 8080):
     """Start the web server."""
+    aiohttp_server_logger = logging.getLogger("aiohttp.server")
+    if not any(isinstance(existing_filter, IgnoreBadHttpNoiseFilter) for existing_filter in aiohttp_server_logger.filters):
+        aiohttp_server_logger.addFilter(IgnoreBadHttpNoiseFilter())
+
     app = create_webapp_routes()
     runner = web.AppRunner(app)
     await runner.setup()
