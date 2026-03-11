@@ -62,23 +62,25 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p 22 -o ConnectTimeout=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'SSH OK'; uname -a"
 
-      - name: Create deploy dir
+      - name: Sync repository on server
         run: |
-          ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /opt/sprache_motivator"
+          ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s <<'REMOTE'
+          set -euo pipefail
+          DEPLOY_PATH=/opt/sprache_motivator
+          REPO_URL="https://github.com/${{ github.repository }}.git"
 
-      - name: Rsync files to server
-        run: |
-          rsync -avz --delete --checksum \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env*' \
-            --exclude='*.pyc' \
-            --exclude='__pycache__' \
-            --exclude='.pytest_cache' \
-            --exclude='logs/*' \
-            --exclude='.gitignore' \
-            -e "ssh -i ~/.ssh/deploy_key -p 22" \
-            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/sprache_motivator/
+          if [ ! -d "${DEPLOY_PATH}/.git" ]; then
+            rm -rf "${DEPLOY_PATH}"
+            git clone "${REPO_URL}" "${DEPLOY_PATH}"
+          fi
+
+          cd "${DEPLOY_PATH}"
+          git remote set-url origin "${REPO_URL}"
+          git fetch --prune origin
+          git reset --hard origin/main
+          git clean -fd
+          mkdir -p logs
+          REMOTE
 
       - name: Upload .env
         run: |
@@ -89,6 +91,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p 22 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -s <<'REMOTE'
           set -euo pipefail
           cd /opt/sprache_motivator
+          echo "==> git status:"
+          git status --short
+          echo "==> git head:"
+          git rev-parse HEAD
           echo "==> Stopping containers..."
           /usr/bin/docker compose down || true
           echo "==> Pruning images..."
