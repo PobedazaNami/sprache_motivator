@@ -40,6 +40,8 @@ jobs:
           MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017/sprache_motivator}"
           WEBAPP_URL="${{ secrets.WEBAPP_URL }}"
           WEBAPP_PORT="${{ secrets.WEBAPP_PORT }}"
+          CLOUDINARY_URL="${{ secrets.CLOUDINARY_URL }}"
+          CLOUDINARY_FOLDER="${{ secrets.CLOUDINARY_FOLDER }}"
           WEBAPP_HOST=$(echo "${WEBAPP_URL}" | sed 's~https\?://~~' | sed 's~/.*~~')
 
           : > .env.tmp
@@ -53,6 +55,8 @@ jobs:
           echo "DAILY_TRAINER_TIMES=08:00,14:00,20:00" >> .env.tmp
           echo "MAX_TOKENS_PER_USER_DAILY=10000" >> .env.tmp
           echo "CACHE_TTL_SECONDS=2592000" >> .env.tmp
+          test -n "${CLOUDINARY_URL:-}" && echo "CLOUDINARY_URL=${CLOUDINARY_URL}" >> .env.tmp || true
+          test -n "${CLOUDINARY_FOLDER:-}" && echo "CLOUDINARY_FOLDER=${CLOUDINARY_FOLDER}" >> .env.tmp || true
           test -n "${WEBAPP_URL:-}" && echo "WEBAPP_URL=${WEBAPP_URL}" >> .env.tmp || true
           test -n "${WEBAPP_PORT:-}" && echo "WEBAPP_PORT=${WEBAPP_PORT}" >> .env.tmp || true
           test -n "${WEBAPP_HOST:-}" && echo "WEBAPP_HOST=${WEBAPP_HOST}" >> .env.tmp || true
