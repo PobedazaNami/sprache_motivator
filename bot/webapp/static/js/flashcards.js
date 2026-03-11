@@ -650,12 +650,17 @@ async function handleGlobalSessionReview(result) {
             state.sessionStats.incorrect += 1;
         }
 
-        if (state.currentCardIndex >= state.currentCards.length - 1) {
+        const [reviewedCard] = state.currentCards.splice(state.currentCardIndex, 1);
+        if (result !== 'know' && reviewedCard) {
+            state.currentCards.push(reviewedCard);
+        }
+
+        if (state.currentCards.length === 0) {
             await finishGlobalStudySession();
             return;
         }
 
-        state.currentCardIndex += 1;
+        state.currentCardIndex = 0;
         state.isFlipped = false;
         resetSwipeBadges();
         renderStudyCard();
