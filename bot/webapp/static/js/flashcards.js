@@ -1265,8 +1265,14 @@ document.getElementById('flashcard').addEventListener('pointerdown', onGlobalPoi
 document.getElementById('flashcard').addEventListener('pointermove', onGlobalPointerMove);
 document.getElementById('flashcard').addEventListener('pointerup', onGlobalPointerUp);
 document.getElementById('flashcard').addEventListener('pointercancel', onGlobalPointerUp);
-document.getElementById('prev-card').addEventListener('click', prevCard);
-document.getElementById('next-card').addEventListener('click', nextCard);
+document.getElementById('prev-card').addEventListener('click', (event) => {
+    event.currentTarget.blur();
+    prevCard();
+});
+document.getElementById('next-card').addEventListener('click', (event) => {
+    event.currentTarget.blur();
+    nextCard();
+});
 document.getElementById('shuffle-cards').addEventListener('click', shuffleStudyCards);
 document.getElementById('toggle-reverse').addEventListener('click', toggleReverse);
 
