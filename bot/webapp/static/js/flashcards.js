@@ -3,6 +3,8 @@
 // Constants
 const SWIPE_THRESHOLD_PX = 50;
 const GLOBAL_REVIEW_THRESHOLD_PX = 110;
+const GLOBAL_REQUEUE_MIN_OFFSET = 3;
+const GLOBAL_REQUEUE_MAX_OFFSET = 5;
 
 // Initialize Telegram WebApp
 const tg = window.Telegram.WebApp;
@@ -570,6 +572,8 @@ function updateStudyModeUI() {
     const isGlobal = state.studyMode === 'global';
     const prevBtn = document.getElementById('prev-card');
     const nextBtn = document.getElementById('next-card');
+    const prevLabel = prevBtn.querySelector('.nav-button-label');
+    const nextLabel = nextBtn.querySelector('.nav-button-label');
     const headerRight = document.querySelector('.header-right');
     const timer = document.getElementById('study-timer');
     const timerSetup = document.getElementById('timer-setup');
@@ -585,6 +589,19 @@ function updateStudyModeUI() {
     timerSetup.style.display = 'none';
     studyScreen.classList.toggle('global-study-mode', isGlobal);
     flashcard.classList.toggle('global-swipe-enabled', isGlobal);
+
+    if (prevLabel) {
+        prevLabel.textContent = isGlobal ? t('swipeDontKnow') : '';
+    }
+
+    if (nextLabel) {
+        nextLabel.textContent = isGlobal ? t('swipeKnow') : '';
+    }
+
+    prevBtn.title = isGlobal ? t('swipeDontKnow') : t('prev');
+    nextBtn.title = isGlobal ? t('swipeKnow') : t('next');
+    prevBtn.setAttribute('aria-label', isGlobal ? t('swipeDontKnow') : t('prev'));
+    nextBtn.setAttribute('aria-label', isGlobal ? t('swipeKnow') : t('next'));
 
     if (isGlobal) {
         context.textContent = currentCard?.set_name ? `${t('deckLabel')}: ${currentCard.set_name}` : '';
@@ -638,6 +655,17 @@ async function finishGlobalStudySession() {
     tg.HapticFeedback.notificationOccurred('success');
 }
 
+function getGlobalRequeueIndex(queueLength) {
+    if (queueLength <= 0) return 0;
+
+    const maxOffset = Math.min(GLOBAL_REQUEUE_MAX_OFFSET, queueLength);
+    const minOffset = Math.min(GLOBAL_REQUEUE_MIN_OFFSET, maxOffset);
+    const offsetRange = maxOffset - minOffset + 1;
+    const offset = minOffset + Math.floor(Math.random() * offsetRange);
+
+    return Math.min(offset, queueLength);
+}
+
 async function handleGlobalSessionReview(result) {
     const card = state.currentCards[state.currentCardIndex];
     if (!card) return;
@@ -652,7 +680,8 @@ async function handleGlobalSessionReview(result) {
 
         const [reviewedCard] = state.currentCards.splice(state.currentCardIndex, 1);
         if (result !== 'know' && reviewedCard) {
-            state.currentCards.push(reviewedCard);
+            const requeueIndex = getGlobalRequeueIndex(state.currentCards.length);
+            state.currentCards.splice(requeueIndex, 0, reviewedCard);
         }
 
         if (state.currentCards.length === 0) {

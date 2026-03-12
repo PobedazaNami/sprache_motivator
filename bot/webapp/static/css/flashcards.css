@@ -693,6 +693,17 @@ button {
     opacity: 0.8;
 }
 
+.btn-nav-floating .nav-button-label {
+    display: none;
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+}
+
 /* Closer to center for one-handed use */
 .btn-nav-left {
     left: calc(50% - 7rem); /* 7rem spacing for center button */
@@ -708,6 +719,59 @@ button {
     background: rgba(255, 59, 48, 0.2); /* Red tint for exit */
     color: #ff3b30;
     border-color: rgba(255, 59, 48, 0.3);
+}
+
+#study-screen.global-study-mode .btn-nav-left,
+#study-screen.global-study-mode .btn-nav-right {
+    width: auto;
+    min-width: 7.5rem;
+    height: 3.5rem;
+    padding: 0 0.95rem;
+    border-radius: 999px;
+    gap: 0.55rem;
+}
+
+#study-screen.global-study-mode .btn-nav-left {
+    left: 0.75rem;
+}
+
+#study-screen.global-study-mode .btn-nav-right {
+    right: 0.75rem;
+}
+
+#study-screen.global-study-mode .btn-nav-left i,
+#study-screen.global-study-mode .btn-nav-right i {
+    display: none;
+}
+
+#study-screen.global-study-mode .btn-nav-left .nav-button-label,
+#study-screen.global-study-mode .btn-nav-right .nav-button-label {
+    display: inline-block;
+}
+
+#study-screen.global-study-mode .btn-nav-left {
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(127, 29, 29, 0.28);
+}
+
+#study-screen.global-study-mode .btn-nav-right {
+    color: #16a34a;
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgba(20, 83, 45, 0.28);
+}
+
+@media (max-width: 420px) {
+    #study-screen.global-study-mode .btn-nav-left,
+    #study-screen.global-study-mode .btn-nav-right {
+        min-width: 6.9rem;
+        padding: 0 0.8rem;
+    }
+
+    #study-screen.global-study-mode .btn-nav-left .nav-button-label,
+    #study-screen.global-study-mode .btn-nav-right .nav-button-label {
+        font-size: 0.82rem;
+    }
 }
 
 /* Disabled state */
