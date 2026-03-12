@@ -666,12 +666,22 @@ function getGlobalRequeueIndex(queueLength) {
     return Math.min(offset, queueLength);
 }
 
+function applyGlobalReviewToDashboard(result) {
+    if (state.dashboard.due > 0) {
+        state.dashboard.due -= 1;
+    }
+
+    renderDashboard();
+}
+
 async function handleGlobalSessionReview(result) {
     const card = state.currentCards[state.currentCardIndex];
     if (!card) return;
 
     try {
         await reviewGlobalSessionCard(card._id, result);
+        applyGlobalReviewToDashboard(result);
+
         if (result === 'know') {
             state.sessionStats.correct += 1;
         } else {

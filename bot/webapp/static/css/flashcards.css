@@ -697,8 +697,8 @@ button {
     display: none;
     font-family: var(--font-heading);
     font-size: 0.95rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-weight: 500;
+    letter-spacing: 0.01em;
     text-transform: uppercase;
     line-height: 1;
     white-space: nowrap;
@@ -750,9 +750,9 @@ button {
 }
 
 #study-screen.global-study-mode .btn-nav-left {
-    color: #dc2626;
-    border-color: rgba(220, 38, 38, 0.35);
-    background: rgba(127, 29, 29, 0.28);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.34);
+    background: rgba(120, 53, 15, 0.24);
 }
 
 #study-screen.global-study-mode .btn-nav-right {
