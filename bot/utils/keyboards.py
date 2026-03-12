@@ -239,9 +239,10 @@ def get_friends_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_add_friend"), callback_data="friends_add")
     builder.button(text=get_text(lang, "btn_remove_friend"), callback_data="friends_remove")
     builder.button(text=get_text(lang, "btn_pending_requests"), callback_data="friends_pending")
+    builder.button(text=get_text(lang, "btn_outgoing_requests"), callback_data="friends_outgoing")
     builder.button(text=get_text(lang, "btn_view_friends_stats"), callback_data="friends_stats")
     builder.button(text=get_text(lang, "btn_main_menu"), callback_data="friends_back")
-    builder.adjust(2, 1, 1, 1)
+    builder.adjust(2, 2, 1, 1)
     return builder.as_markup()
 
 

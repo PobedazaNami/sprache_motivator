@@ -297,13 +297,26 @@ class SchedulerService:
                             friend = await UserService.get_or_create_user(session, friend_id)
                             friend_name = friend.first_name or friend.username or f"User {friend_id}"
                             friend_username = friend.username or str(friend_id)
+                            completed = friend_stat.get("completed", 0)
+                            quality = friend_stat.get("quality", 0)
+                            know = friend_stat.get("flashcard_know", 0)
+                            retry = friend_stat.get("flashcard_retry", 0)
+                            streak_info = await mongo_service.get_streak(friend_id)
+                            streak = streak_info.get("current", 0)
+                            quality_line = ""
+                            if completed > 0:
+                                quality_line = get_text(lang, "friends_stats_quality_inline", quality=quality)
+
                             friends_section += get_text(
                                 lang,
-                                "friends_stats_user",
+                                "friends_stats_user_active",
                                 name=friend_name,
                                 username=friend_username,
-                                completed=friend_stat.get("completed", 0),
-                                quality=friend_stat.get("quality", 0)
+                                completed=completed,
+                                know=know,
+                                retry=retry,
+                                quality_line=quality_line,
+                                streak=streak,
                             )
                         message += friends_section
                     

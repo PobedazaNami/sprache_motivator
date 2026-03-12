@@ -18,6 +18,45 @@ class FriendsStates(StatesGroup):
     waiting_for_friend_id = State()
 
 
+def _friend_display_name(friend, friend_id: int) -> tuple[str, str]:
+    friend_name = friend.first_name or friend.username or f"User {friend_id}"
+    friend_username = friend.username or str(friend_id)
+    return friend_name, friend_username
+
+
+def _build_friend_stats_text(lang: str, friend_name: str, friend_username: str, stats: dict, streak: int) -> str:
+    completed = stats.get("completed", 0)
+    quality = stats.get("quality", 0)
+    know = stats.get("flashcard_know", 0)
+    retry = stats.get("flashcard_retry", 0)
+    is_active_today = completed > 0 or know > 0 or retry > 0
+
+    if not is_active_today:
+        return get_text(
+            lang,
+            "friends_stats_user_inactive",
+            name=friend_name,
+            username=friend_username,
+            streak=streak,
+        )
+
+    quality_line = ""
+    if completed > 0:
+        quality_line = get_text(lang, "friends_stats_quality_inline", quality=quality)
+
+    return get_text(
+        lang,
+        "friends_stats_user_active",
+        name=friend_name,
+        username=friend_username,
+        completed=completed,
+        know=know,
+        retry=retry,
+        quality_line=quality_line,
+        streak=streak,
+    )
+
+
 @router.message(F.text.in_([
     "👥 Друзья", "👥 Друзі"
 ]))
@@ -46,8 +85,8 @@ async def friends_menu(message: Message, state: FSMContext):
             friends_list = []
             for friend_id in friend_ids:
                 friend = await UserService.get_or_create_user(session, friend_id)
-                friend_name = friend.first_name or friend.username or f"User {friend_id}"
-                friends_list.append(f"👤 {friend_name} (@{friend.username or friend_id})")
+                friend_name, friend_username = _friend_display_name(friend, friend_id)
+                friends_list.append(f"👤 {friend_name} (@{friend_username})")
             
             text = get_text(lang, "friends_list", friends_list="\n".join(friends_list))
         else:
@@ -76,8 +115,8 @@ async def friends_menu_callback(callback: CallbackQuery, state: FSMContext):
             friends_list = []
             for friend_id in friend_ids:
                 friend = await UserService.get_or_create_user(session, friend_id)
-                friend_name = friend.first_name or friend.username or f"User {friend_id}"
-                friends_list.append(f"👤 {friend_name} (@{friend.username or friend_id})")
+                friend_name, friend_username = _friend_display_name(friend, friend_id)
+                friends_list.append(f"👤 {friend_name} (@{friend_username})")
             
             text = get_text(lang, "friends_list", friends_list="\n".join(friends_list))
         else:
@@ -311,31 +350,59 @@ async def view_friends_stats(callback: CallbackQuery):
         async with async_session_maker() as session:
             user = await UserService.get_or_create_user(session, callback.from_user.id)
             lang = user.interface_language.value
-            
-            # Get friends' stats
-            friends_stats = await mongo_service.get_friends_stats(callback.from_user.id)
-            
-            if not friends_stats:
+
+            friend_ids = await mongo_service.get_friends(callback.from_user.id)
+            if not friend_ids:
                 await callback.message.edit_text(
-                    get_text(lang, "friends_stats_empty"),
+                    get_text(lang, "no_friends"),
                     reply_markup=get_friends_menu_keyboard(lang)
                 )
                 await callback.answer()
                 return
-            
-            # Build stats message
-            text = get_text(lang, "friends_stats_title")
-            
-            for friend_id, stats in friends_stats.items():
+
+            stats_map = await mongo_service.get_today_stats_bulk(friend_ids)
+            friends_rows = []
+            for friend_id in friend_ids:
                 friend = await UserService.get_or_create_user(session, friend_id)
-                friend_name = friend.first_name or friend.username or f"User {friend_id}"
-                friend_username = friend.username or str(friend_id)
-                
-                text += get_text(lang, "friends_stats_user",
-                               name=friend_name,
-                               username=friend_username,
-                               completed=stats.get("completed", 0),
-                               quality=stats.get("quality", 0))
+                friend_name, friend_username = _friend_display_name(friend, friend_id)
+                friend_stats = stats_map.get(friend_id, {})
+                streak_info = await mongo_service.get_streak(friend_id)
+                streak = streak_info.get("current", 0)
+                activity_score = (
+                    friend_stats.get("completed", 0)
+                    + friend_stats.get("flashcard_know", 0)
+                    + friend_stats.get("flashcard_retry", 0)
+                )
+                is_active_today = activity_score > 0
+                friends_rows.append({
+                    "friend_name": friend_name,
+                    "friend_username": friend_username,
+                    "stats": friend_stats,
+                    "streak": streak,
+                    "is_active_today": is_active_today,
+                    "activity_score": activity_score,
+                })
+
+            friends_rows.sort(
+                key=lambda item: (
+                    0 if item["is_active_today"] else 1,
+                    -item["activity_score"],
+                    -item["stats"].get("quality", 0),
+                    -item["streak"],
+                    item["friend_name"].lower(),
+                )
+            )
+
+            text = get_text(lang, "friends_stats_title")
+
+            for item in friends_rows:
+                text += _build_friend_stats_text(
+                    lang,
+                    item["friend_name"],
+                    item["friend_username"],
+                    item["stats"],
+                    item["streak"],
+                )
             
             await callback.message.edit_text(
                 text,
@@ -387,6 +454,42 @@ async def view_pending_requests(callback: CallbackQuery):
         await callback.answer()
     except Exception:
         # Ensure callback is always answered to prevent button from appearing stuck
+        await callback.answer()
+        raise
+
+
+@router.callback_query(F.data == "friends_outgoing")
+async def view_outgoing_requests(callback: CallbackQuery):
+    """View outgoing pending friend requests."""
+    try:
+        async with async_session_maker() as session:
+            user = await UserService.get_or_create_user(session, callback.from_user.id)
+            lang = user.interface_language.value
+
+            friend_ids = await mongo_service.get_pending_outgoing_requests(callback.from_user.id)
+
+            if not friend_ids:
+                await callback.message.edit_text(
+                    get_text(lang, "no_outgoing_requests"),
+                    reply_markup=get_friends_menu_keyboard(lang)
+                )
+                await callback.answer()
+                return
+
+            lines = []
+            for friend_id in friend_ids:
+                friend = await UserService.get_or_create_user(session, friend_id)
+                friend_name, friend_username = _friend_display_name(friend, friend_id)
+                lines.append(f"👤 {friend_name} (@{friend_username})")
+
+            text = get_text(lang, "outgoing_requests_title") + "\n".join(lines)
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_friends_menu_keyboard(lang)
+            )
+
+        await callback.answer()
+    except Exception:
         await callback.answer()
         raise
 

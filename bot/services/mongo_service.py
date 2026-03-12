@@ -128,6 +128,40 @@ async def update_daily_stats(
     )
 
 
+async def update_flashcard_daily_stats(user_id: int, result: str) -> None:
+    """Increment today's flashcard counters for social statistics."""
+    if not is_ready():
+        return
+
+    if result not in {"know", "dontknow"}:
+        return
+
+    today = _today_midnight_utc()
+    now = datetime.now(timezone.utc)
+
+    inc_doc = {"flashcard_reviews": 1}
+    if result == "know":
+        inc_doc["flashcard_know"] = 1
+    else:
+        inc_doc["flashcard_retry"] = 1
+
+    await db().daily_stats.update_one(
+        {"user_id": user_id, "date": today},
+        {
+            "$inc": inc_doc,
+            "$set": {
+                "updated_at": now,
+                "last_flashcard_review_at": now,
+            },
+            "$setOnInsert": {
+                "created_at": now,
+                "expected_tasks": 0,
+            },
+        },
+        upsert=True,
+    )
+
+
 async def get_today_stats(user_id: int) -> Optional[dict]:
     if not is_ready():
         return None
@@ -145,6 +179,9 @@ async def get_today_stats(user_id: int) -> Optional[dict]:
         "expected": expected,
         "correct": int(doc.get("correct_answers", 0)),
         "incorrect": int(doc.get("incorrect_answers", 0)),
+        "flashcard_reviews": int(doc.get("flashcard_reviews", 0)),
+        "flashcard_know": int(doc.get("flashcard_know", 0)),
+        "flashcard_retry": int(doc.get("flashcard_retry", 0)),
     }
 
 
@@ -168,6 +205,9 @@ async def get_today_stats_bulk(user_ids: List[int]) -> Dict[int, dict]:
             "expected": int(doc.get("expected_tasks", 0)),
             "correct": int(doc.get("correct_answers", 0)),
             "incorrect": int(doc.get("incorrect_answers", 0)),
+            "flashcard_reviews": int(doc.get("flashcard_reviews", 0)),
+            "flashcard_know": int(doc.get("flashcard_know", 0)),
+            "flashcard_retry": int(doc.get("flashcard_retry", 0)),
         }
     return results
 

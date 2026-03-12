@@ -344,6 +344,7 @@ async def review_global_session_card(request: web.Request) -> web.Response:
 
         update_doc = build_srs_review_update(card, result)
         await mongo_service.db().flashcards.update_one({"_id": ObjectId(card_id)}, update_doc)
+        await mongo_service.update_flashcard_daily_stats(user_id, result)
 
         return web.json_response({"success": True})
 
