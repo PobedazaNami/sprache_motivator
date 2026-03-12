@@ -66,15 +66,15 @@ async def express_trainer_menu(message: Message, state: FSMContext):
 @router.callback_query(F.data == "express_start")
 async def start_express_task(callback: CallbackQuery):
     """Start express trainer and send first task"""
-    await send_express_task(callback.from_user.id, callback.message.bot, callback.message.chat.id)
     await callback.answer()
+    await send_express_task(callback.from_user.id, callback.message.bot, callback.message.chat.id)
 
 
 @router.callback_query(F.data == "express_next")
 async def next_express_task(callback: CallbackQuery):
     """Send next express training task"""
-    await send_express_task(callback.from_user.id, callback.message.bot, callback.message.chat.id)
     await callback.answer()
+    await send_express_task(callback.from_user.id, callback.message.bot, callback.message.chat.id)
 
 
 @router.callback_query(F.data == "express_settings")
