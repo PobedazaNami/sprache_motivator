@@ -92,37 +92,44 @@ async def load_video_session(input_str: str) -> dict:
         )
 
     def _fetch_sync() -> tuple[list[dict], str, list[str]]:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        api = YouTubeTranscriptApi()
+        transcript_list = api.list(video_id)
 
-        manual: dict = transcript_list._manually_created_transcripts
-        auto: dict = transcript_list._generated_transcripts
-        all_langs: list[str] = list(manual.keys()) + [
-            l for l in auto.keys() if l not in manual
+        manual: list = [t for t in transcript_list if not t.is_generated]
+        auto: list = [t for t in transcript_list if t.is_generated]
+        all_langs: list[str] = [t.language_code for t in manual] + [
+            t.language_code for t in auto if t.language_code not in {t.language_code for t in manual}
         ]
 
-        # Pick best language: manual preferred over generated, priority order
+        # Pick best language: manual preferred, then generated, priority order
         transcript = None
         selected: Optional[str] = None
+        manual_map = {t.language_code: t for t in manual}
+        auto_map = {t.language_code: t for t in auto}
+
         for lang in _LANG_PRIORITY:
-            if lang in manual:
-                transcript = manual[lang]
+            if lang in manual_map:
+                transcript = manual_map[lang]
                 selected = lang
                 break
         if not transcript:
             for lang in _LANG_PRIORITY:
-                if lang in auto:
-                    transcript = auto[lang]
+                if lang in auto_map:
+                    transcript = auto_map[lang]
                     selected = lang
                     break
         if not transcript and all_langs:
             first = all_langs[0]
-            transcript = manual.get(first) or auto.get(first)
+            transcript = manual_map.get(first) or auto_map.get(first)
             selected = first
         if not transcript:
             raise RuntimeError("Для цього відео не знайдено субтитрів.")
 
         raw = transcript.fetch()
-        cues = _cues_from_transcript(list(raw))
+        cues = _cues_from_transcript([
+            {"text": item.text, "start": item.start, "duration": item.duration}
+            for item in raw
+        ])
         return cues, selected, all_langs
 
     loop = asyncio.get_event_loop()
