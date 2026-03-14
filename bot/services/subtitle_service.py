@@ -1,5 +1,6 @@
 """
-Subtitle service: fetches YouTube subtitles via yt-dlp,
+Subtitle service: fetches YouTube subtitles via youtube-transcript-api
+(public /api/timedtext endpoint — no auth required),
 translates with Google Translate (gtx endpoint), and
 optionally explains with OpenAI.
 """
@@ -43,44 +44,20 @@ def _extract_video_id(input_str: str) -> Optional[str]:
     return None
 
 
-def _parse_json3(data: dict) -> list[dict]:
-    """
-    Convert yt-dlp JSON3 subtitle format to a flat list of cue dicts.
-    Each cue: {start, end, text}  (times in seconds as float)
-    """
+def _cues_from_transcript(raw: list) -> list[dict]:
+    """Convert youtube-transcript-api format to flat cue list: {start, end, text}."""
     cues = []
-    for event in data.get("events", []):
-        segs = event.get("segs")
-        if not segs:
-            continue
-        text = "".join(s.get("utf8", "") for s in segs).strip()
-        text = text.replace("\n", " ").strip()
+    for item in raw:
+        text = item.get("text", "").replace("\n", " ").strip()
         if not text:
             continue
-        start_ms: int = event.get("tStartMs", 0)
-        dur_ms: int = event.get("dDurationMs", 2000)
-        cues.append(
-            {
-                "start": start_ms / 1000.0,
-                "end": (start_ms + dur_ms) / 1000.0,
-                "text": text,
-            }
-        )
+        start: float = item.get("start", 0.0)
+        dur: float = item.get("duration", 2.0)
+        cues.append({"start": start, "end": start + dur, "text": text})
     return cues
 
 
 _LANG_PRIORITY = ["de", "en", "fr", "es", "it", "pt"]
-
-
-def _pick_language(subs_info: dict) -> Optional[str]:
-    """Pick the best available manual subtitle language."""
-    available = list(subs_info.keys())
-    if not available:
-        return None
-    for lang in _LANG_PRIORITY:
-        if lang in available:
-            return lang
-    return available[0]
 
 
 # ---------------------------------------------------------------------------
@@ -103,109 +80,78 @@ async def load_video_session(input_str: str) -> dict:
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    url = f"https://www.youtube.com/watch?v={video_id}"
-
     try:
-        import yt_dlp  # noqa: PLC0415
+        from youtube_transcript_api import (  # noqa: PLC0415
+            YouTubeTranscriptApi,
+            TranscriptsDisabled,
+            NoTranscriptFound,
+        )
     except ImportError:
         raise RuntimeError(
-            "Бібліотека yt-dlp не встановлена. Додайте yt-dlp до requirements.txt."
+            "Бібліотека youtube-transcript-api не встановлена. Додайте її до requirements.txt."
         )
 
-    # Collected subtitle data: lang_code → json3 dict
-    json3_by_lang: dict[str, dict] = {}
-    meta: dict = {}
+    def _fetch_sync() -> tuple[list[dict], str, list[str]]:
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
 
-    def _ydl_progress_hook(d: dict) -> None:
-        pass  # silence output
+        manual: dict = transcript_list._manually_created_transcripts
+        auto: dict = transcript_list._generated_transcripts
+        all_langs: list[str] = list(manual.keys()) + [
+            l for l in auto.keys() if l not in manual
+        ]
 
-    # Use android + ios clients to bypass YouTube bot-detection on servers.
-    # Fallback to web if needed. Optional cookies file via env var.
-    import os as _os
-    cookies_file = _os.environ.get("YOUTUBE_COOKIES_FILE", "")
+        # Pick best language: manual preferred over generated, priority order
+        transcript = None
+        selected: Optional[str] = None
+        for lang in _LANG_PRIORITY:
+            if lang in manual:
+                transcript = manual[lang]
+                selected = lang
+                break
+        if not transcript:
+            for lang in _LANG_PRIORITY:
+                if lang in auto:
+                    transcript = auto[lang]
+                    selected = lang
+                    break
+        if not transcript and all_langs:
+            first = all_langs[0]
+            transcript = manual.get(first) or auto.get(first)
+            selected = first
+        if not transcript:
+            raise RuntimeError("Для цього відео не знайдено субтитрів.")
 
-    ydl_opts: dict = {
-        "skip_download": True,
-        "writesubtitles": True,
-        "writeautomaticsub": True,
-        "subtitleslangs": ["all"],
-        "subtitlesformat": "json3",
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "progress_hooks": [_ydl_progress_hook],
-        # tv_embedded + ios bypass YouTube bot-detection on headless servers
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["tv_embedded", "ios", "android"],
-            }
-        },
-    }
-    if cookies_file and _os.path.exists(cookies_file):
-        ydl_opts["cookiefile"] = cookies_file
-
-    # Run blocking yt_dlp in thread pool to avoid blocking the event loop
-    def _extract_sync() -> dict:
-        collected: dict[str, dict] = {}
-        info: dict = {}
-
-        class _SubCollector(yt_dlp.YoutubeDL):
-            pass
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            if not info:
-                return {"info": {}, "subs": {}}
-
-            # Merge manual + automatic subtitles
-            all_subs: dict = {}
-            all_subs.update(info.get("subtitles") or {})
-            # Prefer manual; auto-subs prefixed with "xx-orig" — use plain codes
-            for lang, data in (info.get("automatic_captions") or {}).items():
-                clean_lang = lang.split("-")[0]  # "de-orig" → "de"
-                if clean_lang not in all_subs:
-                    all_subs[clean_lang] = data
-
-            for lang, formats in all_subs.items():
-                for fmt in (formats or []):
-                    if fmt.get("ext") == "json3" and fmt.get("url"):
-                        collected[lang] = fmt  # {url, ext, ...}
-                        break
-
-        return {"info": info, "subs": collected}
+        raw = transcript.fetch()
+        cues = _cues_from_transcript(list(raw))
+        return cues, selected, all_langs
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, _extract_sync)
+    cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
 
-    info = result["info"]
-    title = info.get("title", video_id) if info else video_id
-    sub_formats = result["subs"]  # lang → {url, ext}
-
-    if not sub_formats:
-        raise RuntimeError("Для цього відео не знайдено субтитрів.")
-
-    selected_lang = _pick_language(sub_formats)
-    if not selected_lang:
-        raise RuntimeError("Не вдалося вибрати мову субтитрів.")
-
-    # Fetch the json3 subtitle file
-    sub_url = sub_formats[selected_lang]["url"]
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(sub_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"Не вдалося завантажити субтитри (HTTP {resp.status}).")
-            raw = await resp.json(content_type=None)
-
-    cues = _parse_json3(raw)
     if not cues:
         raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
+
+    # Fetch video title via YouTube oEmbed (public, no API key required)
+    title = video_id
+    try:
+        oembed_url = (
+            f"https://www.youtube.com/oembed"
+            f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        )
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    title = data.get("title", video_id)
+    except Exception as exc:
+        logger.warning("oEmbed title fetch failed: %s", exc)
 
     return {
         "videoId": video_id,
         "title": title,
         "cues": cues,
         "selectedLanguage": selected_lang,
-        "availableLanguages": list(sub_formats.keys()),
+        "availableLanguages": all_langs,
     }
 
 
