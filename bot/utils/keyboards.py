@@ -36,16 +36,21 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
 
     # Layout: 2 columns for main feature buttons, then 1 column for support (and admin if applicable)
     builder.adjust(2, 2, 2, 2, 2, 1, 1, 1)
+    return builder.as_markup(resize_keyboard=True)
+
+
+def get_admin_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    """Admin menu keyboard"""
     builder = ReplyKeyboardBuilder()
-    
+
     builder.button(text=get_text(lang, "btn_pending_users"))
     builder.button(text=get_text(lang, "btn_user_stats"))
     builder.button(text=get_text(lang, "btn_broadcast"))
     builder.button(text=get_text(lang, "btn_user_rating"))
-     # New: manage user access (trial/30 days/unlimited)
+    # New: manage user access (trial/30 days/unlimited)
     builder.button(text=get_text(lang, "btn_user_access"))
     builder.button(text=get_text(lang, "btn_back"))
-    
+
     builder.adjust(2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
