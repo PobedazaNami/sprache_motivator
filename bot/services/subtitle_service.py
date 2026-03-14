@@ -8,9 +8,6 @@ import asyncio
 import json
 import logging
 import re
-import subprocess
-import tempfile
-import os
 from typing import Optional
 
 import aiohttp
@@ -108,85 +105,94 @@ async def load_video_session(input_str: str) -> dict:
 
     url = f"https://www.youtube.com/watch?v={video_id}"
 
-    with tempfile.TemporaryDirectory() as tmp:
-        out_template = os.path.join(tmp, "%(id)s.%(ext)s")
+    try:
+        import yt_dlp  # noqa: PLC0415
+    except ImportError:
+        raise RuntimeError(
+            "Бібліотека yt-dlp не встановлена. Додайте yt-dlp до requirements.txt."
+        )
 
-        cmd = [
-            "yt-dlp",
-            "--skip-download",
-            "--write-subs",
-            "--write-auto-subs",
-            "--sub-langs", "all",
-            "--sub-format", "json3",
-            "--output", out_template,
-            "--print-json",
-            "--no-playlist",
-            url,
-        ]
+    # Collected subtitle data: lang_code → json3 dict
+    json3_by_lang: dict[str, dict] = {}
+    meta: dict = {}
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
-        except asyncio.TimeoutError:
-            raise RuntimeError("yt-dlp перевищив ліміт часу (60 с).")
-        except FileNotFoundError:
-            raise RuntimeError(
-                "yt-dlp не знайдено. Переконайтеся, що він встановлений і є в PATH."
-            )
+    def _ydl_progress_hook(d: dict) -> None:
+        pass  # silence output
 
-        if proc.returncode != 0:
-            err = stderr.decode(errors="replace").strip().splitlines()
-            raise RuntimeError(
-                "yt-dlp завершився з помилкою: " + (err[-1] if err else "невідома помилка")
-            )
+    ydl_opts = {
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": ["all"],
+        "subtitlesformat": "json3",
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "progress_hooks": [_ydl_progress_hook],
+    }
 
-        # Parse video metadata from stdout (first JSON line)
-        meta = {}
-        for line in stdout.decode(errors="replace").splitlines():
-            line = line.strip()
-            if line.startswith("{"):
-                try:
-                    meta = json.loads(line)
-                    break
-                except json.JSONDecodeError:
-                    pass
+    # Run blocking yt_dlp in thread pool to avoid blocking the event loop
+    def _extract_sync() -> dict:
+        collected: dict[str, dict] = {}
+        info: dict = {}
 
-        title = meta.get("title", video_id)
+        class _SubCollector(yt_dlp.YoutubeDL):
+            pass
 
-        # Collect downloaded .json3 subtitle files
-        json3_files: dict[str, str] = {}  # lang_code → file_path
-        for fname in os.listdir(tmp):
-            if fname.endswith(".json3"):
-                # e.g. "dQw4w9WgXcQ.de.json3"
-                parts = fname.rsplit(".", 2)
-                if len(parts) == 3:
-                    lang_code = parts[1]
-                    json3_files[lang_code] = os.path.join(tmp, fname)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if not info:
+                return {"info": {}, "subs": {}}
 
-        if not json3_files:
-            raise RuntimeError("Для цього відео не знайдено субтитрів.")
+            # Merge manual + automatic subtitles
+            all_subs: dict = {}
+            all_subs.update(info.get("subtitles") or {})
+            # Prefer manual; auto-subs prefixed with "xx-orig" — use plain codes
+            for lang, data in (info.get("automatic_captions") or {}).items():
+                clean_lang = lang.split("-")[0]  # "de-orig" → "de"
+                if clean_lang not in all_subs:
+                    all_subs[clean_lang] = data
 
-        selected_lang = _pick_language(json3_files)
-        if not selected_lang:
-            raise RuntimeError("Не вдалося вибрати мову субтитрів.")
+            for lang, formats in all_subs.items():
+                for fmt in (formats or []):
+                    if fmt.get("ext") == "json3" and fmt.get("url"):
+                        collected[lang] = fmt  # {url, ext, ...}
+                        break
 
-        with open(json3_files[selected_lang], encoding="utf-8") as fh:
-            raw = json.load(fh)
+        return {"info": info, "subs": collected}
 
-        cues = _parse_json3(raw)
-        if not cues:
-            raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _extract_sync)
+
+    info = result["info"]
+    title = info.get("title", video_id) if info else video_id
+    sub_formats = result["subs"]  # lang → {url, ext}
+
+    if not sub_formats:
+        raise RuntimeError("Для цього відео не знайдено субтитрів.")
+
+    selected_lang = _pick_language(sub_formats)
+    if not selected_lang:
+        raise RuntimeError("Не вдалося вибрати мову субтитрів.")
+
+    # Fetch the json3 subtitle file
+    sub_url = sub_formats[selected_lang]["url"]
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(sub_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"Не вдалося завантажити субтитри (HTTP {resp.status}).")
+            raw = await resp.json(content_type=None)
+
+    cues = _parse_json3(raw)
+    if not cues:
+        raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
 
     return {
         "videoId": video_id,
         "title": title,
         "cues": cues,
         "selectedLanguage": selected_lang,
-        "availableLanguages": list(json3_files.keys()),
+        "availableLanguages": list(sub_formats.keys()),
     }
 
 

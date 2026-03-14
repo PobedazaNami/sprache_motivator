@@ -24,6 +24,7 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     builder.button(text=get_text(lang, "btn_express_trainer"))
     builder.button(text=get_text(lang, "btn_my_progress"))
     builder.button(text=get_text(lang, "btn_flashcards"))
+    builder.button(text=get_text(lang, "btn_subtitle_trainer"))
     builder.button(text=get_text(lang, "btn_saved_words"))
     builder.button(text=get_text(lang, "btn_friends"))
     builder.button(text=get_text(lang, "btn_settings"))
@@ -32,14 +33,9 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     from bot.config import settings
     if getattr(user, "telegram_id", None) in settings.admin_id_list:
         builder.button(text=get_text(lang, "btn_admin"))
-    
-    # Layout: 2 columns for main feature buttons (4 rows), then 1 column for support (and admin if applicable)
-    builder.adjust(2, 2, 2, 2, 1, 1, 1)
-    return builder.as_markup(resize_keyboard=True)
 
-
-def get_admin_menu_keyboard(lang: str) -> ReplyKeyboardMarkup:
-    """Admin menu keyboard"""
+    # Layout: 2 columns for main feature buttons, then 1 column for support (and admin if applicable)
+    builder.adjust(2, 2, 2, 2, 2, 1, 1, 1)
     builder = ReplyKeyboardBuilder()
     
     builder.button(text=get_text(lang, "btn_pending_users"))
@@ -354,8 +350,18 @@ def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) ->
             text=get_text(lang, "btn_open_webapp"),
             web_app=WebAppInfo(url=f"{webapp_url}/flashcards?v={int(time())}")
         )
+
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_subtitle_trainer_keyboard(lang: str, webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Subtitle Trainer keyboard with WebApp button"""
+    builder = InlineKeyboardBuilder()
+
+    if webapp_url:
         builder.button(
-            text=get_text(lang, "btn_subtitle_trainer"),
+            text=get_text(lang, "btn_open_subtitle_trainer"),
             web_app=WebAppInfo(url=f"{webapp_url}/subtitle-trainer?v={int(time())}")
         )
 
