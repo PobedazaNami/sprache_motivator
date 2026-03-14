@@ -134,11 +134,10 @@ async def load_video_session(input_str: str) -> dict:
         "quiet": True,
         "no_warnings": True,
         "progress_hooks": [_ydl_progress_hook],
-        # Try android client first — avoids "sign in to confirm" on headless servers
+        # tv_embedded + ios bypass YouTube bot-detection on headless servers
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"],
-                "player_skip": ["webpage", "configs"],
+                "player_client": ["tv_embedded", "ios", "android"],
             }
         },
     }
