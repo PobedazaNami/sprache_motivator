@@ -119,7 +119,12 @@ async def load_video_session(input_str: str) -> dict:
     def _ydl_progress_hook(d: dict) -> None:
         pass  # silence output
 
-    ydl_opts = {
+    # Use android + ios clients to bypass YouTube bot-detection on servers.
+    # Fallback to web if needed. Optional cookies file via env var.
+    import os as _os
+    cookies_file = _os.environ.get("YOUTUBE_COOKIES_FILE", "")
+
+    ydl_opts: dict = {
         "skip_download": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
@@ -129,7 +134,16 @@ async def load_video_session(input_str: str) -> dict:
         "quiet": True,
         "no_warnings": True,
         "progress_hooks": [_ydl_progress_hook],
+        # Try android client first — avoids "sign in to confirm" on headless servers
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+                "player_skip": ["webpage", "configs"],
+            }
+        },
     }
+    if cookies_file and _os.path.exists(cookies_file):
+        ydl_opts["cookiefile"] = cookies_file
 
     # Run blocking yt_dlp in thread pool to avoid blocking the event loop
     def _extract_sync() -> dict:
