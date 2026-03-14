@@ -152,6 +152,8 @@ html, body {
     background: rgba(8,14,28,0.80);
     backdrop-filter: blur(2px);
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #pause-play-btn {
@@ -168,6 +170,7 @@ html, body {
     transition: opacity 200ms;
 }
 #pause-overlay:hover #pause-play-btn { opacity: 1; }
+@media (hover: none) { #pause-play-btn { opacity: 1; } }
 
 /* ---- Subtitle overlay ---- */
 #subtitle-overlay {
@@ -199,6 +202,8 @@ html, body {
 .st-token--clk {
     cursor: pointer;
     pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     color: #ffe87a;
     text-decoration: underline;
     text-decoration-color: rgba(251,191,36,.55);
