@@ -354,6 +354,10 @@ def get_flashcards_menu_keyboard(lang: str, webapp_url: Optional[str] = None) ->
             text=get_text(lang, "btn_open_webapp"),
             web_app=WebAppInfo(url=f"{webapp_url}/flashcards?v={int(time())}")
         )
+        builder.button(
+            text=get_text(lang, "btn_subtitle_trainer"),
+            web_app=WebAppInfo(url=f"{webapp_url}/subtitle-trainer?v={int(time())}")
+        )
 
     builder.adjust(1)
     return builder.as_markup()

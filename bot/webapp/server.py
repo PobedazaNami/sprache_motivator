@@ -21,6 +21,7 @@ from bot.config import settings
 from bot.services import mongo_service, cloudinary_service
 from bot.services.database_service import UserService
 from bot.models.database import async_session_maker
+import bot.services.subtitle_service as subtitle_service
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +263,132 @@ async def serve_flashcards_app(request: web.Request) -> web.Response:
             "Expires": "0",
         }
     )
+
+
+async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
+    """Serve the Subtitle Trainer Mini App HTML."""
+    html_path = TEMPLATES_DIR / "subtitle_trainer.html"
+
+    if not html_path.exists():
+        raise web.HTTPNotFound(text="App not found")
+
+    return web.FileResponse(
+        html_path,
+        headers={
+            "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+async def subtitle_session(request: web.Request) -> web.Response:
+    """
+    POST /api/subtitle/session
+    Body: {"input": "<YouTube URL or ID>"}
+    Returns cue list + metadata for the video.
+    """
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid JSON body")
+
+    input_str: str = (body.get("input") or "").strip()
+    if not input_str:
+        raise web.HTTPBadRequest(text="'input' field is required")
+
+    try:
+        result = await subtitle_service.load_video_session(input_str)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc))
+    except RuntimeError as exc:
+        raise web.HTTPInternalServerError(text=str(exc))
+    except Exception as exc:
+        logger.error("subtitle_session error: %s", exc)
+        raise web.HTTPInternalServerError(text="Не вдалося завантажити відео.")
+
+    return web.json_response(result)
+
+
+async def subtitle_lookup(request: web.Request) -> web.Response:
+    """
+    POST /api/subtitle/lookup
+    Body: {surfaceForm, normalizedForm, cueText, previousCue, nextCue, videoLang, targetLang}
+    Returns a WordCard dict.
+    """
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid JSON body")
+
+    if not payload.get("surfaceForm"):
+        raise web.HTTPBadRequest(text="'surfaceForm' is required")
+
+    try:
+        card = await subtitle_service.lookup_word(payload)
+    except Exception as exc:
+        logger.error("subtitle_lookup error: %s", exc)
+        raise web.HTTPInternalServerError(text="Не вдалося перекласти слово.")
+
+    return web.json_response(card)
+
+
+async def subtitle_save_word(request: web.Request) -> web.Response:
+    """
+    POST /api/subtitle/words
+    Saves a looked-up word to the user's subtitle_words collection.
+    """
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(text="Invalid JSON body")
+
+    if not body.get("surfaceForm"):
+        raise web.HTTPBadRequest(text="'surfaceForm' is required")
+
+    if not mongo_service.is_ready():
+        raise web.HTTPServiceUnavailable(text="Database not available")
+
+    try:
+        doc = {
+            "user_id": user_id,
+            "videoId": body.get("videoId", ""),
+            "surfaceForm": body.get("surfaceForm", ""),
+            "normalizedForm": body.get("normalizedForm") or body.get("surfaceForm", ""),
+            "translation": body.get("translation", ""),
+            "cueText": body.get("cueText", ""),
+            "cueTranslation": body.get("cueTranslation", ""),
+            "explanation": body.get("explanation", ""),
+            "videoLang": body.get("videoLang", "de"),
+            "targetLang": body.get("targetLang", "uk"),
+            "savedAt": datetime.now(timezone.utc),
+        }
+        await mongo_service.db().subtitle_words.update_one(
+            {
+                "user_id": user_id,
+                "videoId": doc["videoId"],
+                "normalizedForm": doc["normalizedForm"],
+            },
+            {"$set": doc},
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.error("subtitle_save_word error: %s", exc)
+        raise web.HTTPInternalServerError(text="Не вдалося зберегти слово.")
+
+    return web.json_response({"ok": True})
 
 
 async def get_user_lang(request: web.Request) -> web.Response:
@@ -930,7 +1057,13 @@ def create_webapp_routes() -> web.Application:
     app.router.add_post('/api/flashcards/sets/{set_id}/cards/{card_id}/image', upload_card_image)
     app.router.add_get('/api/flashcards/sets/{set_id}/cards/{card_id}/image', get_card_image)
     app.router.add_delete('/api/flashcards/sets/{set_id}/cards/{card_id}/image', delete_card_image)
-    
+
+    # Subtitle Trainer
+    app.router.add_get('/subtitle-trainer', serve_subtitle_trainer_app)
+    app.router.add_post('/api/subtitle/session', subtitle_session)
+    app.router.add_post('/api/subtitle/lookup', subtitle_lookup)
+    app.router.add_post('/api/subtitle/words', subtitle_save_word)
+
     return app
 
 

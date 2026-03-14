@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Субтитри — Тренажер</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/css/subtitle_trainer.css">
+</head>
+<body>
+<div id="app">
+
+    <!-- Loading -->
+    <div id="screen-loading" class="screen active">
+        <div class="loader"></div>
+        <p>Завантаження...</p>
+    </div>
+
+    <!-- Main screen -->
+    <div id="screen-main" class="screen">
+
+        <!-- URL form -->
+        <div id="url-bar">
+            <form id="url-form">
+                <input
+                    id="url-input"
+                    type="text"
+                    placeholder="YouTube URL або videoId…"
+                    autocomplete="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                />
+                <button type="submit" id="load-btn">▶</button>
+            </form>
+            <p id="status-line" class="status-line"></p>
+        </div>
+
+        <!-- Player area -->
+        <div id="player-area">
+            <!-- placeholder before video loads -->
+            <div id="player-placeholder">
+                <p>Вставте посилання на YouTube з німецькими субтитрами</p>
+            </div>
+
+            <!-- YouTube iframe will be injected here -->
+            <div id="yt-container" style="display:none;">
+                <div id="pause-overlay" style="display:none;">
+                    <div id="pause-play-btn">▶</div>
+                </div>
+                <div id="yt-frame-wrap">
+                    <!-- YT.Player mounts here -->
+                    <div id="yt-player"></div>
+                </div>
+                <!-- Subtitles -->
+                <div id="subtitle-overlay">
+                    <p id="subtitle-line"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Word popup -->
+        <div id="word-popup" style="display:none;">
+            <div class="popup-header">
+                <div class="popup-title-wrap">
+                    <span class="popup-kicker">ПОЯСНЕННЯ</span>
+                    <h3 id="popup-word"></h3>
+                </div>
+                <button id="popup-close">✕</button>
+            </div>
+            <div id="popup-body">
+                <!-- filled by JS -->
+            </div>
+        </div>
+
+    </div><!-- /screen-main -->
+
+</div><!-- /app -->
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="/static/js/subtitle_trainer.js"></script>
+</body>
+</html>
