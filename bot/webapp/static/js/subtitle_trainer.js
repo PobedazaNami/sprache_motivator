@@ -62,42 +62,6 @@ function extractVideoId(input) {
     return null;
 }
 
-// Caption-track promise state
-let _pendingCaptions = null;
-
-function waitForCaptionTracks(timeoutMs = 14000) {
-    // Try immediately — tracks may already be available
-    try {
-        const tracks = state.player?.getOption?.('captions', 'tracklist');
-        if (tracks?.length) return Promise.resolve(tracks);
-    } catch (_) {}
-
-    return new Promise((resolve, reject) => {
-        _pendingCaptions = { resolve, reject };
-        setTimeout(() => {
-            if (_pendingCaptions) {
-                _pendingCaptions.reject(
-                    new Error('Субтитри не знайдено для цього відео')
-                );
-                _pendingCaptions = null;
-            }
-        }, timeoutMs);
-    });
-}
-
-function onPlayerApiChange() {
-    if (!_pendingCaptions) return;
-    try {
-        const tracks = state.player?.getOption?.('captions', 'tracklist');
-        if (tracks?.length) {
-            _pendingCaptions.resolve(tracks);
-            _pendingCaptions = null;
-        }
-    } catch (_) {}
-}
-
-const CAPTION_LANG_PRIORITY = ['de', 'en', 'fr', 'es', 'it', 'pt'];
-
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
 const screenLoading  = $('screen-loading');
@@ -147,13 +111,11 @@ async function apiFetch(path, { method = 'GET', body = null } = {}) {
 
 // ---------------------------------------------------------------------------
 // Load video session
-// New flow: browser extracts videoId → mounts player → waits for onApiChange
-// → gets signed captionTrackUrl from the player → sends URL to server.
-// Server only fetches the caption text file (not the YouTube watch page),
-// so datacenter IP ban does NOT apply.
+// Flow: extract videoId → server fetches subtitles via Invidious API →
+// mount YouTube player in user's browser (plays fine from any IP).
 // ---------------------------------------------------------------------------
 async function loadSession(input) {
-    setStatus('Завантажую відео…');
+    setStatus('Завантажую субтитри…');
     loadBtn.disabled = true;
 
     const videoId = extractVideoId(input);
@@ -163,49 +125,22 @@ async function loadSession(input) {
         return;
     }
 
-    // Reset any pending caption promise
-    if (_pendingCaptions) {
-        _pendingCaptions.reject(new Error('cancelled'));
-        _pendingCaptions = null;
-    }
-
     try {
-        // 1. Mount the player — loads video via the user's browser IP (not blocked)
-        mountPlayer(videoId);
-
-        setStatus('Отримую субтитри з плеєра…');
-
-        // 2. Wait for YouTube player to expose caption tracks via onApiChange
-        const tracks = await waitForCaptionTracks();
-
-        // 3. Pick best language track
-        const track =
-            CAPTION_LANG_PRIORITY
-                .map(l => tracks.find(t => t.languageCode?.startsWith(l)))
-                .find(Boolean) || tracks[0];
-
-        setStatus('Обробляю субтитри…');
-
-        // 4. Server fetches ONLY the caption text file via the signed URL
-        //    (This is not a YouTube page scrape — just downloading a text file)
+        // 1. Server fetches subtitles (Invidious API — no IP ban)
         const data = await apiFetch('/api/subtitle/session', {
             method: 'POST',
-            body: {
-                captionUrl: track.captionTrackUrl,
-                videoId,
-                lang: track.languageCode,
-                availableLanguages: tracks.map(t => t.languageCode),
-            },
+            body: { input: videoId },
         });
 
         state.session = data;
         state.activeCueIndex = -1;
         setStatus(`${data.cues.length} субтитрів • ${data.selectedLanguage}`);
-        loadBtn.disabled = false;
+
+        // 2. Mount player (video loads from YouTube via user's browser)
+        mountPlayer(videoId);
     } catch (err) {
-        if (err.message !== 'cancelled') {
-            setStatus('Помилка: ' + err.message, true);
-        }
+        setStatus('Помилка: ' + err.message, true);
+    } finally {
         loadBtn.disabled = false;
     }
 }
@@ -261,7 +196,6 @@ function createPlayer(videoId) {
                 startCueInterval();
             },
             onStateChange: onPlayerStateChange,
-            onApiChange: onPlayerApiChange,
         },
     });
 }
@@ -281,6 +215,13 @@ function onPlayerStateChange(event) {
 // ---------------------------------------------------------------------------
 // Subtitle sync
 // ---------------------------------------------------------------------------
+function pickActiveCue(cues, ms) {
+    for (let i = cues.length - 1; i >= 0; i--) {
+        if (ms >= cues[i].startMs && ms < cues[i].endMs) return i;
+    }
+    return -1;
+}
+
 function startCueInterval() {
     if (state.intervalId) clearInterval(state.intervalId);
     state.intervalId = setInterval(() => {
