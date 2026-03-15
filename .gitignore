@@ -47,3 +47,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# YouTube cookies (sensitive — never commit!)
+cookies/*.txt

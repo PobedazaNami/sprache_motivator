@@ -49,6 +49,7 @@ services:
       - nginx-proxy
     volumes:
       - ./logs:/app/logs
+      - ./cookies:/app/cookies:ro
     restart: unless-stopped
 
 volumes:

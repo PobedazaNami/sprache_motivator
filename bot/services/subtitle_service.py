@@ -2,17 +2,14 @@
 Subtitle service: fetches YouTube subtitles via youtube-transcript-api.
 
 Fetch strategy:
-  1. Check Redis L2 cache (shared across all users, 24h TTL)
-  2. Check in-memory L1 cache (10 min TTL)
-  3. youtube-transcript-api (direct YouTube access)
-  4. On RequestBlocked → return friendly error
-     (background cache warmer will fill Redis over time)
+  1. Check in-memory L1 cache (10 min TTL)
+  2. Check Redis L2 cache (shared across all users, 7-day TTL)
+  3. youtube-transcript-api with cookie-authenticated requests
+     (cookies loaded from /app/cookies/youtube_cookies.txt)
 
 Background cache warmer:
-  - Runs at startup and every 10 min
+  - Runs at startup
   - Fetches subtitles for channel videos one at a time with delays
-  - YouTube allows ~1-2 requests before IP block, so over time all videos
-    accumulate in Redis (24h TTL)
 
 Translates with Google Translate (gtx endpoint), optionally explains with OpenAI.
 """
@@ -20,12 +17,15 @@ Translates with Google Translate (gtx endpoint), optionally explains with OpenAI
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import xml.etree.ElementTree as ET
+from http.cookiejar import MozillaCookieJar
 from typing import Optional
 
 import aiohttp
+import requests
 
 from bot.config import settings
 from bot.services.redis_service import redis_service
@@ -43,12 +43,13 @@ _CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 600  # 10 minutes (in-memory L1)
-_REDIS_SUBTITLE_TTL = 86400  # 24 hours  (Redis L2, shared across users)
+_REDIS_SUBTITLE_TTL = 604800  # 7 days  (Redis L2, shared across users)
 _REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
 _WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
 _warmer_running = False
+_COOKIE_PATH = os.environ.get("YOUTUBE_COOKIE_PATH", "/app/cookies/youtube_cookies.txt")
 
 # Per-video locks: prevents thundering herd (60 users click same video →
 # only 1 request goes to YouTube, others wait for result from cache).
@@ -60,6 +61,28 @@ def _get_video_lock(video_id: str) -> asyncio.Lock:
     if video_id not in _video_locks:
         _video_locks[video_id] = asyncio.Lock()
     return _video_locks[video_id]
+
+# ---------------------------------------------------------------------------
+# Cookie-authenticated HTTP client
+# ---------------------------------------------------------------------------
+
+
+def _build_http_client() -> requests.Session | None:
+    """Build a requests.Session with YouTube cookies loaded from Netscape file."""
+    if not os.path.isfile(_COOKIE_PATH):
+        logger.warning("Cookie file not found at %s — YouTube may block requests", _COOKIE_PATH)
+        return None
+    try:
+        jar = MozillaCookieJar(_COOKIE_PATH)
+        jar.load(ignore_discard=True, ignore_expires=True)
+        session = requests.Session()
+        session.cookies = jar  # type: ignore[assignment]
+        logger.debug("Loaded %d cookies from %s", len(jar), _COOKIE_PATH)
+        return session
+    except Exception as exc:
+        logger.error("Failed to load cookies from %s: %s", _COOKIE_PATH, exc)
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -110,7 +133,8 @@ async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
     from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
 
     def _fetch_sync() -> tuple[list[dict], str, list[str]]:
-        api = YouTubeTranscriptApi()
+        http_client = _build_http_client()
+        api = YouTubeTranscriptApi(http_client=http_client) if http_client else YouTubeTranscriptApi()
         transcript_list = api.list(video_id)
         all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
         try:
@@ -301,9 +325,9 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
 
     Strategy:
       1. Return from in-memory cache if fresh (10 min TTL).
-      2. Try youtube-transcript-api (fast, direct YouTube access).
-      3. On RequestBlocked (server IP banned by YouTube) → Invidious fallback.
-      4. Cache and return result.
+      2. Return from Redis L2 cache (7-day TTL).
+      3. Fetch via youtube-transcript-api with cookie authentication.
+      4. Cache result in L1 + L2.
 
     Returns:
         {videoId, title, cues, selectedLanguage, availableLanguages}
@@ -353,7 +377,8 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
 
         def _fetch_direct() -> tuple[list[dict], str, list[str]]:
             """Synchronous fetch via youtube-transcript-api (runs in thread executor)."""
-            api = YouTubeTranscriptApi()
+            http_client = _build_http_client()
+            api = YouTubeTranscriptApi(http_client=http_client) if http_client else YouTubeTranscriptApi()
             transcript_list = api.list(video_id)
             all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
             try:
