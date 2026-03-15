@@ -1,17 +1,13 @@
 """
-Subtitle service: fetches YouTube subtitles via Invidious public API
-(fallback: youtube-transcript-api),
+Subtitle service: fetches YouTube subtitles via youtube-transcript-api,
 translates with Google Translate (gtx endpoint), and
 optionally explains with OpenAI.
 """
 
 import asyncio
-import json
 import logging
-import os
 import re
 from typing import Optional
-from urllib.parse import quote
 
 import aiohttp
 
@@ -25,26 +21,6 @@ _TRANSLATE_URL = (
 )
 
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
-
-_DEFAULT_INVIDIOUS_INSTANCES = [
-    "https://vid.puffyan.us",
-    "https://inv.nadeko.net",
-    "https://invidious.fdn.fr",
-    "https://invidious.privacyredirect.com",
-    "https://iv.nbooo.de",
-]
-
-
-def _get_invidious_instances() -> list[str]:
-    raw = os.environ.get("INVIDIOUS_INSTANCES", "")
-    if raw:
-        try:
-            instances = json.loads(raw)
-            if isinstance(instances, list) and instances:
-                return [s.rstrip("/") for s in instances]
-        except json.JSONDecodeError:
-            pass
-    return list(_DEFAULT_INVIDIOUS_INSTANCES)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,145 +57,6 @@ def _cues_from_transcript(raw: list) -> list[dict]:
     return cues
 
 
-_VTT_TS_RE = re.compile(
-    r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})"
-)
-
-
-def _vtt_ts_to_ms(ts: str) -> int:
-    m = _VTT_TS_RE.search(ts)
-    if not m:
-        return 0
-    h, mi, s, ms = (int(g) for g in m.groups())
-    return h * 3600000 + mi * 60000 + s * 1000 + ms
-
-
-def _parse_vtt(text: str) -> list[dict]:
-    """Parse WebVTT text into cue list {startMs, endMs, text}."""
-    cues: list[dict] = []
-    blocks = re.split(r"\n\n+", text.strip())
-    for block in blocks:
-        lines = block.strip().splitlines()
-        # Find the line with the timestamp arrow
-        ts_idx = -1
-        for i, line in enumerate(lines):
-            if "-->" in line:
-                ts_idx = i
-                break
-        if ts_idx < 0:
-            continue
-        parts = lines[ts_idx].split("-->")
-        if len(parts) < 2:
-            continue
-        start_ms = _vtt_ts_to_ms(parts[0].strip())
-        end_ms = _vtt_ts_to_ms(parts[1].strip())
-        content = " ".join(lines[ts_idx + 1:]).replace("\n", " ").strip()
-        # Strip VTT tags like <c> </c> etc.
-        content = re.sub(r"<[^>]+>", "", content).strip()
-        if not content:
-            continue
-        cues.append({"startMs": start_ms, "endMs": end_ms, "text": content})
-    return cues
-
-
-def _is_german(label: str) -> bool:
-    return bool(re.search(r"(^de$|^de-|deutsch|german)", label, re.IGNORECASE))
-
-
-async def _fetch_captions_invidious(video_id: str) -> dict:
-    """
-    Fetch subtitles via Invidious public API.
-    Tries multiple instances; picks German track.
-
-    Returns:
-        {videoId, title, cues, selectedLanguage, availableLanguages}
-    """
-    instances = _get_invidious_instances()
-    last_error: Exception | None = None
-
-    async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=15)
-    ) as sess:
-        for instance in instances:
-            try:
-                # 1. List caption tracks
-                list_url = f"{instance}/api/v1/captions/{video_id}"
-                async with sess.get(list_url) as resp:
-                    if resp.status != 200:
-                        logger.debug("Invidious %s returned %s", instance, resp.status)
-                        continue
-                    data = await resp.json(content_type=None)
-
-                tracks = data.get("captions") or []
-                if not tracks:
-                    raise RuntimeError("У цього відео немає доступних субтитрів.")
-
-                available = [t.get("label", t.get("language_code", "")) for t in tracks]
-
-                # 2. Find German track (prefer non-auto over auto)
-                german_tracks = [t for t in tracks if _is_german(
-                    t.get("language_code", "") + " " + t.get("label", "")
-                )]
-                if not german_tracks:
-                    raise RuntimeError(
-                        f"Для цього відео немає німецьких субтитрів. "
-                        f"Доступні: {', '.join(available)}"
-                    )
-                # Prefer non-auto-generated
-                track = next(
-                    (t for t in german_tracks if "auto" not in t.get("label", "").lower()),
-                    german_tracks[0],
-                )
-
-                label = track.get("label", "")
-
-                # 3. Fetch caption content (VTT)
-                caption_url = f"{instance}/api/v1/captions/{video_id}?label={quote(label)}"
-                async with sess.get(caption_url) as cresp:
-                    if cresp.status != 200:
-                        logger.debug("Invidious caption fetch %s returned %s", instance, cresp.status)
-                        continue
-                    vtt_text = await cresp.text()
-
-                cues = _parse_vtt(vtt_text)
-                if not cues:
-                    raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
-
-                # 4. Title via oEmbed
-                title = video_id
-                try:
-                    oembed_url = (
-                        f"https://www.youtube.com/oembed"
-                        f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
-                    )
-                    async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as tresp:
-                        if tresp.status == 200:
-                            tdata = await tresp.json(content_type=None)
-                            title = tdata.get("title", video_id)
-                except Exception as exc:
-                    logger.warning("oEmbed title fetch failed: %s", exc)
-
-                return {
-                    "videoId": video_id,
-                    "title": title,
-                    "cues": cues,
-                    "selectedLanguage": track.get("language_code", "de"),
-                    "availableLanguages": available,
-                }
-
-            except RuntimeError:
-                raise
-            except Exception as exc:
-                logger.warning("Invidious instance %s failed: %s", instance, exc)
-                last_error = exc
-                continue
-
-    raise RuntimeError(
-        "Не вдалося отримати субтитри через Invidious. "
-        + (str(last_error) if last_error else "Усі інстанси недоступні.")
-    )
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -227,9 +64,7 @@ async def _fetch_captions_invidious(video_id: str) -> dict:
 
 async def load_video_session(input_str: str) -> dict:
     """
-    Download subtitle metadata for a YouTube video.
-    Primary: Invidious public API.
-    Fallback: youtube-transcript-api (may fail on cloud IPs).
+    Download subtitle metadata for a YouTube video via youtube-transcript-api.
 
     Returns:
         {videoId, title, cues, selectedLanguage, availableLanguages}
@@ -238,37 +73,10 @@ async def load_video_session(input_str: str) -> dict:
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    # --- Primary: Invidious ---
-    try:
-        return await _fetch_captions_invidious(video_id)
-    except RuntimeError:
-        raise
-    except Exception as exc:
-        logger.warning("Invidious failed, trying youtube-transcript-api: %s", exc)
-
-    # --- Fallback: youtube-transcript-api ---
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
-        from youtube_transcript_api.proxies import GenericProxyConfig  # noqa: PLC0415
-    except ImportError:
-        raise RuntimeError(
-            "Бібліотека youtube-transcript-api не встановлена."
-        )
-
-    proxy_url = os.environ.get("YOUTUBE_PROXY_URL", "")
-
-    def _build_api() -> YouTubeTranscriptApi:
-        if proxy_url:
-            return YouTubeTranscriptApi(
-                proxy_config=GenericProxyConfig(
-                    http_url=proxy_url,
-                    https_url=proxy_url,
-                )
-            )
-        return YouTubeTranscriptApi()
+    from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
 
     def _fetch_sync() -> tuple[list[dict], str, list[str]]:
-        api = _build_api()
+        api = YouTubeTranscriptApi()
         transcript_list = api.list(video_id)
 
         all_langs: list[str] = []
