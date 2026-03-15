@@ -1,12 +1,12 @@
-"""Test: yt-dlp urlopen with cookies for subtitle download."""
+"""Test: requests with cookies from cookie file for subtitle download."""
 import yt_dlp
 import shutil
 import os
 import json
 import traceback
+import http.cookiejar
 
 VIDEO_ID = 'iFOUdu-aKzM'
-LANGS = ['de', 'de-DE', 'en']
 
 try:
     src = '/app/cookies/youtube_cookies.txt'
@@ -14,11 +14,12 @@ try:
     shutil.copy2(src, dst)
     print('Cookie copy OK, size:', os.path.getsize(dst))
 
+    # Get subtitle URL via extract_info
     ydl_opts = {
         'skip_download': True,
         'writesubtitles': True,
         'writeautomaticsub': True,
-        'subtitleslangs': LANGS,
+        'subtitleslangs': ['de'],
         'subtitlesformat': 'json3',
         'quiet': True,
         'no_warnings': True,
@@ -27,28 +28,41 @@ try:
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(f'https://www.youtube.com/watch?v={VIDEO_ID}', download=False)
-        subs = info.get('subtitles', {})
         auto = info.get('automatic_captions', {})
-        print('Subs langs:', list(subs.keys())[:5])
-        print('Auto langs:', list(auto.keys())[:5])
+        de_list = auto.get('de', [])
+        json3_entries = [s for s in de_list if s.get('ext') == 'json3']
+        if not json3_entries:
+            print('No json3!')
+            exit()
+        url = json3_entries[0]['url']
+        print(f'Got URL (len={len(url)})')
 
-        for lang in LANGS:
-            sub_list = subs.get(lang, []) or auto.get(lang, [])
-            json3_entries = [s for s in sub_list if s.get('ext') == 'json3']
-            if not json3_entries:
-                continue
-            url = json3_entries[0]['url']
-            print(f'\nTrying {lang} via ydl.urlopen()...')
-            try:
-                resp = ydl.urlopen(url)
-                raw = resp.read().decode('utf-8')
-                data = json.loads(raw)
-                events = data.get('events', [])
-                print(f'SUCCESS! Events: {len(events)}, size: {len(raw)} bytes')
-                if len(events) > 1:
-                    print('Event[1]:', json.dumps(events[1], ensure_ascii=False)[:200])
-                break
-            except Exception as e:
-                print(f'FAILED: {e}')
+    # Load cookies from Netscape cookie file
+    import requests
+    cj = http.cookiejar.MozillaCookieJar(dst)
+    cj.load(ignore_discard=True, ignore_expires=True)
+    print(f'Loaded {len(cj)} cookies')
+
+    session = requests.Session()
+    session.cookies = cj
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+        'Referer': f'https://www.youtube.com/watch?v={VIDEO_ID}',
+    })
+
+    print('\n=== Test: requests with browser cookies ===')
+    resp = session.get(url, timeout=15)
+    print(f'Status: {resp.status_code}')
+    if resp.status_code == 200:
+        data = resp.json()
+        events = data.get('events', [])
+        print(f'SUCCESS! Events: {len(events)}')
+        if len(events) > 1:
+            segs = events[1].get('segs', [])
+            print(f'  Event[1] segs={len(segs)}, has tOffsetMs: {any("tOffsetMs" in s for s in segs)}')
+    else:
+        print(f'Body: {resp.text[:300]}')
+
 except Exception:
     traceback.print_exc()
