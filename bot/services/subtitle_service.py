@@ -50,6 +50,17 @@ _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
 _WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
 _warmer_running = False
 
+# Per-video locks: prevents thundering herd (60 users click same video →
+# only 1 request goes to YouTube, others wait for result from cache).
+_video_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_video_lock(video_id: str) -> asyncio.Lock:
+    """Get or create an asyncio.Lock for a specific video_id."""
+    if video_id not in _video_locks:
+        _video_locks[video_id] = asyncio.Lock()
+    return _video_locks[video_id]
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -301,7 +312,7 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    # --- Cache check (L1: in-memory, L2: Redis) ---
+    # --- Fast path: L1 in-memory cache (no lock needed) ---
     cached = _session_cache.get(video_id)
     if cached:
         result, ts = cached
@@ -310,90 +321,103 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
             return result
         del _session_cache[video_id]
 
-    # L2: Redis — shared across all users
-    try:
-        if redis_service.redis:
-            redis_key = f"subtitle:session:{video_id}"
-            cached_json = await redis_service.get(redis_key)
-            if cached_json:
-                result = json.loads(cached_json)
-                _session_cache[video_id] = (result, time.time())
-                logger.info("Subtitle L2 (Redis) cache hit for %s", video_id)
+    # --- Lock per video: thundering herd protection ---
+    # If 60 users click the same video, only 1 goes to YouTube.
+    # The other 59 wait here and get the result from cache.
+    lock = _get_video_lock(video_id)
+    async with lock:
+        # Re-check caches after acquiring lock (another coroutine may have filled them)
+        cached = _session_cache.get(video_id)
+        if cached:
+            result, ts = cached
+            if time.time() - ts < _CACHE_TTL:
+                logger.info("Subtitle L1 cache hit (post-lock) for %s", video_id)
                 return result
-    except Exception as exc:
-        logger.debug("Redis subtitle cache read failed: %s", exc)
 
-    # --- Fetch subtitles ---
-    from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
-    from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
-
-    def _fetch_direct() -> tuple[list[dict], str, list[str]]:
-        """Synchronous fetch via youtube-transcript-api (runs in thread executor)."""
-        api = YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
-        all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
+        # L2: Redis — shared across all users
         try:
-            transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
-        except Exception:
-            raise RuntimeError("Для цього відео не знайдено субтитрів.")
-        cues = _cues_from_transcript(transcript.fetch().to_raw_data())
-        return cues, transcript.language_code, all_langs
-
-    cues: list[dict]
-    selected_lang: str
-    all_langs: list[str]
-
-    try:
-        loop = asyncio.get_event_loop()
-        cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_direct)
-    except TranscriptsDisabled:
-        raise RuntimeError("У цього відео субтитри вимкнені.")
-    except RequestBlocked:
-        logger.warning("YouTube blocked this server IP for video %s", video_id)
-        raise RuntimeError(
-            "Субтитри для цього відео ще завантажуються. "
-            "Спробуйте інше відео або повторіть через хвилину."
-        )
-    except Exception as exc:
-        raise RuntimeError(f"Не вдалося отримати субтитри: {exc}") from exc
-
-    if not cues:
-        raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
-
-    # --- Resolve title ---
-    title = preferred_title or video_id
-    if not preferred_title:
-        try:
-            oembed_url = (
-                f"https://www.youtube.com/oembed"
-                f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
-            )
-            async with aiohttp.ClientSession() as sess:
-                async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json(content_type=None)
-                        title = data.get("title", video_id)
+            if redis_service.redis:
+                redis_key = f"subtitle:session:{video_id}"
+                cached_json = await redis_service.get(redis_key)
+                if cached_json:
+                    result = json.loads(cached_json)
+                    _session_cache[video_id] = (result, time.time())
+                    logger.info("Subtitle L2 (Redis) cache hit for %s", video_id)
+                    return result
         except Exception as exc:
-            logger.warning("oEmbed title fetch failed: %s", exc)
+            logger.debug("Redis subtitle cache read failed: %s", exc)
 
-    result = {
-        "videoId": video_id,
-        "title": title,
-        "cues": cues,
-        "selectedLanguage": selected_lang,
-        "availableLanguages": all_langs,
-    }
+        # --- Fetch subtitles (only 1 coroutine reaches here per video) ---
+        from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
+        from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
 
-    # Store in both caches
-    _session_cache[video_id] = (result, time.time())
-    try:
-        if redis_service.redis:
-            redis_key = f"subtitle:session:{video_id}"
-            await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
-    except Exception as exc:
-        logger.debug("Redis subtitle cache write failed: %s", exc)
+        def _fetch_direct() -> tuple[list[dict], str, list[str]]:
+            """Synchronous fetch via youtube-transcript-api (runs in thread executor)."""
+            api = YouTubeTranscriptApi()
+            transcript_list = api.list(video_id)
+            all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
+            try:
+                transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
+            except Exception:
+                raise RuntimeError("Для цього відео не знайдено субтитрів.")
+            cues = _cues_from_transcript(transcript.fetch().to_raw_data())
+            return cues, transcript.language_code, all_langs
 
-    return result
+        cues: list[dict]
+        selected_lang: str
+        all_langs: list[str]
+
+        try:
+            loop = asyncio.get_event_loop()
+            cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_direct)
+        except TranscriptsDisabled:
+            raise RuntimeError("У цього відео субтитри вимкнені.")
+        except RequestBlocked:
+            logger.warning("YouTube blocked this server IP for video %s", video_id)
+            raise RuntimeError(
+                "Субтитри для цього відео ще завантажуються. "
+                "Спробуйте інше відео або повторіть через хвилину."
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Не вдалося отримати субтитри: {exc}") from exc
+
+        if not cues:
+            raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
+
+        # --- Resolve title ---
+        title = preferred_title or video_id
+        if not preferred_title:
+            try:
+                oembed_url = (
+                    f"https://www.youtube.com/oembed"
+                    f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
+                )
+                async with aiohttp.ClientSession() as sess:
+                    async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            data = await resp.json(content_type=None)
+                            title = data.get("title", video_id)
+            except Exception as exc:
+                logger.warning("oEmbed title fetch failed: %s", exc)
+
+        result = {
+            "videoId": video_id,
+            "title": title,
+            "cues": cues,
+            "selectedLanguage": selected_lang,
+            "availableLanguages": all_langs,
+        }
+
+        # Store in both caches
+        _session_cache[video_id] = (result, time.time())
+        try:
+            if redis_service.redis:
+                redis_key = f"subtitle:session:{video_id}"
+                await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
+        except Exception as exc:
+            logger.debug("Redis subtitle cache write failed: %s", exc)
+
+        return result
 
 
 async def translate_text(
