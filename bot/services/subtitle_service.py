@@ -1,10 +1,10 @@
 """
-Subtitle service: fetches YouTube subtitles via youtube-transcript-api.
+Subtitle service: fetches YouTube subtitles via yt-dlp.
 
 Fetch strategy:
   1. Check in-memory L1 cache (10 min TTL)
   2. Check Redis L2 cache (shared across all users, 7-day TTL)
-  3. youtube-transcript-api with cookie-authenticated requests
+  3. yt-dlp with cookie-authenticated requests
      (cookies loaded from /app/cookies/youtube_cookies.txt)
 
 Background cache warmer:
@@ -19,13 +19,12 @@ import json
 import logging
 import os
 import re
+import shutil
 import time
 import xml.etree.ElementTree as ET
-from http.cookiejar import MozillaCookieJar
 from typing import Optional
 
 import aiohttp
-import requests
 
 from bot.config import settings
 from bot.services.redis_service import redis_service
@@ -63,25 +62,90 @@ def _get_video_lock(video_id: str) -> asyncio.Lock:
     return _video_locks[video_id]
 
 # ---------------------------------------------------------------------------
-# Cookie-authenticated HTTP client
+# yt-dlp subtitle extraction
 # ---------------------------------------------------------------------------
 
+_COOKIE_TMP = "/tmp/yt_cookies.txt"
 
-def _build_http_client() -> requests.Session | None:
-    """Build a requests.Session with YouTube cookies loaded from Netscape file."""
+
+def _ensure_cookie_copy() -> str | None:
+    """Copy cookies to writable location (yt-dlp needs write access). Returns path or None."""
     if not os.path.isfile(_COOKIE_PATH):
-        logger.warning("Cookie file not found at %s — YouTube may block requests", _COOKIE_PATH)
+        logger.warning("Cookie file not found at %s", _COOKIE_PATH)
         return None
     try:
-        jar = MozillaCookieJar(_COOKIE_PATH)
-        jar.load(ignore_discard=True, ignore_expires=True)
-        session = requests.Session()
-        session.cookies = jar  # type: ignore[assignment]
-        logger.debug("Loaded %d cookies from %s", len(jar), _COOKIE_PATH)
-        return session
+        shutil.copy2(_COOKIE_PATH, _COOKIE_TMP)
+        return _COOKIE_TMP
     except Exception as exc:
-        logger.error("Failed to load cookies from %s: %s", _COOKIE_PATH, exc)
+        logger.error("Failed to copy cookies: %s", exc)
         return None
+
+
+def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
+    """Fetch subtitles via yt-dlp (synchronous, runs in thread executor).
+
+    Returns (cues, selected_language, available_languages).
+    """
+    import yt_dlp  # noqa: PLC0415
+
+    cookie_path = _ensure_cookie_copy()
+    ydl_opts: dict = {
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": _LANG_PRIORITY,
+        "subtitlesformat": "json3",
+        "quiet": True,
+        "no_warnings": True,
+        "ignore_no_formats_error": True,
+    }
+    if cookie_path:
+        ydl_opts["cookiefile"] = cookie_path
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(
+            f"https://www.youtube.com/watch?v={video_id}", download=False
+        )
+
+    subs = info.get("subtitles", {})
+    auto_subs = info.get("automatic_captions", {})
+    all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
+
+    # Try languages in priority order
+    import requests as _requests  # noqa: PLC0415
+
+    for lang in _LANG_PRIORITY + all_langs:
+        sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
+        if not sub_list:
+            continue
+        json3_entries = [s for s in sub_list if s.get("ext") == "json3"]
+        if not json3_entries:
+            continue
+        url = json3_entries[0]["url"]
+        resp = _requests.get(url, timeout=15)
+        if resp.status_code != 200:
+            continue
+        data = resp.json()
+        events = data.get("events", [])
+        cues = _cues_from_json3_events(events)
+        if cues:
+            return cues, lang, all_langs
+
+    return [], "", all_langs
+
+
+def _cues_from_json3_events(events: list[dict]) -> list[dict]:
+    """Convert yt-dlp json3 events to flat cue list: {startMs, endMs, text}."""
+    cues = []
+    for event in events:
+        segs = event.get("segs", [])
+        text = "".join(s.get("utf8", "") for s in segs).replace("\n", " ").strip()
+        if not text:
+            continue
+        start_ms = event.get("tStartMs", 0)
+        dur_ms = event.get("dDurationMs", 2000)
+        cues.append({"startMs": start_ms, "endMs": start_ms + dur_ms, "text": text})
+    return cues
 
 
 # ---------------------------------------------------------------------------
@@ -106,19 +170,6 @@ def _extract_video_id(input_str: str) -> Optional[str]:
     return None
 
 
-def _cues_from_transcript(raw: list) -> list[dict]:
-    """Convert youtube-transcript-api format to flat cue list: {startMs, endMs, text}."""
-    cues = []
-    for item in raw:
-        text = item.get("text", "").replace("\n", " ").strip()
-        if not text:
-            continue
-        start: float = item.get("start", 0.0)
-        dur: float = item.get("duration", 2.0)
-        cues.append({"startMs": int(start * 1000), "endMs": int((start + dur) * 1000), "text": text})
-    return cues
-
-
 # ---------------------------------------------------------------------------
 # Background cache warmer
 # ---------------------------------------------------------------------------
@@ -129,27 +180,13 @@ async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
     Try to fetch subtitles for one video and store in Redis.
     Returns True if cached successfully, False if blocked/failed.
     """
-    from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
-    from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
-
-    def _fetch_sync() -> tuple[list[dict], str, list[str]]:
-        http_client = _build_http_client()
-        api = YouTubeTranscriptApi(http_client=http_client) if http_client else YouTubeTranscriptApi()
-        transcript_list = api.list(video_id)
-        all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
-        try:
-            transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
-        except Exception:
-            return [], "", all_langs
-        cues = _cues_from_transcript(transcript.fetch().to_raw_data())
-        return cues, transcript.language_code, all_langs
-
     try:
         loop = asyncio.get_event_loop()
-        cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
-    except (RequestBlocked, TranscriptsDisabled):
-        return False
-    except Exception:
+        cues, selected_lang, all_langs = await loop.run_in_executor(
+            None, _fetch_subtitles_ytdlp, video_id
+        )
+    except Exception as exc:
+        logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc)
         return False
 
     if not cues:
@@ -211,8 +248,7 @@ async def warm_subtitle_cache() -> None:
                 fetched_count += 1
                 logger.info("Cache warmer: cached subtitles for %s", vid)
             else:
-                logger.info("Cache warmer: blocked at video %s after %d fetches, stopping", vid, fetched_count)
-                break
+                logger.warning("Cache warmer: failed for video %s, continuing", vid)
 
         logger.info("Cache warmer done: %d already cached, %d newly fetched, %d total videos",
                     cached_count, fetched_count, len(videos))
@@ -372,38 +408,17 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
             logger.debug("Redis subtitle cache read failed: %s", exc)
 
         # --- Fetch subtitles (only 1 coroutine reaches here per video) ---
-        from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
-        from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
-
-        def _fetch_direct() -> tuple[list[dict], str, list[str]]:
-            """Synchronous fetch via youtube-transcript-api (runs in thread executor)."""
-            http_client = _build_http_client()
-            api = YouTubeTranscriptApi(http_client=http_client) if http_client else YouTubeTranscriptApi()
-            transcript_list = api.list(video_id)
-            all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
-            try:
-                transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
-            except Exception:
-                raise RuntimeError("Для цього відео не знайдено субтитрів.")
-            cues = _cues_from_transcript(transcript.fetch().to_raw_data())
-            return cues, transcript.language_code, all_langs
-
         cues: list[dict]
         selected_lang: str
         all_langs: list[str]
 
         try:
             loop = asyncio.get_event_loop()
-            cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_direct)
-        except TranscriptsDisabled:
-            raise RuntimeError("У цього відео субтитри вимкнені.")
-        except RequestBlocked:
-            logger.warning("YouTube blocked this server IP for video %s", video_id)
-            raise RuntimeError(
-                "Субтитри для цього відео ще завантажуються. "
-                "Спробуйте інше відео або повторіть через хвилину."
+            cues, selected_lang, all_langs = await loop.run_in_executor(
+                None, _fetch_subtitles_ytdlp, video_id
             )
         except Exception as exc:
+            logger.warning("yt-dlp fetch failed for video %s: %s", video_id, exc)
             raise RuntimeError(f"Не вдалося отримати субтитри: {exc}") from exc
 
         if not cues:
