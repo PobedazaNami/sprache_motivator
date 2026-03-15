@@ -36,7 +36,7 @@ _TRANSLATE_URL = (
     "?client=gtx&sl={sl}&tl={tl}&dt=t&q={q}"
 )
 
-_LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
+_LANG_PRIORITY = ["de", "de-DE"]
 _CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
 
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
@@ -84,10 +84,9 @@ def _ensure_cookie_copy() -> str | None:
 def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
     """Fetch subtitles via yt-dlp (synchronous, runs in thread executor).
 
-    Uses yt-dlp's urlopen (with cookie session) to download subtitle content
-    instead of bare requests, avoiding 429 rate limits on unauthenticated requests.
-
+    Uses yt-dlp's urlopen (with cookie session) to download subtitle content.
     Returns (cues, selected_language, available_languages).
+    Raises RuntimeError('429') on rate limit so caller can back off.
     """
     import yt_dlp  # noqa: PLC0415
 
@@ -96,7 +95,7 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
         "skip_download": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
-        "subtitleslangs": _LANG_PRIORITY,
+        "subtitleslangs": ["de"],
         "subtitlesformat": "json3",
         "quiet": True,
         "no_warnings": True,
@@ -114,8 +113,8 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
         auto_subs = info.get("automatic_captions", {})
         all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
 
-        # Try languages in priority order, fetch via yt-dlp's session
-        for lang in _LANG_PRIORITY + all_langs:
+        # Only try priority languages (not all 100+ auto-translated ones)
+        for lang in _LANG_PRIORITY:
             sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
             if not sub_list:
                 continue
@@ -127,6 +126,9 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
                 resp = ydl.urlopen(url)
                 data = json.loads(resp.read().decode("utf-8"))
             except Exception as e:
+                err_str = str(e)
+                if "429" in err_str:
+                    raise RuntimeError("429") from e
                 logger.warning("Failed to download %s subs for %s: %s", lang, video_id, e)
                 continue
             events = data.get("events", [])
