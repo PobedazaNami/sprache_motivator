@@ -282,6 +282,26 @@ async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
     )
 
 
+async def subtitle_videos(request: web.Request) -> web.Response:
+    """
+    GET /api/subtitle/videos
+    Returns the latest channel videos for the subtitle trainer.
+    """
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise web.HTTPUnauthorized(text="Invalid authentication")
+
+    try:
+        videos = await subtitle_service.list_channel_videos(limit=12)
+    except RuntimeError as exc:
+        raise web.HTTPInternalServerError(text=str(exc))
+    except Exception as exc:
+        logger.error("subtitle_videos error: %s", exc)
+        raise web.HTTPInternalServerError(text="Не вдалося завантажити список відео.")
+
+    return web.json_response({"videos": videos})
+
+
 async def subtitle_session(request: web.Request) -> web.Response:
     """
     POST /api/subtitle/session
@@ -1058,6 +1078,7 @@ def create_webapp_routes() -> web.Application:
 
     # Subtitle Trainer
     app.router.add_get('/subtitle-trainer', serve_subtitle_trainer_app)
+    app.router.add_get('/api/subtitle/videos', subtitle_videos)
     app.router.add_post('/api/subtitle/session', subtitle_session)
     app.router.add_post('/api/subtitle/lookup', subtitle_lookup)
     app.router.add_post('/api/subtitle/words', subtitle_save_word)

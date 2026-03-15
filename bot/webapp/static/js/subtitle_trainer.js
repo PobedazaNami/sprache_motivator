@@ -22,6 +22,8 @@ function getTgInitData() {
 // ---------------------------------------------------------------------------
 const state = {
     session: null,          // { videoId, title, cues, selectedLanguage }
+    availableVideos: [],
+    selectedVideoId: null,
     activeCueIndex: -1,
     isPlaying: false,
     isLookingUp: false,
@@ -66,10 +68,9 @@ function extractVideoId(input) {
 const $ = (id) => document.getElementById(id);
 const screenLoading  = $('screen-loading');
 const screenMain     = $('screen-main');
-const urlForm        = $('url-form');
-const urlInput       = $('url-input');
-const loadBtn        = $('load-btn');
 const statusLine     = $('status-line');
+const videosList     = $('videos-list');
+const reloadVideosBtn = $('reload-videos-btn');
 const playerPlaceholder = $('player-placeholder');
 const ytContainer    = $('yt-container');
 const pauseOverlay   = $('pause-overlay');
@@ -116,14 +117,15 @@ async function apiFetch(path, { method = 'GET', body = null } = {}) {
 // ---------------------------------------------------------------------------
 async function loadSession(input) {
     setStatus('Завантажую субтитри…');
-    loadBtn.disabled = true;
 
     const videoId = extractVideoId(input);
     if (!videoId) {
-        setStatus('Невірне посилання', true);
-        loadBtn.disabled = false;
+        setStatus('Невірний ідентифікатор відео', true);
         return;
     }
+
+    state.selectedVideoId = videoId;
+    renderVideos(state.availableVideos || []);
 
     try {
         // 1. Server fetches subtitles via youtube-transcript-api
@@ -140,9 +142,55 @@ async function loadSession(input) {
         mountPlayer(videoId);
     } catch (err) {
         setStatus('Помилка: ' + err.message, true);
-    } finally {
-        loadBtn.disabled = false;
     }
+}
+
+async function loadVideoCatalog() {
+    setStatus('Завантажую список відео…');
+    if (reloadVideosBtn) reloadVideosBtn.disabled = true;
+    try {
+        const data = await apiFetch('/api/subtitle/videos');
+        state.availableVideos = data.videos || [];
+        renderVideos(state.availableVideos);
+        setStatus('Оберіть відео зі списку');
+    } catch (err) {
+        setStatus('Помилка: ' + err.message, true);
+    } finally {
+        if (reloadVideosBtn) reloadVideosBtn.disabled = false;
+        showScreen('screen-main');
+    }
+}
+
+function formatPublishedDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderVideos(videos) {
+    if (!videosList) return;
+    if (!videos.length) {
+        videosList.innerHTML = '<p class="videos-empty">Список відео порожній.</p>';
+        return;
+    }
+
+    videosList.innerHTML = videos.map((video) => {
+        const selected = video.videoId === state.selectedVideoId ? ' is-selected' : '';
+        const dateLabel = formatPublishedDate(video.publishedAt);
+        return `
+            <button type="button" class="video-card${selected}" data-video-id="${esc(video.videoId)}">
+                <img class="video-thumb" src="${esc(video.thumbnailUrl || '')}" alt="${esc(video.title)}" loading="lazy" />
+                <span class="video-card-body">
+                    <span class="video-card-title">${esc(video.title)}</span>
+                    <span class="video-card-meta">${esc(dateLabel)}</span>
+                </span>
+            </button>`;
+    }).join('');
+
+    videosList.querySelectorAll('[data-video-id]').forEach((el) => {
+        el.addEventListener('click', () => loadSession(el.dataset.videoId));
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +240,6 @@ function createPlayer(videoId) {
         },
         events: {
             onReady: () => {
-                loadBtn.disabled = false;
                 startCueInterval();
             },
             onStateChange: onPlayerStateChange,
@@ -265,7 +312,7 @@ function renderSubtitles(idx) {
 }
 
 function esc(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ---------------------------------------------------------------------------
@@ -373,12 +420,12 @@ async function saveWord(card) {
             method: 'POST',
             body: {
                 userId: getTgUserId(),
-                videoId: card.videoId,
+                videoId: card.videoId || state.session?.videoId || '',
                 surfaceForm: card.surfaceForm,
                 normalizedForm: card.normalizedForm,
                 translation: card.translation,
-                partOfSpeech: card.partOfSpeech,
-                contextExplanation: card.contextExplanation,
+                partOfSpeech: card.partOfSpeech ?? '',
+                contextExplanation: card.explanation ?? '',
                 cueText: card.cueText,
                 cueTranslation: card.cueTranslation ?? '',
             },
@@ -398,17 +445,11 @@ function setStatus(msg, isError = false) {
     statusLine.className = 'status-line' + (isError ? ' status-error' : '');
 }
 
-// ---------------------------------------------------------------------------
-// Event listeners
-// ---------------------------------------------------------------------------
-urlForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const val = urlInput.value.trim();
-    if (!val) return;
-    loadSession(val);
-});
-
 popupClose.addEventListener('click', closePopup);
+
+reloadVideosBtn?.addEventListener('click', () => {
+    loadVideoCatalog();
+});
 
 pauseOverlay.addEventListener('click', () => {
     state.player?.playVideo?.();
@@ -427,3 +468,4 @@ document.addEventListener('click', (e) => {
 // Boot
 // ---------------------------------------------------------------------------
 showScreen('screen-main');
+loadVideoCatalog();

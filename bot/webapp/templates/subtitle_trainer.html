@@ -22,27 +22,23 @@
     <!-- Main screen -->
     <div id="screen-main" class="screen">
 
-        <!-- URL form -->
         <div id="url-bar">
-            <form id="url-form">
-                <input
-                    id="url-input"
-                    type="text"
-                    placeholder="YouTube URL або videoId…"
-                    autocomplete="off"
-                    autocorrect="off"
-                    spellcheck="false"
-                />
-                <button type="submit" id="load-btn">▶</button>
-            </form>
+            <div id="videos-head">
+                <div>
+                    <p class="videos-kicker">KURZGESAGT DE</p>
+                    <h2 class="videos-title">Оберіть готове відео</h2>
+                </div>
+                <button type="button" id="reload-videos-btn">Оновити</button>
+            </div>
             <p id="status-line" class="status-line"></p>
+            <div id="videos-list" class="videos-list"></div>
         </div>
 
         <!-- Player area -->
         <div id="player-area">
             <!-- placeholder before video loads -->
             <div id="player-placeholder">
-                <p>Вставте посилання на YouTube з німецькими субтитрами</p>
+                <p>Оберіть відео зі списку вище. Для каналу Kurzgesagt DE список оновлюється автоматично.</p>
             </div>
 
             <!-- YouTube iframe will be injected here -->

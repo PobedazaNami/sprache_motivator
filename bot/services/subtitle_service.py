@@ -8,6 +8,7 @@ import asyncio
 import logging
 import re
 import time
+import xml.etree.ElementTree as ET
 from typing import Optional
 
 import aiohttp
@@ -22,10 +23,13 @@ _TRANSLATE_URL = (
 )
 
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
+_CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
 
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 600  # 10 minutes
+_channel_videos_cache: tuple[list[dict], float] | None = None
+_CHANNEL_CACHE_TTL = 1800  # 30 minutes
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,9 +66,61 @@ def _cues_from_transcript(raw: list) -> list[dict]:
     return cues
 
 
+def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "yt": "http://www.youtube.com/xml/schemas/2015",
+        "media": "http://search.yahoo.com/mrss/",
+    }
+    root = ET.fromstring(xml_text)
+    items: list[dict] = []
+
+    for entry in root.findall("atom:entry", ns)[:limit]:
+        video_id = entry.findtext("yt:videoId", namespaces=ns)
+        title = entry.findtext("atom:title", default="", namespaces=ns)
+        published_at = entry.findtext("atom:published", default="", namespaces=ns)
+        thumb = entry.find("media:group/media:thumbnail", ns)
+        thumbnail_url = thumb.attrib.get("url", "") if thumb is not None else ""
+        if not video_id or not title:
+            continue
+        items.append(
+            {
+                "videoId": video_id,
+                "title": title,
+                "publishedAt": published_at,
+                "thumbnailUrl": thumbnail_url,
+                "videoUrl": f"https://www.youtube.com/watch?v={video_id}",
+            }
+        )
+
+    return items
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+async def list_channel_videos(limit: int = 12) -> list[dict]:
+    global _channel_videos_cache
+
+    if _channel_videos_cache:
+        cached_items, cached_at = _channel_videos_cache
+        if time.time() - cached_at < _CHANNEL_CACHE_TTL:
+            return cached_items[:limit]
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(_CHANNEL_FEED_URL, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                raise RuntimeError("Не вдалося завантажити список відео каналу.")
+            xml_text = await resp.text()
+
+    videos = _parse_channel_feed(xml_text, max(limit, 12))
+    if not videos:
+        raise RuntimeError("Канал не повернув жодного відео.")
+
+    _channel_videos_cache = (videos, time.time())
+    return videos[:limit]
 
 
 async def load_video_session(input_str: str) -> dict:
