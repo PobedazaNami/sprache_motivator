@@ -46,7 +46,7 @@ _REDIS_SUBTITLE_TTL = 604800  # 7 days  (Redis L2, shared across users)
 _REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
-_WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
+_WARM_DELAY = 45  # seconds between subtitle fetches during cache warming
 _warmer_running = False
 _COOKIE_PATH = os.environ.get("YOUTUBE_COOKIE_PATH", "/app/cookies/youtube_cookies.txt")
 
@@ -84,6 +84,9 @@ def _ensure_cookie_copy() -> str | None:
 def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
     """Fetch subtitles via yt-dlp (synchronous, runs in thread executor).
 
+    Uses yt-dlp's urlopen (with cookie session) to download subtitle content
+    instead of bare requests, avoiding 429 rate limits on unauthenticated requests.
+
     Returns (cues, selected_language, available_languages).
     """
     import yt_dlp  # noqa: PLC0415
@@ -107,29 +110,29 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
             f"https://www.youtube.com/watch?v={video_id}", download=False
         )
 
-    subs = info.get("subtitles", {})
-    auto_subs = info.get("automatic_captions", {})
-    all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
+        subs = info.get("subtitles", {})
+        auto_subs = info.get("automatic_captions", {})
+        all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
 
-    # Try languages in priority order
-    import requests as _requests  # noqa: PLC0415
-
-    for lang in _LANG_PRIORITY + all_langs:
-        sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
-        if not sub_list:
-            continue
-        json3_entries = [s for s in sub_list if s.get("ext") == "json3"]
-        if not json3_entries:
-            continue
-        url = json3_entries[0]["url"]
-        resp = _requests.get(url, timeout=15)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-        events = data.get("events", [])
-        cues = _cues_from_json3_events(events)
-        if cues:
-            return cues, lang, all_langs
+        # Try languages in priority order, fetch via yt-dlp's session
+        for lang in _LANG_PRIORITY + all_langs:
+            sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
+            if not sub_list:
+                continue
+            json3_entries = [s for s in sub_list if s.get("ext") == "json3"]
+            if not json3_entries:
+                continue
+            url = json3_entries[0]["url"]
+            try:
+                resp = ydl.urlopen(url)
+                data = json.loads(resp.read().decode("utf-8"))
+            except Exception as e:
+                logger.warning("Failed to download %s subs for %s: %s", lang, video_id, e)
+                continue
+            events = data.get("events", [])
+            cues = _cues_from_json3_events(events)
+            if cues:
+                return cues, lang, all_langs
 
     return [], "", all_langs
 
@@ -199,7 +202,7 @@ async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
             None, _fetch_subtitles_ytdlp, video_id
         )
     except Exception as exc:
-        logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc)
+        logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc, exc_info=True)
         return False
 
     if not cues:
@@ -227,8 +230,7 @@ async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
 async def warm_subtitle_cache() -> None:
     """
     Background task: fetch subtitles for all channel videos that aren't
-    yet in Redis. YouTube allows ~1-2 requests before IP block, so we
-    fetch slowly (20s delay). Runs at startup and can be called periodically.
+    yet in Redis. Uses backoff on 429 rate limits.
     """
     global _warmer_running
     if _warmer_running:
@@ -239,6 +241,7 @@ async def warm_subtitle_cache() -> None:
         videos = await list_channel_videos(limit=15)
         cached_count = 0
         fetched_count = 0
+        consecutive_fails = 0
 
         for video in videos:
             vid = video["videoId"]
@@ -252,16 +255,24 @@ async def warm_subtitle_cache() -> None:
             except Exception:
                 pass
 
-            # Not cached — try to fetch
-            if fetched_count > 0:
+            # Back off if seeing consecutive failures (likely 429 rate limit)
+            if consecutive_fails >= 3:
+                backoff = min(300, 60 * consecutive_fails)  # max 5 min
+                logger.info("Cache warmer: %d consecutive fails, backing off %ds", consecutive_fails, backoff)
+                await asyncio.sleep(backoff)
+
+            # Normal delay between fetches
+            if fetched_count > 0 or consecutive_fails > 0:
                 await asyncio.sleep(_WARM_DELAY)
 
             ok = await _fetch_and_cache_one(vid, video.get("title", vid))
             if ok:
                 fetched_count += 1
+                consecutive_fails = 0
                 logger.info("Cache warmer: cached subtitles for %s", vid)
             else:
-                logger.warning("Cache warmer: failed for video %s, continuing", vid)
+                consecutive_fails += 1
+                logger.warning("Cache warmer: failed for video %s (fail streak: %d)", vid, consecutive_fails)
 
         logger.info("Cache warmer done: %d already cached, %d newly fetched, %d total videos",
                     cached_count, fetched_count, len(videos))
