@@ -25,6 +25,7 @@ const state = {
     availableVideos: [],
     selectedVideoId: null,
     loadingVideoId: null,
+    pendingAutoplay: false,
     activeCueIndex: -1,
     isPlaying: false,
     isLookingUp: false,
@@ -219,9 +220,10 @@ window.onYouTubeIframeAPIReady = function () {
 function mountPlayer(videoId) {
     playerPlaceholder.style.display = 'none';
     ytContainer.style.display = 'flex';
+    pauseOverlay.style.display = 'none';
+    state.pendingAutoplay = true;
 
     if (state.player) {
-        // loadVideoById ensures caption data is fetched even before user presses play
         state.player.loadVideoById(videoId);
         startCueInterval();
         return;
@@ -240,7 +242,7 @@ function createPlayer(videoId) {
         width: '100%',
         height: '100%',
         playerVars: {
-            autoplay: 0,
+            autoplay: 1,
             controls: 1,
             enablejsapi: 1,
             modestbranding: 1,
@@ -249,6 +251,9 @@ function createPlayer(videoId) {
         },
         events: {
             onReady: () => {
+                if (state.pendingAutoplay) {
+                    state.player?.playVideo?.();
+                }
                 startCueInterval();
             },
             onStateChange: onPlayerStateChange,
@@ -258,11 +263,16 @@ function createPlayer(videoId) {
 
 function onPlayerStateChange(event) {
     const PLAYING = 1;
-    if (event.data === PLAYING) {
+    const BUFFERING = 3;
+    const PAUSED = 2;
+    const ENDED = 0;
+
+    if (event.data === PLAYING || event.data === BUFFERING) {
         state.isPlaying = true;
+        state.pendingAutoplay = false;
         pauseOverlay.style.display = 'none';
         closePopup();
-    } else {
+    } else if (event.data === PAUSED || event.data === ENDED) {
         state.isPlaying = false;
         pauseOverlay.style.display = 'flex';
     }
