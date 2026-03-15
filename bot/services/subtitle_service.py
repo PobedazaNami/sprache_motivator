@@ -1,7 +1,14 @@
 """
 Subtitle service: fetches YouTube subtitles via youtube-transcript-api,
-translates with Google Translate (gtx endpoint), and
-optionally explains with OpenAI.
+with automatic fallback to public Invidious instances when YouTube blocks
+the server IP (common on cloud/datacenter providers like Hetzner).
+
+Fetch strategy:
+  1. youtube-transcript-api (fast, direct)
+  2. On RequestBlocked → Invidious public API (different server IPs)
+  3. Error with clear message if both fail
+
+Translates with Google Translate (gtx endpoint), optionally explains with OpenAI.
 """
 
 import asyncio
@@ -24,6 +31,16 @@ _TRANSLATE_URL = (
 
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
 _CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
+
+# Public Invidious instances — fallback when YouTube blocks the server IP.
+# See https://docs.invidious.io/api/ for the captions endpoint spec.
+_INVIDIOUS_INSTANCES = [
+    "https://invidious.io.lol",
+    "https://inv.nadeko.net",
+    "https://invidious.fdn.fr",
+    "https://iv.melmac.space",
+    "https://invidious.privacyredirect.com",
+]
 
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
@@ -64,6 +81,121 @@ def _cues_from_transcript(raw: list) -> list[dict]:
         dur: float = item.get("duration", 2.0)
         cues.append({"startMs": int(start * 1000), "endMs": int((start + dur) * 1000), "text": text})
     return cues
+
+
+# ---------------------------------------------------------------------------
+# WebVTT parser (used for Invidious captions)
+# ---------------------------------------------------------------------------
+
+_VTT_TIMESTAMP_RE = re.compile(
+    r"(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})"
+)
+_VTT_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _ts_to_ms(ts: str) -> int:
+    """'00:01:23.456' or '00:01:23,456' → milliseconds."""
+    ts = ts.replace(",", ".")
+    h, m, rest = ts.split(":")
+    return int((int(h) * 3600 + int(m) * 60 + float(rest)) * 1000)
+
+
+def _parse_vtt(vtt_text: str) -> list[dict]:
+    """Parse WebVTT content into cue list: {startMs, endMs, text}."""
+    cues: list[dict] = []
+    for block in re.split(r"\n{2,}", vtt_text):
+        lines = block.strip().splitlines()
+        for i, line in enumerate(lines):
+            m = _VTT_TIMESTAMP_RE.match(line)
+            if m:
+                start_ms = _ts_to_ms(m.group(1))
+                end_ms = _ts_to_ms(m.group(2))
+                text = " ".join(lines[i + 1 :])
+                text = _VTT_TAG_RE.sub("", text).strip()
+                if text:
+                    cues.append({"startMs": start_ms, "endMs": end_ms, "text": text})
+                break
+    return cues
+
+
+# ---------------------------------------------------------------------------
+# Invidious fallback (called when YouTube blocks the server IP)
+# ---------------------------------------------------------------------------
+
+
+async def _fetch_via_invidious(video_id: str) -> tuple[list[dict], str, list[str]]:
+    """
+    Fetch subtitles via public Invidious API instances.
+    Tries each instance in _INVIDIOUS_INSTANCES until one succeeds.
+
+    Returns (cues, selected_language_code, all_language_codes).
+    Raises RuntimeError with a user-facing message if all fail.
+
+    API spec: https://docs.invidious.io/api/#get-apiv1captionsid
+    """
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for instance in _INVIDIOUS_INSTANCES:
+            try:
+                # Step 1: list available caption tracks
+                caps_url = f"{instance}/api/v1/captions/{video_id}"
+                async with session.get(caps_url) as resp:
+                    if resp.status != 200:
+                        logger.debug("Invidious %s returned HTTP %d for captions list", instance, resp.status)
+                        continue
+                    data = await resp.json(content_type=None)
+
+                captions: list[dict] = data.get("captions", [])
+                if not captions:
+                    # Video genuinely has no captions — no point trying other instances
+                    raise RuntimeError("У цього відео субтитри вимкнені.")
+
+                # Step 2: pick the best available language
+                # Invidious uses either 'languageCode' or 'language_code'
+                def _lang(cap: dict) -> str:
+                    return cap.get("languageCode") or cap.get("language_code", "")
+
+                all_langs = list(dict.fromkeys(_lang(c) for c in captions if _lang(c)))
+
+                selected: dict | None = None
+                for lang in _LANG_PRIORITY + all_langs:
+                    for cap in captions:
+                        if _lang(cap) == lang:
+                            selected = cap
+                            break
+                    if selected:
+                        break
+                if not selected:
+                    selected = captions[0]
+
+                # Step 3: fetch VTT content using the URL from the API response
+                cap_url_path: str = selected.get("url", "")
+                if not cap_url_path:
+                    continue
+                vtt_url = f"{instance}{cap_url_path}"
+                async with session.get(vtt_url) as resp:
+                    if resp.status != 200:
+                        continue
+                    vtt_text = await resp.text()
+
+                cues = _parse_vtt(vtt_text)
+                if not cues:
+                    logger.debug("Invidious %s returned empty VTT for %s", instance, video_id)
+                    continue
+
+                logger.info("Fetched subtitles via Invidious: %s (lang=%s)", instance, _lang(selected))
+                return cues, _lang(selected), all_langs
+
+            except RuntimeError:
+                raise  # propagate "subtitles disabled" errors immediately
+            except Exception as exc:
+                logger.warning("Invidious instance %s failed: %s", instance, exc)
+                continue
+
+    raise RuntimeError(
+        "YouTube заблокував сервер і жоден резервний сервіс не відповів. "
+        "Спробуйте інше відео або повторіть пізніше."
+    )
 
 
 def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
@@ -125,7 +257,13 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
 
 async def load_video_session(input_str: str, preferred_title: Optional[str] = None) -> dict:
     """
-    Download subtitle metadata for a YouTube video via youtube-transcript-api.
+    Download subtitle metadata for a YouTube video.
+
+    Strategy:
+      1. Return from in-memory cache if fresh (10 min TTL).
+      2. Try youtube-transcript-api (fast, direct YouTube access).
+      3. On RequestBlocked (server IP banned by YouTube) → Invidious fallback.
+      4. Cache and return result.
 
     Returns:
         {videoId, title, cues, selectedLanguage, availableLanguages}
@@ -134,7 +272,7 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    # Check cache first
+    # --- Cache check ---
     cached = _session_cache.get(video_id)
     if cached:
         result, ts = cached
@@ -143,56 +281,44 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
             return result
         del _session_cache[video_id]
 
+    # --- Fetch subtitles ---
     from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
     from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
 
-    def _fetch_sync() -> tuple[list[dict], str, list[str]]:
+    def _fetch_direct() -> tuple[list[dict], str, list[str]]:
+        """Synchronous fetch via youtube-transcript-api (runs in thread executor)."""
         api = YouTubeTranscriptApi()
         transcript_list = api.list(video_id)
-
-        all_langs: list[str] = []
-        seen: set[str] = set()
-        for t in transcript_list:
-            if t.language_code not in seen:
-                all_langs.append(t.language_code)
-                seen.add(t.language_code)
-
+        all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
         try:
             transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
         except Exception:
             raise RuntimeError("Для цього відео не знайдено субтитрів.")
-
-        selected = transcript.language_code
         cues = _cues_from_transcript(transcript.fetch().to_raw_data())
-        return cues, selected, all_langs
+        return cues, transcript.language_code, all_langs
 
-    # Retry with backoff for IP-block errors
-    last_exc: Exception | None = None
-    for attempt in range(3):
-        try:
-            loop = asyncio.get_event_loop()
-            cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
-            break
-        except TranscriptsDisabled:
-            raise RuntimeError("У цього відео субтитри вимкнені.")
-        except RequestBlocked as exc:
-            last_exc = exc
-            if attempt < 2:
-                delay = 3 * (attempt + 1)
-                logger.warning("YouTube IP blocked (attempt %d), retrying in %ds…", attempt + 1, delay)
-                await asyncio.sleep(delay)
-            else:
-                raise RuntimeError(
-                    "YouTube тимчасово блокує запити. Спробуйте ще раз через хвилину."
-                )
-        except Exception as exc:
-            raise RuntimeError(f"Не вдалося отримати субтитри: {exc}")
+    cues: list[dict]
+    selected_lang: str
+    all_langs: list[str]
+
+    try:
+        loop = asyncio.get_event_loop()
+        cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_direct)
+    except TranscriptsDisabled:
+        raise RuntimeError("У цього відео субтитри вимкнені.")
+    except RequestBlocked:
+        # YouTube bans datacenter/cloud IPs regularly.
+        # Retrying the same blocked IP is pointless — go straight to Invidious.
+        logger.warning("YouTube blocked this server IP for video %s — switching to Invidious fallback", video_id)
+        cues, selected_lang, all_langs = await _fetch_via_invidious(video_id)
+    except Exception as exc:
+        raise RuntimeError(f"Не вдалося отримати субтитри: {exc}") from exc
 
     if not cues:
         raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
 
+    # --- Resolve title ---
     title = preferred_title or video_id
-
     if not preferred_title:
         try:
             oembed_url = (
