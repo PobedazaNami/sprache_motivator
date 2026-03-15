@@ -136,6 +136,15 @@ html, body {
     color: var(--accent);
 }
 
+.video-card.not-cached {
+    opacity: 0.55;
+}
+
+.video-card.not-cached .video-card-meta::after {
+    content: ' • скоро';
+    color: var(--text-muted);
+}
+
 .video-thumb {
     width: 100%;
     aspect-ratio: 16 / 9;

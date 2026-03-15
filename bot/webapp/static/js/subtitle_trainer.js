@@ -149,7 +149,9 @@ async function loadSession(input, preferredTitle = '') {
         playerTitle.textContent = data.title || preferredTitle || videoId;
     } catch (err) {
         state.loadingVideoId = null;
-        setStatus('Помилка: ' + err.message, true);
+        state.selectedVideoId = null;
+        setStatus(err.message, true);
+        showScreen('screen-catalog');
     }
 }
 
@@ -186,9 +188,10 @@ function renderVideos(videos) {
     videosList.innerHTML = videos.map((video) => {
         const selected = video.videoId === state.selectedVideoId ? ' is-selected' : '';
         const loading = video.videoId === state.loadingVideoId ? ' is-loading' : '';
+        const notCached = !video.cached ? ' not-cached' : '';
         const dateLabel = formatPublishedDate(video.publishedAt);
         return `
-            <button type="button" class="video-card${selected}${loading}" data-video-id="${esc(video.videoId)}">
+            <button type="button" class="video-card${selected}${loading}${notCached}" data-video-id="${esc(video.videoId)}">
                 <img class="video-thumb" src="${esc(video.thumbnailUrl || '')}" alt="${esc(video.title)}" loading="lazy" />
                 <span class="video-card-body">
                     <span class="video-card-title">${esc(video.title)}</span>

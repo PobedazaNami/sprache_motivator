@@ -1,12 +1,18 @@
 """
-Subtitle service: fetches YouTube subtitles via youtube-transcript-api,
-with automatic fallback to public Invidious instances when YouTube blocks
-the server IP (common on cloud/datacenter providers like Hetzner).
+Subtitle service: fetches YouTube subtitles via youtube-transcript-api.
 
 Fetch strategy:
-  1. youtube-transcript-api (fast, direct)
-  2. On RequestBlocked → Invidious public API (different server IPs)
-  3. Error with clear message if both fail
+  1. Check Redis L2 cache (shared across all users, 24h TTL)
+  2. Check in-memory L1 cache (10 min TTL)
+  3. youtube-transcript-api (direct YouTube access)
+  4. On RequestBlocked → return friendly error
+     (background cache warmer will fill Redis over time)
+
+Background cache warmer:
+  - Runs at startup and every 10 min
+  - Fetches subtitles for channel videos one at a time with delays
+  - YouTube allows ~1-2 requests before IP block, so over time all videos
+    accumulate in Redis (24h TTL)
 
 Translates with Google Translate (gtx endpoint), optionally explains with OpenAI.
 """
@@ -34,16 +40,6 @@ _TRANSLATE_URL = (
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
 _CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
 
-# Public Invidious instances — fallback when YouTube blocks the server IP.
-# See https://docs.invidious.io/api/ for the captions endpoint spec.
-_INVIDIOUS_INSTANCES = [
-    "https://invidious.io.lol",
-    "https://inv.nadeko.net",
-    "https://invidious.fdn.fr",
-    "https://iv.melmac.space",
-    "https://invidious.privacyredirect.com",
-]
-
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 600  # 10 minutes (in-memory L1)
@@ -51,6 +47,8 @@ _REDIS_SUBTITLE_TTL = 86400  # 24 hours  (Redis L2, shared across users)
 _REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
+_WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
+_warmer_running = False
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -88,118 +86,124 @@ def _cues_from_transcript(raw: list) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# WebVTT parser (used for Invidious captions)
-# ---------------------------------------------------------------------------
-
-_VTT_TIMESTAMP_RE = re.compile(
-    r"(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[.,]\d{3})"
-)
-_VTT_TAG_RE = re.compile(r"<[^>]+>")
-
-
-def _ts_to_ms(ts: str) -> int:
-    """'00:01:23.456' or '00:01:23,456' → milliseconds."""
-    ts = ts.replace(",", ".")
-    h, m, rest = ts.split(":")
-    return int((int(h) * 3600 + int(m) * 60 + float(rest)) * 1000)
-
-
-def _parse_vtt(vtt_text: str) -> list[dict]:
-    """Parse WebVTT content into cue list: {startMs, endMs, text}."""
-    cues: list[dict] = []
-    for block in re.split(r"\n{2,}", vtt_text):
-        lines = block.strip().splitlines()
-        for i, line in enumerate(lines):
-            m = _VTT_TIMESTAMP_RE.match(line)
-            if m:
-                start_ms = _ts_to_ms(m.group(1))
-                end_ms = _ts_to_ms(m.group(2))
-                text = " ".join(lines[i + 1 :])
-                text = _VTT_TAG_RE.sub("", text).strip()
-                if text:
-                    cues.append({"startMs": start_ms, "endMs": end_ms, "text": text})
-                break
-    return cues
-
-
-# ---------------------------------------------------------------------------
-# Invidious fallback (called when YouTube blocks the server IP)
+# Background cache warmer
 # ---------------------------------------------------------------------------
 
 
-async def _fetch_via_invidious(video_id: str) -> tuple[list[dict], str, list[str]]:
+async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
     """
-    Fetch subtitles via public Invidious API instances.
-    Tries each instance in _INVIDIOUS_INSTANCES until one succeeds.
-
-    Returns (cues, selected_language_code, all_language_codes).
-    Raises RuntimeError with a user-facing message if all fail.
-
-    API spec: https://docs.invidious.io/api/#get-apiv1captionsid
+    Try to fetch subtitles for one video and store in Redis.
+    Returns True if cached successfully, False if blocked/failed.
     """
-    timeout = aiohttp.ClientTimeout(total=15)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        for instance in _INVIDIOUS_INSTANCES:
+    from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
+    from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
+
+    def _fetch_sync() -> tuple[list[dict], str, list[str]]:
+        api = YouTubeTranscriptApi()
+        transcript_list = api.list(video_id)
+        all_langs = list(dict.fromkeys(t.language_code for t in transcript_list))
+        try:
+            transcript = transcript_list.find_transcript(_LANG_PRIORITY + all_langs)
+        except Exception:
+            return [], "", all_langs
+        cues = _cues_from_transcript(transcript.fetch().to_raw_data())
+        return cues, transcript.language_code, all_langs
+
+    try:
+        loop = asyncio.get_event_loop()
+        cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
+    except (RequestBlocked, TranscriptsDisabled):
+        return False
+    except Exception:
+        return False
+
+    if not cues:
+        return False
+
+    result = {
+        "videoId": video_id,
+        "title": title,
+        "cues": cues,
+        "selectedLanguage": selected_lang,
+        "availableLanguages": all_langs,
+    }
+
+    _session_cache[video_id] = (result, time.time())
+    try:
+        if redis_service.redis:
+            redis_key = f"subtitle:session:{video_id}"
+            await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
+    except Exception:
+        pass
+
+    return True
+
+
+async def warm_subtitle_cache() -> None:
+    """
+    Background task: fetch subtitles for all channel videos that aren't
+    yet in Redis. YouTube allows ~1-2 requests before IP block, so we
+    fetch slowly (20s delay). Runs at startup and can be called periodically.
+    """
+    global _warmer_running
+    if _warmer_running:
+        return
+    _warmer_running = True
+
+    try:
+        videos = await list_channel_videos(limit=15)
+        cached_count = 0
+        fetched_count = 0
+
+        for video in videos:
+            vid = video["videoId"]
+            # Check if already in Redis
             try:
-                # Step 1: list available caption tracks
-                caps_url = f"{instance}/api/v1/captions/{video_id}"
-                async with session.get(caps_url) as resp:
-                    if resp.status != 200:
-                        logger.debug("Invidious %s returned HTTP %d for captions list", instance, resp.status)
+                if redis_service.redis:
+                    existing = await redis_service.get(f"subtitle:session:{vid}")
+                    if existing:
+                        cached_count += 1
                         continue
-                    data = await resp.json(content_type=None)
+            except Exception:
+                pass
 
-                captions: list[dict] = data.get("captions", [])
-                if not captions:
-                    # Video genuinely has no captions — no point trying other instances
-                    raise RuntimeError("У цього відео субтитри вимкнені.")
+            # Not cached — try to fetch
+            if fetched_count > 0:
+                await asyncio.sleep(_WARM_DELAY)
 
-                # Step 2: pick the best available language
-                # Invidious uses either 'languageCode' or 'language_code'
-                def _lang(cap: dict) -> str:
-                    return cap.get("languageCode") or cap.get("language_code", "")
+            ok = await _fetch_and_cache_one(vid, video.get("title", vid))
+            if ok:
+                fetched_count += 1
+                logger.info("Cache warmer: cached subtitles for %s", vid)
+            else:
+                logger.info("Cache warmer: blocked at video %s after %d fetches, stopping", vid, fetched_count)
+                break
 
-                all_langs = list(dict.fromkeys(_lang(c) for c in captions if _lang(c)))
+        logger.info("Cache warmer done: %d already cached, %d newly fetched, %d total videos",
+                    cached_count, fetched_count, len(videos))
+    except Exception as exc:
+        logger.warning("Cache warmer error: %s", exc)
+    finally:
+        _warmer_running = False
 
-                selected: dict | None = None
-                for lang in _LANG_PRIORITY + all_langs:
-                    for cap in captions:
-                        if _lang(cap) == lang:
-                            selected = cap
-                            break
-                    if selected:
-                        break
-                if not selected:
-                    selected = captions[0]
 
-                # Step 3: fetch VTT content using the URL from the API response
-                cap_url_path: str = selected.get("url", "")
-                if not cap_url_path:
-                    continue
-                vtt_url = f"{instance}{cap_url_path}"
-                async with session.get(vtt_url) as resp:
-                    if resp.status != 200:
-                        continue
-                    vtt_text = await resp.text()
-
-                cues = _parse_vtt(vtt_text)
-                if not cues:
-                    logger.debug("Invidious %s returned empty VTT for %s", instance, video_id)
-                    continue
-
-                logger.info("Fetched subtitles via Invidious: %s (lang=%s)", instance, _lang(selected))
-                return cues, _lang(selected), all_langs
-
-            except RuntimeError:
-                raise  # propagate "subtitles disabled" errors immediately
-            except Exception as exc:
-                logger.warning("Invidious instance %s failed: %s", instance, exc)
+async def get_cached_video_ids() -> set[str]:
+    """Return set of video IDs that have subtitles in Redis."""
+    result: set[str] = set()
+    try:
+        videos = await list_channel_videos(limit=15)
+        for video in videos:
+            vid = video["videoId"]
+            if vid in _session_cache:
+                result.add(vid)
                 continue
-
-    raise RuntimeError(
-        "YouTube заблокував сервер і жоден резервний сервіс не відповів. "
-        "Спробуйте інше відео або повторіть пізніше."
-    )
+            if redis_service.redis:
+                existing = await redis_service.get(f"subtitle:session:{vid}")
+                if existing:
+                    result.add(vid)
+    except Exception:
+        pass
+    return result
 
 
 def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
@@ -345,10 +349,11 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
     except TranscriptsDisabled:
         raise RuntimeError("У цього відео субтитри вимкнені.")
     except RequestBlocked:
-        # YouTube bans datacenter/cloud IPs regularly.
-        # Retrying the same blocked IP is pointless — go straight to Invidious.
-        logger.warning("YouTube blocked this server IP for video %s — switching to Invidious fallback", video_id)
-        cues, selected_lang, all_langs = await _fetch_via_invidious(video_id)
+        logger.warning("YouTube blocked this server IP for video %s", video_id)
+        raise RuntimeError(
+            "Субтитри для цього відео ще завантажуються. "
+            "Спробуйте інше відео або повторіть через хвилину."
+        )
     except Exception as exc:
         raise RuntimeError(f"Не вдалося отримати субтитри: {exc}") from exc
 

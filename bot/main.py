@@ -104,6 +104,11 @@ async def main():
     logger.info("Starting scheduler service...")
     scheduler_service.set_bot(bot)
     await scheduler_service.start()
+
+    # Pre-warm subtitle cache in background (fetches subtitles for
+    # channel videos slowly to avoid YouTube IP blocks)
+    from bot.services.subtitle_service import warm_subtitle_cache
+    asyncio.create_task(warm_subtitle_cache())
     
     try:
         logger.info("Bot started!")

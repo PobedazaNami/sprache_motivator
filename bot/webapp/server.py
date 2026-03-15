@@ -286,6 +286,7 @@ async def subtitle_videos(request: web.Request) -> web.Response:
     """
     GET /api/subtitle/videos
     Returns the latest channel videos for the subtitle trainer.
+    Includes a 'cached' flag per video so the UI can show availability.
     """
     user_id = get_user_id_from_request(request)
     if not user_id:
@@ -293,6 +294,9 @@ async def subtitle_videos(request: web.Request) -> web.Response:
 
     try:
         videos = await subtitle_service.list_channel_videos(limit=12)
+        cached_ids = await subtitle_service.get_cached_video_ids()
+        for v in videos:
+            v["cached"] = v["videoId"] in cached_ids
     except RuntimeError as exc:
         raise web.HTTPInternalServerError(text=str(exc))
     except Exception as exc:
