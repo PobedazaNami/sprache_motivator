@@ -313,19 +313,28 @@ function renderSubtitles(idx) {
         subtitleLine.innerHTML = '';
         return;
     }
-    const cue = state.session.cues[idx];
-    const tokens = tokenize(cue.text);
-    const spans = tokens.map((token, i) => {
-        const space = shouldAppendSpace(token, tokens[i + 1]) ? ' ' : '';
-        if (!token.clickable) {
-            return `<span class="st-token">${esc(token.value)}</span>${space}`;
-        }
-        const isLoading = state.lookingUpWord === token.value;
-        const cls = 'st-token st-token--clk' + (isLoading ? ' st-token--loading' : '');
-        const spinner = isLoading ? '<span class="st-spinner"></span>' : '';
-        return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}">${spinner}${esc(token.value)}</span>${space}`;
+    // Render current cue + next cue (2 lines for more reading time)
+    const cues = state.session.cues;
+    const indicesToShow = [idx];
+    if (idx + 1 < cues.length) indicesToShow.push(idx + 1);
+
+    const parts = indicesToShow.map((ci, lineIdx) => {
+        const cue = cues[ci];
+        const tokens = tokenize(cue.text);
+        const spans = tokens.map((token, i) => {
+            const space = shouldAppendSpace(token, tokens[i + 1]) ? ' ' : '';
+            if (!token.clickable) {
+                return `<span class="st-token">${esc(token.value)}</span>${space}`;
+            }
+            const isLoading = state.lookingUpWord === token.value;
+            const cls = 'st-token st-token--clk' + (isLoading ? ' st-token--loading' : '');
+            const spinner = isLoading ? '<span class="st-spinner"></span>' : '';
+            return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${ci}">${spinner}${esc(token.value)}</span>${space}`;
+        });
+        const opacity = lineIdx === 0 ? '1' : '0.55';
+        return `<span class="st-cue-line" style="opacity:${opacity}">${spans.join('')}</span>`;
     });
-    subtitleLine.innerHTML = spans.join('');
+    subtitleLine.innerHTML = parts.join('<br>');
 
     // Attach click handlers
     subtitleLine.querySelectorAll('.st-token--clk').forEach(el => {
@@ -350,7 +359,7 @@ async function handleTokenClick(el) {
     const value = el.dataset.value;
     const normalized = el.dataset.norm;
     const cues = state.session.cues;
-    const idx = state.activeCueIndex;
+    const idx = el.dataset.cue != null ? parseInt(el.dataset.cue, 10) : state.activeCueIndex;
 
     const cueText = cues[idx]?.text ?? '';
     const prev2  = cues[idx - 2]?.text ?? '';

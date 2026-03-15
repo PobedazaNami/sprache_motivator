@@ -275,28 +275,25 @@ html, body {
 #pause-overlay:hover #pause-play-btn { opacity: 1; }
 @media (hover: none) { #pause-play-btn { opacity: 1; } }
 
-/* ---- Subtitle overlay ---- */
+/* ---- Subtitle overlay (below video) ---- */
 #subtitle-overlay {
-    position: absolute;
-    bottom: 8%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 24px);
+    flex-shrink: 0;
+    width: 100%;
     z-index: 3;
-    background: linear-gradient(180deg, rgba(3,8,19,.28) 0%, rgba(3,8,19,.72) 100%);
-    border-radius: 14px;
-    padding: 10px 14px;
-    pointer-events: none;
+    background: linear-gradient(180deg, rgba(3,8,19,.72) 0%, rgba(3,8,19,.92) 100%);
+    border-radius: 0;
+    padding: 12px 14px;
+    padding-bottom: calc(12px + var(--safe-bottom));
     text-align: center;
+    min-height: 72px;
 }
 
 #subtitle-line {
     font-size: clamp(1rem, 4vw, 1.4rem);
     font-weight: 600;
-    line-height: 1.35;
+    line-height: 1.45;
     color: #f8fbff;
     text-shadow: 0 2px 8px rgba(0,0,0,.7);
-    pointer-events: none;
 }
 
 /* tokens */
