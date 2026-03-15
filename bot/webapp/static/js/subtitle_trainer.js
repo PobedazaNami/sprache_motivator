@@ -337,19 +337,17 @@ function openPopupLoading(word) {
 
 function renderPopupCard(card) {
     popupWord.textContent = card.surfaceForm;
-    const altHtml = card.alternativeTranslations?.length
-        ? `<span class="pill pill-alt">${esc(card.alternativeTranslations[0])}</span>` : '';
     const cueTransHtml = card.cueTranslation
         ? `<p class="popup-cue-translation">${esc(card.cueTranslation)}</p>` : '';
+    const explanationHtml = card.explanation
+        ? `<p class="popup-explanation">${esc(card.explanation)}</p>` : '';
 
     popupBody.innerHTML = `
         <div class="popup-tags">
-            <span class="pill">${esc(card.translation)}</span>
-            <span class="pill pill-soft">${esc(card.partOfSpeech)}</span>
-            ${altHtml}
+            <span class="pill">${esc(card.translation || '')}</span>
         </div>
-        <p class="popup-explanation">${esc(card.contextExplanation)}</p>
-        <p class="popup-cue">${esc(card.cueText)}</p>
+        ${explanationHtml}
+        <p class="popup-cue">${esc(card.cueText || '')}</p>
         ${cueTransHtml}
         <div class="popup-actions">
             <button class="btn-save" id="btn-save-word">Зберегти</button>
