@@ -135,7 +135,7 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
 
 
 def _cues_from_json3_events(events: list[dict]) -> list[dict]:
-    """Convert yt-dlp json3 events to flat cue list: {startMs, endMs, text}."""
+    """Convert yt-dlp json3 events to flat cue list with word-level timing."""
     cues = []
     for event in events:
         segs = event.get("segs", [])
@@ -144,7 +144,20 @@ def _cues_from_json3_events(events: list[dict]) -> list[dict]:
             continue
         start_ms = event.get("tStartMs", 0)
         dur_ms = event.get("dDurationMs", 2000)
-        cues.append({"startMs": start_ms, "endMs": start_ms + dur_ms, "text": text})
+
+        # Extract per-word timing from segments
+        words = []
+        for seg in segs:
+            w = seg.get("utf8", "").replace("\n", " ").strip()
+            if not w:
+                continue
+            offset = seg.get("tOffsetMs", 0)
+            words.append({"w": w, "s": start_ms + offset})
+
+        cue: dict = {"startMs": start_ms, "endMs": start_ms + dur_ms, "text": text}
+        if words:
+            cue["words"] = words
+        cues.append(cue)
     return cues
 
 

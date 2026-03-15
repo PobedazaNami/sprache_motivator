@@ -305,13 +305,54 @@ function startCueInterval() {
             state.activeCueIndex = idx;
             renderSubtitles(idx);
         }
-    }, 250);
+        // Highlight the word currently being spoken
+        highlightActiveWord(ms);
+    }, 100);
+}
+
+/** Add .st-word-active to the word being spoken right now. */
+function highlightActiveWord(ms) {
+    const wordEls = subtitleLine.querySelectorAll('[data-wstart]');
+    if (!wordEls.length) return;
+    let activeEl = null;
+    for (const el of wordEls) {
+        const wStart = parseInt(el.dataset.wstart, 10);
+        if (ms >= wStart) activeEl = el;
+    }
+    wordEls.forEach(el => el.classList.toggle('st-word-active', el === activeEl));
 }
 
 function renderSubtitles(idx) {
     if (idx < 0 || !state.session) {
         subtitleLine.innerHTML = '';
         return;
+    }
+
+    /**
+     * Build array of {word, ms} from cue.words for word-level highlight.
+     * Each entry in cue.words is {w: "word text", s: startMs}.
+     * We split multi-word segments into individual words.
+     */
+    function buildWordTimingMap(words) {
+        const result = [];
+        for (const entry of words) {
+            const parts = entry.w.split(/\s+/).filter(Boolean);
+            for (const p of parts) {
+                result.push({ word: p.toLowerCase(), ms: entry.s });
+            }
+        }
+        return result;
+    }
+
+    function findWordStart(timings, tokenValue, fromIdx) {
+        const needle = tokenValue.toLowerCase().replace(/[.,!?;:"""''„‚]/g, '');
+        for (let i = fromIdx; i < timings.length; i++) {
+            const tw = timings[i].word.replace(/[.,!?;:"""''„‚]/g, '');
+            if (tw === needle || tw.startsWith(needle) || needle.startsWith(tw)) {
+                return { ms: timings[i].ms, nextIdx: i + 1 };
+            }
+        }
+        return null;
     }
     // Render current cue + next cue (2 lines for more reading time)
     const cues = state.session.cues;
@@ -321,6 +362,9 @@ function renderSubtitles(idx) {
     const parts = indicesToShow.map((ci, lineIdx) => {
         const cue = cues[ci];
         const tokens = tokenize(cue.text);
+        // Build a map of word → startMs from cue.words (if available)
+        const wordTimings = buildWordTimingMap(cue.words || []);
+        let wordIdx = 0;
         const spans = tokens.map((token, i) => {
             const space = shouldAppendSpace(token, tokens[i + 1]) ? ' ' : '';
             if (!token.clickable) {
@@ -329,7 +373,10 @@ function renderSubtitles(idx) {
             const isLoading = state.lookingUpWord === token.value;
             const cls = 'st-token st-token--clk' + (isLoading ? ' st-token--loading' : '');
             const spinner = isLoading ? '<span class="st-spinner"></span>' : '';
-            return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${ci}">${spinner}${esc(token.value)}</span>${space}`;
+            const wStart = findWordStart(wordTimings, token.value, wordIdx);
+            if (wStart !== null) wordIdx = wStart.nextIdx;
+            const wsAttr = wStart !== null ? ` data-wstart="${wStart.ms}"` : '';
+            return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${ci}"${wsAttr}>${spinner}${esc(token.value)}</span>${space}`;
         });
         const opacity = lineIdx === 0 ? '1' : '0.55';
         return `<span class="st-cue-line" style="opacity:${opacity}">${spans.join('')}</span>`;
