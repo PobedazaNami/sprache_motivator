@@ -285,8 +285,15 @@ async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
 async def subtitle_session(request: web.Request) -> web.Response:
     """
     POST /api/subtitle/session
-    Body: {"input": "<YouTube URL or ID>"}
-    Returns cue list + metadata for the video.
+
+    Two modes:
+    1. Client-side (preferred): browser sends signed captionTrackUrl obtained
+       from the YouTube IFrame player. Server only downloads that text file.
+       Body: {captionUrl, videoId, lang, availableLanguages}
+
+    2. Legacy server-side: server tries to fetch subtitles itself via
+       youtube-transcript-api (may fail on cloud VPS IPs).
+       Body: {input: "<YouTube URL or ID>"}
     """
     user_id = get_user_id_from_request(request)
     if not user_id:
@@ -297,19 +304,38 @@ async def subtitle_session(request: web.Request) -> web.Response:
     except Exception:
         raise web.HTTPBadRequest(text="Invalid JSON body")
 
-    input_str: str = (body.get("input") or "").strip()
-    if not input_str:
-        raise web.HTTPBadRequest(text="'input' field is required")
+    caption_url: str = (body.get("captionUrl") or "").strip()
 
-    try:
-        result = await subtitle_service.load_video_session(input_str)
-    except ValueError as exc:
-        raise web.HTTPBadRequest(text=str(exc))
-    except RuntimeError as exc:
-        raise web.HTTPInternalServerError(text=str(exc))
-    except Exception as exc:
-        logger.error("subtitle_session error: %s", exc)
-        raise web.HTTPInternalServerError(text="Не вдалося завантажити відео.")
+    if caption_url:
+        # Mode 1: client provided the signed caption URL from the IFrame player
+        video_id: str = (body.get("videoId") or "").strip()
+        lang: str = (body.get("lang") or "de").strip()
+        available: list = body.get("availableLanguages") or [lang]
+        if not video_id:
+            raise web.HTTPBadRequest(text="'videoId' is required with captionUrl")
+        try:
+            result = await subtitle_service.load_session_from_caption_url(
+                caption_url, video_id, lang, available
+            )
+        except RuntimeError as exc:
+            raise web.HTTPInternalServerError(text=str(exc))
+        except Exception as exc:
+            logger.error("subtitle_session (captionUrl) error: %s", exc)
+            raise web.HTTPInternalServerError(text="Не вдалося завантажити субтитри.")
+    else:
+        # Mode 2: legacy — server fetches subtitles itself
+        input_str: str = (body.get("input") or "").strip()
+        if not input_str:
+            raise web.HTTPBadRequest(text="'input' or 'captionUrl' field is required")
+        try:
+            result = await subtitle_service.load_video_session(input_str)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc))
+        except RuntimeError as exc:
+            raise web.HTTPInternalServerError(text=str(exc))
+        except Exception as exc:
+            logger.error("subtitle_session error: %s", exc)
+            raise web.HTTPInternalServerError(text="Не вдалося завантажити відео.")
 
     return web.json_response(result)
 

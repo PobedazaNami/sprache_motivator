@@ -57,7 +57,89 @@ def _cues_from_transcript(raw: list) -> list[dict]:
     return cues
 
 
-_LANG_PRIORITY = ["de", "en", "fr", "es", "it", "pt"]
+def _parse_json3_caption(data: dict) -> list[dict]:
+    """
+    Parse YouTube JSON3 caption format into flat cue list {startMs, endMs, text}.
+    The captionTrackUrl with &fmt=json3 returns this format.
+    """
+    cues = []
+    for event in data.get("events", []):
+        segs = event.get("segs")
+        if not segs:
+            continue
+        text = "".join(s.get("utf8", "") for s in segs).replace("\n", " ").strip()
+        if not text:
+            continue
+        start_ms: int = event.get("tStartMs", 0)
+        dur_ms: int = event.get("dDurationMs", 2000)
+        cues.append({
+            "startMs": start_ms,
+            "endMs": start_ms + dur_ms,
+            "text": text,
+        })
+    return cues
+
+
+async def load_session_from_caption_url(
+    caption_url: str,
+    video_id: str,
+    lang: str,
+    available_languages: list[str],
+) -> dict:
+    """
+    Fetch subtitle cues using a signed captionTrackUrl obtained from the
+    YouTube IFrame player running in the user's browser.
+
+    This avoids all server-side YouTube scraping — we only download a single
+    text file whose URL was provided by the browser.
+
+    Args:
+        caption_url: signed URL from player.getOption('captions','tracklist')
+        video_id: 11-char YouTube video ID
+        lang: language code e.g. 'de'
+        available_languages: all available language codes from the player
+
+    Returns:
+        {videoId, title, cues, selectedLanguage, availableLanguages}
+    """
+    # Append fmt=json3 to get structured JSON instead of XML/VTT
+    sep = "&" if "?" in caption_url else "?"
+    fetch_url = caption_url + sep + "fmt=json3"
+
+    async with aiohttp.ClientSession() as sess:
+        # 1. Fetch caption JSON3
+        async with sess.get(fetch_url, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+            if resp.status != 200:
+                raise RuntimeError(
+                    f"Не вдалося завантажити субтитри (HTTP {resp.status})."
+                )
+            raw = await resp.json(content_type=None)
+
+        cues = _parse_json3_caption(raw)
+        if not cues:
+            raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
+
+        # 2. Fetch video title via oEmbed (public, always works)
+        title = video_id
+        try:
+            oembed_url = (
+                f"https://www.youtube.com/oembed"
+                f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            )
+            async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    title = data.get("title", video_id)
+        except Exception as exc:
+            logger.warning("oEmbed title fetch failed: %s", exc)
+
+    return {
+        "videoId": video_id,
+        "title": title,
+        "cues": cues,
+        "selectedLanguage": lang,
+        "availableLanguages": available_languages,
+    }
 
 
 # ---------------------------------------------------------------------------

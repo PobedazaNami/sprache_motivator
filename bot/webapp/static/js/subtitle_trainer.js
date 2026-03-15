@@ -53,15 +53,51 @@ function shouldAppendSpace(current, next) {
     return true;
 }
 
-function pickActiveCue(cues, ms) {
-    for (let i = cues.length - 1; i >= 0; i--) {
-        if (ms >= cues[i].startMs && ms < cues[i].endMs) return i;
-    }
-    return -1;
+function extractVideoId(input) {
+    const m = input.trim().match(
+        /(?:youtube\.com\/(?:watch\?.*v=|embed\/|v\/)|youtu\.be\/|shorts\/)?([\w-]{11})/
+    );
+    const id = m?.[1];
+    if (id && /^[\w-]{11}$/.test(id)) return id;
+    return null;
 }
 
-// ---------------------------------------------------------------------------
-// DOM refs
+// Caption-track promise state
+let _pendingCaptions = null;
+
+function waitForCaptionTracks(timeoutMs = 14000) {
+    // Try immediately — tracks may already be available
+    try {
+        const tracks = state.player?.getOption?.('captions', 'tracklist');
+        if (tracks?.length) return Promise.resolve(tracks);
+    } catch (_) {}
+
+    return new Promise((resolve, reject) => {
+        _pendingCaptions = { resolve, reject };
+        setTimeout(() => {
+            if (_pendingCaptions) {
+                _pendingCaptions.reject(
+                    new Error('Субтитри не знайдено для цього відео')
+                );
+                _pendingCaptions = null;
+            }
+        }, timeoutMs);
+    });
+}
+
+function onPlayerApiChange() {
+    if (!_pendingCaptions) return;
+    try {
+        const tracks = state.player?.getOption?.('captions', 'tracklist');
+        if (tracks?.length) {
+            _pendingCaptions.resolve(tracks);
+            _pendingCaptions = null;
+        }
+    } catch (_) {}
+}
+
+const CAPTION_LANG_PRIORITY = ['de', 'en', 'fr', 'es', 'it', 'pt'];
+
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
 const screenLoading  = $('screen-loading');
@@ -111,22 +147,65 @@ async function apiFetch(path, { method = 'GET', body = null } = {}) {
 
 // ---------------------------------------------------------------------------
 // Load video session
+// New flow: browser extracts videoId → mounts player → waits for onApiChange
+// → gets signed captionTrackUrl from the player → sends URL to server.
+// Server only fetches the caption text file (not the YouTube watch page),
+// so datacenter IP ban does NOT apply.
 // ---------------------------------------------------------------------------
 async function loadSession(input) {
-    setStatus('Завантажую субтитри…');
+    setStatus('Завантажую відео…');
     loadBtn.disabled = true;
 
+    const videoId = extractVideoId(input);
+    if (!videoId) {
+        setStatus('Невірне посилання', true);
+        loadBtn.disabled = false;
+        return;
+    }
+
+    // Reset any pending caption promise
+    if (_pendingCaptions) {
+        _pendingCaptions.reject(new Error('cancelled'));
+        _pendingCaptions = null;
+    }
+
     try {
+        // 1. Mount the player — loads video via the user's browser IP (not blocked)
+        mountPlayer(videoId);
+
+        setStatus('Отримую субтитри з плеєра…');
+
+        // 2. Wait for YouTube player to expose caption tracks via onApiChange
+        const tracks = await waitForCaptionTracks();
+
+        // 3. Pick best language track
+        const track =
+            CAPTION_LANG_PRIORITY
+                .map(l => tracks.find(t => t.languageCode?.startsWith(l)))
+                .find(Boolean) || tracks[0];
+
+        setStatus('Обробляю субтитри…');
+
+        // 4. Server fetches ONLY the caption text file via the signed URL
+        //    (This is not a YouTube page scrape — just downloading a text file)
         const data = await apiFetch('/api/subtitle/session', {
             method: 'POST',
-            body: { input },
+            body: {
+                captionUrl: track.captionTrackUrl,
+                videoId,
+                lang: track.languageCode,
+                availableLanguages: tracks.map(t => t.languageCode),
+            },
         });
+
         state.session = data;
         state.activeCueIndex = -1;
-        setStatus(`Знайдено ${data.cues.length} субтитрів • ${data.selectedLanguage || 'de'}`);
-        mountPlayer(data.videoId);
+        setStatus(`${data.cues.length} субтитрів • ${data.selectedLanguage}`);
+        loadBtn.disabled = false;
     } catch (err) {
-        setStatus('Помилка: ' + err.message, true);
+        if (err.message !== 'cancelled') {
+            setStatus('Помилка: ' + err.message, true);
+        }
         loadBtn.disabled = false;
     }
 }
@@ -150,8 +229,8 @@ function mountPlayer(videoId) {
     ytContainer.style.display = 'flex';
 
     if (state.player) {
-        state.player.cueVideoById(videoId);
-        loadBtn.disabled = false;
+        // loadVideoById ensures caption data is fetched even before user presses play
+        state.player.loadVideoById(videoId);
         startCueInterval();
         return;
     }
@@ -182,6 +261,7 @@ function createPlayer(videoId) {
                 startCueInterval();
             },
             onStateChange: onPlayerStateChange,
+            onApiChange: onPlayerApiChange,
         },
     });
 }
