@@ -7,6 +7,7 @@ optionally explains with OpenAI.
 import asyncio
 import logging
 import re
+import time
 from typing import Optional
 
 import aiohttp
@@ -21,6 +22,10 @@ _TRANSLATE_URL = (
 )
 
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
+
+# Simple in-memory cache: video_id -> (result_dict, timestamp)
+_session_cache: dict[str, tuple[dict, float]] = {}
+_CACHE_TTL = 600  # 10 minutes
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,7 +78,17 @@ async def load_video_session(input_str: str) -> dict:
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
+    # Check cache first
+    cached = _session_cache.get(video_id)
+    if cached:
+        result, ts = cached
+        if time.time() - ts < _CACHE_TTL:
+            logger.info("Subtitle cache hit for %s", video_id)
+            return result
+        del _session_cache[video_id]
+
     from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
+    from youtube_transcript_api._errors import RequestBlocked, TranscriptsDisabled  # noqa: PLC0415
 
     def _fetch_sync() -> tuple[list[dict], str, list[str]]:
         api = YouTubeTranscriptApi()
@@ -95,8 +110,27 @@ async def load_video_session(input_str: str) -> dict:
         cues = _cues_from_transcript(transcript.fetch().to_raw_data())
         return cues, selected, all_langs
 
-    loop = asyncio.get_event_loop()
-    cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
+    # Retry with backoff for IP-block errors
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            loop = asyncio.get_event_loop()
+            cues, selected_lang, all_langs = await loop.run_in_executor(None, _fetch_sync)
+            break
+        except TranscriptsDisabled:
+            raise RuntimeError("У цього відео субтитри вимкнені.")
+        except RequestBlocked as exc:
+            last_exc = exc
+            if attempt < 2:
+                delay = 3 * (attempt + 1)
+                logger.warning("YouTube IP blocked (attempt %d), retrying in %ds…", attempt + 1, delay)
+                await asyncio.sleep(delay)
+            else:
+                raise RuntimeError(
+                    "YouTube тимчасово блокує запити. Спробуйте ще раз через хвилину."
+                )
+        except Exception as exc:
+            raise RuntimeError(f"Не вдалося отримати субтитри: {exc}")
 
     if not cues:
         raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
@@ -115,13 +149,15 @@ async def load_video_session(input_str: str) -> dict:
     except Exception as exc:
         logger.warning("oEmbed title fetch failed: %s", exc)
 
-    return {
+    result = {
         "videoId": video_id,
         "title": title,
         "cues": cues,
         "selectedLanguage": selected_lang,
         "availableLanguages": all_langs,
     }
+    _session_cache[video_id] = (result, time.time())
+    return result
 
 
 async def translate_text(

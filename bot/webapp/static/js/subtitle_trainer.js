@@ -126,7 +126,7 @@ async function loadSession(input) {
     }
 
     try {
-        // 1. Server fetches subtitles (Invidious API — no IP ban)
+        // 1. Server fetches subtitles via youtube-transcript-api
         const data = await apiFetch('/api/subtitle/session', {
             method: 'POST',
             body: { input: videoId },
