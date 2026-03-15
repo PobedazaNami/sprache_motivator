@@ -129,6 +129,15 @@ html, body {
     box-shadow: 0 0 0 1px rgba(251,191,36,.35);
 }
 
+.video-card.is-loading {
+    opacity: 0.72;
+}
+
+.video-card.is-loading .video-card-meta::after {
+    content: ' • завантаження';
+    color: var(--accent);
+}
+
 .video-thumb {
     width: 100%;
     aspect-ratio: 16 / 9;

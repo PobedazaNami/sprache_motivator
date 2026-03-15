@@ -123,7 +123,7 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
     return videos[:limit]
 
 
-async def load_video_session(input_str: str) -> dict:
+async def load_video_session(input_str: str, preferred_title: Optional[str] = None) -> dict:
     """
     Download subtitle metadata for a YouTube video via youtube-transcript-api.
 
@@ -191,19 +191,21 @@ async def load_video_session(input_str: str) -> dict:
     if not cues:
         raise RuntimeError("Субтитри порожні або не вдалося розібрати.")
 
-    title = video_id
-    try:
-        oembed_url = (
-            f"https://www.youtube.com/oembed"
-            f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
-        )
-        async with aiohttp.ClientSession() as sess:
-            async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    data = await resp.json(content_type=None)
-                    title = data.get("title", video_id)
-    except Exception as exc:
-        logger.warning("oEmbed title fetch failed: %s", exc)
+    title = preferred_title or video_id
+
+    if not preferred_title:
+        try:
+            oembed_url = (
+                f"https://www.youtube.com/oembed"
+                f"?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            )
+            async with aiohttp.ClientSession() as sess:
+                async with sess.get(oembed_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json(content_type=None)
+                        title = data.get("title", video_id)
+        except Exception as exc:
+            logger.warning("oEmbed title fetch failed: %s", exc)
 
     result = {
         "videoId": video_id,

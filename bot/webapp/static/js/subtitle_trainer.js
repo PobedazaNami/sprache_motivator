@@ -24,6 +24,7 @@ const state = {
     session: null,          // { videoId, title, cues, selectedLanguage }
     availableVideos: [],
     selectedVideoId: null,
+    loadingVideoId: null,
     activeCueIndex: -1,
     isPlaying: false,
     isLookingUp: false,
@@ -115,33 +116,37 @@ async function apiFetch(path, { method = 'GET', body = null } = {}) {
 // Flow: extract videoId → server fetches subtitles via Invidious API →
 // mount YouTube player in user's browser (plays fine from any IP).
 // ---------------------------------------------------------------------------
-async function loadSession(input) {
-    setStatus('Завантажую субтитри…');
-
+async function loadSession(input, preferredTitle = '') {
     const videoId = extractVideoId(input);
     if (!videoId) {
         setStatus('Невірний ідентифікатор відео', true);
         return;
     }
 
+    setStatus('Відкриваю відео і підтягую субтитри…');
     state.selectedVideoId = videoId;
+    state.loadingVideoId = videoId;
+    state.session = null;
+    state.activeCueIndex = -1;
+    renderSubtitles(-1);
     renderVideos(state.availableVideos || []);
+    mountPlayer(videoId);
 
     try {
-        // 1. Server fetches subtitles via youtube-transcript-api
         const data = await apiFetch('/api/subtitle/session', {
             method: 'POST',
-            body: { input: videoId },
+            body: { input: videoId, title: preferredTitle },
         });
 
         state.session = data;
         state.activeCueIndex = -1;
+        state.loadingVideoId = null;
         setStatus(`${data.cues.length} субтитрів • ${data.selectedLanguage}`);
-
-        // 2. Mount player (video loads from YouTube via user's browser)
-        mountPlayer(videoId);
     } catch (err) {
+        state.loadingVideoId = null;
         setStatus('Помилка: ' + err.message, true);
+    } finally {
+        renderVideos(state.availableVideos || []);
     }
 }
 
@@ -177,9 +182,10 @@ function renderVideos(videos) {
 
     videosList.innerHTML = videos.map((video) => {
         const selected = video.videoId === state.selectedVideoId ? ' is-selected' : '';
+        const loading = video.videoId === state.loadingVideoId ? ' is-loading' : '';
         const dateLabel = formatPublishedDate(video.publishedAt);
         return `
-            <button type="button" class="video-card${selected}" data-video-id="${esc(video.videoId)}">
+            <button type="button" class="video-card${selected}${loading}" data-video-id="${esc(video.videoId)}">
                 <img class="video-thumb" src="${esc(video.thumbnailUrl || '')}" alt="${esc(video.title)}" loading="lazy" />
                 <span class="video-card-body">
                     <span class="video-card-title">${esc(video.title)}</span>
@@ -189,7 +195,10 @@ function renderVideos(videos) {
     }).join('');
 
     videosList.querySelectorAll('[data-video-id]').forEach((el) => {
-        el.addEventListener('click', () => loadSession(el.dataset.videoId));
+        el.addEventListener('click', () => {
+            const video = videos.find((item) => item.videoId === el.dataset.videoId);
+            loadSession(el.dataset.videoId, video?.title || '');
+        });
     });
 }
 

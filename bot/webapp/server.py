@@ -317,10 +317,11 @@ async def subtitle_session(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid JSON body")
 
     input_str: str = (body.get("input") or "").strip()
+    preferred_title: str = (body.get("title") or "").strip()
     if not input_str:
         raise web.HTTPBadRequest(text="'input' field is required")
     try:
-        result = await subtitle_service.load_video_session(input_str)
+        result = await subtitle_service.load_video_session(input_str, preferred_title=preferred_title or None)
     except ValueError as exc:
         raise web.HTTPBadRequest(text=str(exc))
     except RuntimeError as exc:
