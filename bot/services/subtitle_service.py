@@ -12,6 +12,7 @@ Translates with Google Translate (gtx endpoint), optionally explains with OpenAI
 """
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -21,6 +22,7 @@ from typing import Optional
 import aiohttp
 
 from bot.config import settings
+from bot.services.redis_service import redis_service
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,11 @@ _INVIDIOUS_INSTANCES = [
 
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
-_CACHE_TTL = 600  # 10 minutes
+_CACHE_TTL = 600  # 10 minutes (in-memory L1)
+_REDIS_SUBTITLE_TTL = 86400  # 24 hours  (Redis L2, shared across users)
+_REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
-_CHANNEL_CACHE_TTL = 1800  # 30 minutes
+_CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -236,11 +240,25 @@ def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
 async def list_channel_videos(limit: int = 12) -> list[dict]:
     global _channel_videos_cache
 
+    # L1: in-memory
     if _channel_videos_cache:
         cached_items, cached_at = _channel_videos_cache
         if time.time() - cached_at < _CHANNEL_CACHE_TTL:
             return cached_items[:limit]
 
+    # L2: Redis (shared across restarts and workers)
+    try:
+        if redis_service.redis:
+            cached_json = await redis_service.get("subtitle:channel_videos")
+            if cached_json:
+                videos = json.loads(cached_json)
+                _channel_videos_cache = (videos, time.time())
+                logger.info("Channel videos loaded from Redis cache")
+                return videos[:limit]
+    except Exception as exc:
+        logger.debug("Redis channel cache read failed: %s", exc)
+
+    # Fetch from YouTube RSS
     async with aiohttp.ClientSession() as session:
         async with session.get(_CHANNEL_FEED_URL, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             if resp.status != 200:
@@ -251,7 +269,14 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
     if not videos:
         raise RuntimeError("Канал не повернув жодного відео.")
 
+    # Store in both caches
     _channel_videos_cache = (videos, time.time())
+    try:
+        if redis_service.redis:
+            await redis_service.set("subtitle:channel_videos", json.dumps(videos), ex=_REDIS_CHANNEL_TTL)
+    except Exception as exc:
+        logger.debug("Redis channel cache write failed: %s", exc)
+
     return videos[:limit]
 
 
@@ -272,14 +297,27 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    # --- Cache check ---
+    # --- Cache check (L1: in-memory, L2: Redis) ---
     cached = _session_cache.get(video_id)
     if cached:
         result, ts = cached
         if time.time() - ts < _CACHE_TTL:
-            logger.info("Subtitle cache hit for %s", video_id)
+            logger.info("Subtitle L1 cache hit for %s", video_id)
             return result
         del _session_cache[video_id]
+
+    # L2: Redis — shared across all users
+    try:
+        if redis_service.redis:
+            redis_key = f"subtitle:session:{video_id}"
+            cached_json = await redis_service.get(redis_key)
+            if cached_json:
+                result = json.loads(cached_json)
+                _session_cache[video_id] = (result, time.time())
+                logger.info("Subtitle L2 (Redis) cache hit for %s", video_id)
+                return result
+    except Exception as exc:
+        logger.debug("Redis subtitle cache read failed: %s", exc)
 
     # --- Fetch subtitles ---
     from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
@@ -340,7 +378,16 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
         "selectedLanguage": selected_lang,
         "availableLanguages": all_langs,
     }
+
+    # Store in both caches
     _session_cache[video_id] = (result, time.time())
+    try:
+        if redis_service.redis:
+            redis_key = f"subtitle:session:{video_id}"
+            await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
+    except Exception as exc:
+        logger.debug("Redis subtitle cache write failed: %s", exc)
+
     return result
 
 

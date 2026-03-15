@@ -68,20 +68,22 @@ function extractVideoId(input) {
 
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
-const screenLoading  = $('screen-loading');
-const screenMain     = $('screen-main');
-const statusLine     = $('status-line');
-const videosList     = $('videos-list');
+const screenLoading   = $('screen-loading');
+const screenCatalog   = $('screen-catalog');
+const screenPlayer    = $('screen-player');
+const statusLine      = $('status-line');
+const videosList      = $('videos-list');
 const reloadVideosBtn = $('reload-videos-btn');
-const playerPlaceholder = $('player-placeholder');
-const ytContainer    = $('yt-container');
-const pauseOverlay   = $('pause-overlay');
+const backBtn         = $('back-btn');
+const playerTitle     = $('player-title');
+const ytContainer     = $('yt-container');
+const pauseOverlay    = $('pause-overlay');
 const subtitleOverlay = $('subtitle-overlay');
-const subtitleLine   = $('subtitle-line');
-const wordPopup      = $('word-popup');
-const popupWord      = $('popup-word');
-const popupBody      = $('popup-body');
-const popupClose     = $('popup-close');
+const subtitleLine    = $('subtitle-line');
+const wordPopup       = $('word-popup');
+const popupWord       = $('popup-word');
+const popupBody       = $('popup-body');
+const popupClose      = $('popup-close');
 
 // ---------------------------------------------------------------------------
 // Screen management
@@ -124,13 +126,15 @@ async function loadSession(input, preferredTitle = '') {
         return;
     }
 
-    setStatus('Відкриваю відео і підтягую субтитри…');
     state.selectedVideoId = videoId;
     state.loadingVideoId = videoId;
     state.session = null;
     state.activeCueIndex = -1;
     renderSubtitles(-1);
-    renderVideos(state.availableVideos || []);
+
+    // Switch to player screen
+    playerTitle.textContent = preferredTitle || videoId;
+    showScreen('screen-player');
     mountPlayer(videoId);
 
     try {
@@ -142,12 +146,10 @@ async function loadSession(input, preferredTitle = '') {
         state.session = data;
         state.activeCueIndex = -1;
         state.loadingVideoId = null;
-        setStatus(`${data.cues.length} субтитрів • ${data.selectedLanguage}`);
+        playerTitle.textContent = data.title || preferredTitle || videoId;
     } catch (err) {
         state.loadingVideoId = null;
         setStatus('Помилка: ' + err.message, true);
-    } finally {
-        renderVideos(state.availableVideos || []);
     }
 }
 
@@ -158,12 +160,12 @@ async function loadVideoCatalog() {
         const data = await apiFetch('/api/subtitle/videos');
         state.availableVideos = data.videos || [];
         renderVideos(state.availableVideos);
-        setStatus('Оберіть відео зі списку');
+        setStatus('');
     } catch (err) {
         setStatus('Помилка: ' + err.message, true);
     } finally {
         if (reloadVideosBtn) reloadVideosBtn.disabled = false;
-        showScreen('screen-main');
+        showScreen('screen-catalog');
     }
 }
 
@@ -218,8 +220,6 @@ window.onYouTubeIframeAPIReady = function () {
 };
 
 function mountPlayer(videoId) {
-    playerPlaceholder.style.display = 'none';
-    ytContainer.style.display = 'flex';
     pauseOverlay.style.display = 'none';
     state.pendingAutoplay = true;
 
@@ -470,6 +470,13 @@ reloadVideosBtn?.addEventListener('click', () => {
     loadVideoCatalog();
 });
 
+backBtn?.addEventListener('click', () => {
+    // Pause video when going back to catalog
+    state.player?.pauseVideo?.();
+    closePopup();
+    showScreen('screen-catalog');
+});
+
 pauseOverlay.addEventListener('click', () => {
     state.player?.playVideo?.();
 });
@@ -486,5 +493,5 @@ document.addEventListener('click', (e) => {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-showScreen('screen-main');
+showScreen('screen-catalog');
 loadVideoCatalog();

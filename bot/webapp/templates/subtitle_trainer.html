@@ -19,10 +19,9 @@
         <p>Завантаження...</p>
     </div>
 
-    <!-- Main screen -->
-    <div id="screen-main" class="screen">
-
-        <div id="url-bar">
+    <!-- Catalog screen (grid of videos) -->
+    <div id="screen-catalog" class="screen">
+        <div id="catalog-wrap">
             <div id="videos-head">
                 <div>
                     <p class="videos-kicker">KURZGESAGT DE</p>
@@ -33,24 +32,22 @@
             <p id="status-line" class="status-line"></p>
             <div id="videos-list" class="videos-list"></div>
         </div>
+    </div>
 
-        <!-- Player area -->
+    <!-- Player screen (full-screen video + subtitles) -->
+    <div id="screen-player" class="screen">
+        <div id="player-top-bar">
+            <button type="button" id="back-btn">← Назад</button>
+            <p id="player-title" class="player-title"></p>
+        </div>
         <div id="player-area">
-            <!-- placeholder before video loads -->
-            <div id="player-placeholder">
-                <p>Оберіть відео зі списку вище. Для каналу Kurzgesagt DE список оновлюється автоматично.</p>
-            </div>
-
-            <!-- YouTube iframe will be injected here -->
-            <div id="yt-container" style="display:none;">
+            <div id="yt-container">
                 <div id="pause-overlay" style="display:none;">
                     <div id="pause-play-btn">▶</div>
                 </div>
                 <div id="yt-frame-wrap">
-                    <!-- YT.Player mounts here -->
                     <div id="yt-player"></div>
                 </div>
-                <!-- Subtitles -->
                 <div id="subtitle-overlay">
                     <p id="subtitle-line"></p>
                 </div>
@@ -71,7 +68,7 @@
             </div>
         </div>
 
-    </div><!-- /screen-main -->
+    </div><!-- /screen-player -->
 
 </div><!-- /app -->
 
