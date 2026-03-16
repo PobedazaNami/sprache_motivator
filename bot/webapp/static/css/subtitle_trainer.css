@@ -289,11 +289,20 @@ html, body {
 }
 
 #subtitle-line {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     font-size: clamp(1.15rem, 5vw, 1.55rem);
     font-weight: 600;
     line-height: 1.55;
     color: #f8fbff;
     text-shadow: 0 2px 8px rgba(0,0,0,.7);
+}
+
+.st-cue-line {
+    display: block;
+    width: 100%;
+    text-wrap: balance;
 }
 
 /* tokens */
@@ -309,7 +318,7 @@ html, body {
     text-decoration-color: rgba(251,191,36,.55);
     text-underline-offset: 3px;
     text-decoration-thickness: 2px;
-    padding: 4px 5px;
+    padding: 4px 3px;
     border-radius: 6px;
     transition: background 120ms;
 }

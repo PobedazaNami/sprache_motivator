@@ -332,9 +332,9 @@ function renderSubtitles(idx) {
             return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${ci}">${spinner}${esc(token.value)}</span>${space}`;
         });
         const opacity = lineIdx === 0 ? '1' : '0.55';
-        return `<span class="st-cue-line" style="opacity:${opacity}">${spans.join('')}</span>`;
+        return `<div class="st-cue-line" style="opacity:${opacity}">${spans.join('')}</div>`;
     });
-    subtitleLine.innerHTML = parts.join('<br>');
+    subtitleLine.innerHTML = parts.join('');
 
     // Attach click handlers
     subtitleLine.querySelectorAll('.st-token--clk').forEach(el => {
