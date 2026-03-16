@@ -302,7 +302,9 @@ html, body {
 .st-cue-line {
     display: block;
     width: 100%;
-    text-wrap: balance;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     min-height: 1.55em;
 }
 
