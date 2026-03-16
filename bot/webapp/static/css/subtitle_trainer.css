@@ -285,13 +285,13 @@ html, body {
     padding: 12px 14px;
     padding-bottom: calc(12px + var(--safe-bottom));
     text-align: center;
-    min-height: 72px;
+    min-height: 182px;
 }
 
 #subtitle-line {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     font-size: clamp(1.15rem, 5vw, 1.55rem);
     font-weight: 600;
     line-height: 1.55;
@@ -303,6 +303,20 @@ html, body {
     display: block;
     width: 100%;
     text-wrap: balance;
+    min-height: 1.55em;
+}
+
+.st-cue-line--active {
+    opacity: 1;
+}
+
+.st-cue-line--future {
+    opacity: 0.52;
+}
+
+.st-cue-line--measure {
+    width: auto;
+    min-height: 0;
 }
 
 /* tokens */

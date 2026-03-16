@@ -308,32 +308,151 @@ function startCueInterval() {
     }, 250);
 }
 
+function buildSubtitleTokenWindow(cues, startIdx, maxCues = 8) {
+    const items = [];
+    const endIdx = Math.min(cues.length, startIdx + maxCues);
+
+    for (let cueIdx = startIdx; cueIdx < endIdx; cueIdx++) {
+        const cue = cues[cueIdx];
+        const tokens = tokenize(cue.text);
+        tokens.forEach((token, tokenIdx) => {
+            items.push({
+                token,
+                cueIdx,
+                trailingSpace: shouldAppendSpace(token, tokens[tokenIdx + 1]),
+            });
+        });
+    }
+
+    return items;
+}
+
+function renderTokenHtml(item) {
+    const { token, cueIdx, trailingSpace } = item;
+    const space = trailingSpace ? ' ' : '';
+
+    if (!token.clickable) {
+        return `<span class="st-token">${esc(token.value)}</span>${space}`;
+    }
+
+    const isLoading = state.lookingUpWord === token.value;
+    const cls = 'st-token st-token--clk' + (isLoading ? ' st-token--loading' : '');
+    const spinner = isLoading ? '<span class="st-spinner"></span>' : '';
+    return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${cueIdx}">${spinner}${esc(token.value)}</span>${space}`;
+}
+
+let subtitleMeasureEl = null;
+
+function ensureSubtitleMeasureEl() {
+    if (!subtitleMeasureEl) {
+        subtitleMeasureEl = document.createElement('div');
+        subtitleMeasureEl.setAttribute('aria-hidden', 'true');
+        subtitleMeasureEl.style.position = 'absolute';
+        subtitleMeasureEl.style.left = '-99999px';
+        subtitleMeasureEl.style.top = '0';
+        subtitleMeasureEl.style.visibility = 'hidden';
+        subtitleMeasureEl.style.pointerEvents = 'none';
+        subtitleMeasureEl.style.whiteSpace = 'nowrap';
+        document.body.appendChild(subtitleMeasureEl);
+    }
+
+    const styles = window.getComputedStyle(subtitleLine);
+    subtitleMeasureEl.style.fontSize = styles.fontSize;
+    subtitleMeasureEl.style.fontWeight = styles.fontWeight;
+    subtitleMeasureEl.style.lineHeight = styles.lineHeight;
+    subtitleMeasureEl.style.fontFamily = styles.fontFamily;
+    subtitleMeasureEl.style.letterSpacing = styles.letterSpacing;
+    subtitleMeasureEl.style.textTransform = styles.textTransform;
+    return subtitleMeasureEl;
+}
+
+function measureTokenLine(items) {
+    if (!items.length) return 0;
+    const measureEl = ensureSubtitleMeasureEl();
+    measureEl.innerHTML = `<div class="st-cue-line st-cue-line--measure">${items.map(renderTokenHtml).join('')}</div>`;
+    return measureEl.firstElementChild?.getBoundingClientRect().width ?? 0;
+}
+
+function rebalancePackedLines(lines, maxWidth) {
+    for (let i = 0; i < lines.length - 1; i++) {
+        let changed = true;
+        while (changed && lines[i].length > 1 && lines[i + 1].length > 0) {
+            changed = false;
+            const currentWidth = measureTokenLine(lines[i]);
+            const nextWidth = measureTokenLine(lines[i + 1]);
+            const moved = lines[i][lines[i].length - 1];
+            const candidateCurrent = lines[i].slice(0, -1);
+            const candidateNext = [moved, ...lines[i + 1]];
+            const candidateCurrentWidth = measureTokenLine(candidateCurrent);
+            const candidateNextWidth = measureTokenLine(candidateNext);
+            const currentGap = Math.abs(currentWidth - nextWidth);
+            const candidateGap = Math.abs(candidateCurrentWidth - candidateNextWidth);
+
+            if (candidateCurrentWidth <= maxWidth && candidateNextWidth <= maxWidth && candidateGap < currentGap) {
+                lines[i] = candidateCurrent;
+                lines[i + 1] = candidateNext;
+                changed = true;
+            }
+        }
+    }
+
+    return lines;
+}
+
+function packTokensIntoLines(items, lineCount, maxWidth) {
+    if (!items.length) {
+        return Array.from({ length: lineCount }, () => []);
+    }
+
+    const lines = [];
+    let cursor = 0;
+
+    for (let lineIdx = 0; lineIdx < lineCount && cursor < items.length; lineIdx++) {
+        const remainingLines = lineCount - lineIdx;
+        const maxEnd = items.length - (remainingLines - 1);
+        let bestEnd = Math.min(cursor + 1, items.length);
+
+        for (let end = cursor + 1; end <= maxEnd; end++) {
+            const width = measureTokenLine(items.slice(cursor, end));
+            if (width <= maxWidth || end === cursor + 1) {
+                bestEnd = end;
+                continue;
+            }
+            break;
+        }
+
+        lines.push(items.slice(cursor, bestEnd));
+        cursor = bestEnd;
+    }
+
+    if (cursor < items.length && lines.length) {
+        lines[lines.length - 1] = lines[lines.length - 1].concat(items.slice(cursor));
+    }
+
+    while (lines.length < lineCount) {
+        lines.push([]);
+    }
+
+    return rebalancePackedLines(lines, maxWidth);
+}
+
 function renderSubtitles(idx) {
     if (idx < 0 || !state.session) {
         subtitleLine.innerHTML = '';
         return;
     }
-    // Render current cue + next cue (2 lines for more reading time)
-    const cues = state.session.cues;
-    const indicesToShow = [idx];
-    if (idx + 1 < cues.length) indicesToShow.push(idx + 1);
 
-    const parts = indicesToShow.map((ci, lineIdx) => {
-        const cue = cues[ci];
-        const tokens = tokenize(cue.text);
-        const spans = tokens.map((token, i) => {
-            const space = shouldAppendSpace(token, tokens[i + 1]) ? ' ' : '';
-            if (!token.clickable) {
-                return `<span class="st-token">${esc(token.value)}</span>${space}`;
-            }
-            const isLoading = state.lookingUpWord === token.value;
-            const cls = 'st-token st-token--clk' + (isLoading ? ' st-token--loading' : '');
-            const spinner = isLoading ? '<span class="st-spinner"></span>' : '';
-            return `<span class="${cls}" data-value="${esc(token.value)}" data-norm="${esc(token.normalized)}" data-cue="${ci}">${spinner}${esc(token.value)}</span>${space}`;
-        });
-        const opacity = lineIdx === 0 ? '1' : '0.55';
-        return `<div class="st-cue-line" style="opacity:${opacity}">${spans.join('')}</div>`;
+    const cues = state.session.cues;
+    const tokenWindow = buildSubtitleTokenWindow(cues, idx, 8);
+    const availableWidth = Math.max(subtitleLine.clientWidth || 0, 240);
+    const packedLines = packTokensIntoLines(tokenWindow, 4, availableWidth);
+
+    const parts = packedLines.map((lineItems, lineIdx) => {
+        const cls = lineIdx < 2 ? 'st-cue-line st-cue-line--active' : 'st-cue-line st-cue-line--future';
+        const html = lineItems.length ? lineItems.map(renderTokenHtml).join('') : '&nbsp;';
+        return `<div class="${cls}">${html}</div>`;
     });
+
     subtitleLine.innerHTML = parts.join('');
 
     // Attach click handlers
