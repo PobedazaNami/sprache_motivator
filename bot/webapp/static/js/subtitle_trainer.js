@@ -27,6 +27,7 @@ const state = {
     loadingVideoId: null,
     pendingAutoplay: false,
     activeCueIndex: -1,
+    windowStartIndex: 0,
     isPlaying: false,
     isLookingUp: false,
     lookingUpWord: null,    // surface form being queried
@@ -130,6 +131,7 @@ async function loadSession(input, preferredTitle = '') {
     state.loadingVideoId = videoId;
     state.session = null;
     state.activeCueIndex = -1;
+    state.windowStartIndex = 0;
     renderSubtitles(-1);
 
     // Switch to player screen
@@ -303,7 +305,12 @@ function startCueInterval() {
         const idx = pickActiveCue(state.session.cues, ms);
         if (idx !== state.activeCueIndex) {
             state.activeCueIndex = idx;
-            renderSubtitles(idx);
+            if (idx >= 0 && idx >= state.windowStartIndex + 4) {
+                state.windowStartIndex = idx;
+            } else if (idx < 0) {
+                state.windowStartIndex = 0;
+            }
+            renderSubtitles(state.windowStartIndex);
         }
     }, 250);
 }
@@ -493,7 +500,7 @@ async function handleTokenClick(el) {
 
     state.isLookingUp = true;
     state.lookingUpWord = value;
-    renderSubtitles(state.activeCueIndex); // show spinner on token
+    renderSubtitles(state.windowStartIndex); // show spinner on token
 
     try {
         const card = await apiFetch('/api/subtitle/lookup', {
@@ -513,7 +520,7 @@ async function handleTokenClick(el) {
     } finally {
         state.isLookingUp = false;
         state.lookingUpWord = null;
-        renderSubtitles(state.activeCueIndex);
+        renderSubtitles(state.windowStartIndex);
     }
 }
 
