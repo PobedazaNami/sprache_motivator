@@ -16,6 +16,7 @@ LOCALES = {
         "btn_russian": "Русский",
         "btn_translator": "📖 Перекладач (підписка)",
         "btn_daily_trainer": "🎯 Щоденний тренажер",
+        "btn_daily_route": "🔥 Сьогоднішній маршрут",
         "btn_saved_words": "💾 Збережені слова",
         "btn_settings": "⚙️ Налаштування",
         "btn_support": "💬 Техпідтримка",
@@ -291,6 +292,45 @@ LOCALES = {
         "flashcards_delete_set_confirm": "⚠️ Ви впевнені, що хочете видалити набір '{name}' і всі його картки?",
         "btn_confirm_delete": "✅ Так, видалити",
         "flashcards_cards_count": "карт",
+        
+        # Daily Route
+        "daily_route_title": "🔥 Сьогоднішній маршрут ({done}/3)",
+        "daily_route_step1": "Виконай 1 експрес-завдання",
+        "daily_route_step2": "Повтори {count} карток",
+        "daily_route_step2_no_cards": "Створи перші 3 картки для вивчення",
+        "daily_route_step2_no_due": "Додай слова в картки для повторення",
+        "daily_route_step3": "Подивись відео з субтитрами",
+        "daily_route_complete": "🎉 Маршрут на сьогодні виконано! Чудова робота!",
+        "daily_route_cta_create_cards": "🎴 Створіть перші 3 картки, щоб почати вивчати слова!\n\n💡 Відкрийте додаток нижче.",
+        "btn_route_step1": "⚡️ 1. Експрес-завдання",
+        "btn_route_step2": "🎴 2. Повторити картки",
+        "btn_route_step2_create": "🎴 2. Створити перші картки",
+        "btn_route_step3": "🎬 3. Відео з субтитрами",
+        
+        # Scenario labels
+        "scenario_label": "📍 Сценарій: {scenario}",
+        
+        # Improved feedback
+        "feedback_correct_practical": "✅ Правильно! Якість: {quality}%\n\n🎯 Тепер ви вмієте сказати:\n\"{phrase}\"\n\n💡 Використайте цю фразу в реальному житті!",
+        "feedback_incorrect_practical": "❌ Не зовсім правильно. Якість: {quality}%\n\n📝 Що виправити:\n{errors}\n\n✅ Правильно:\n\"{correct}\"\n\n🎯 Готова фраза для життя:\n\"{phrase}\"",
+        
+        # Progress 2.0
+        "progress_route_today": "📍 Маршрут сьогодні: {done}/3 кроки\n",
+        "progress_due_cards": "🎴 Карток на повторення: {count}\n",
+        "progress_recommendation": "\n💡 {recommendation}",
+        "progress_rec_cards": "Зараз найкраще: повторити {count} карток",
+        "progress_rec_express": "Наступний крок: 1 експрес-завдання",
+        "progress_rec_streak": "Щоб зберегти серію, виконайте 1 коротке завдання сьогодні",
+        "progress_rec_route": "Почніть із маршруту на сьогодні!",
+        "progress_strong_topic": "💪 Найсильніша тема: {topic}\n",
+        "progress_weak_topic": "📖 Варто попрактикувати: {topic}\n",
+        
+        # Comeback flow
+        "comeback_welcome": "👋 Ми сумували! Ви не були {days} днів.\n\n🔥 Повернімося з короткої сесії на 2 хвилини?",
+        "comeback_tip_1": "Сьогодні можна просто зробити 1 корисну фразу",
+        "comeback_tip_2": "Щоб повернути ритм, почніть з експрес-тренажера",
+        "comeback_tip_3": "Навіть 1 картка на день — це прогрес!",
+        "daily_tip": "💡 Порада дня: {tip}",
     },
     "ru": {
         # Main Menu
@@ -307,6 +347,7 @@ LOCALES = {
         "btn_russian": "Русский",
         "btn_translator": "📖 Переводчик (подписка)",
         "btn_daily_trainer": "🎯 Ежедневный тренажёр",
+        "btn_daily_route": "🔥 Маршрут на сегодня",
         "btn_saved_words": "💾 Сохранённые слова",
         "btn_settings": "⚙️ Настройки",
         "btn_support": "💬 Техподдержка",
@@ -582,6 +623,45 @@ LOCALES = {
         "flashcards_delete_set_confirm": "⚠️ Вы уверены, что хотите удалить набор '{name}' и все его карточки?",
         "btn_confirm_delete": "✅ Да, удалить",
         "flashcards_cards_count": "карт",
+        
+        # Daily Route
+        "daily_route_title": "🔥 Маршрут на сегодня ({done}/3)",
+        "daily_route_step1": "Выполни 1 экспресс-задание",
+        "daily_route_step2": "Повтори {count} карточек",
+        "daily_route_step2_no_cards": "Создай первые 3 карточки для изучения",
+        "daily_route_step2_no_due": "Добавь слова в карточки для повторения",
+        "daily_route_step3": "Посмотри видео с субтитрами",
+        "daily_route_complete": "🎉 Маршрут на сегодня выполнен! Отличная работа!",
+        "daily_route_cta_create_cards": "🎴 Создайте первые 3 карточки, чтобы начать учить слова!\n\n💡 Откройте приложение ниже.",
+        "btn_route_step1": "⚡️ 1. Экспресс-задание",
+        "btn_route_step2": "🎴 2. Повторить карточки",
+        "btn_route_step2_create": "🎴 2. Создать первые карточки",
+        "btn_route_step3": "🎬 3. Видео с субтитрами",
+        
+        # Scenario labels
+        "scenario_label": "📍 Сценарий: {scenario}",
+        
+        # Improved feedback
+        "feedback_correct_practical": "✅ Правильно! Качество: {quality}%\n\n🎯 Теперь вы умеете сказать:\n\"{phrase}\"\n\n💡 Используйте эту фразу в реальной жизни!",
+        "feedback_incorrect_practical": "❌ Не совсем правильно. Качество: {quality}%\n\n📝 Что исправить:\n{errors}\n\n✅ Правильно:\n\"{correct}\"\n\n🎯 Готовая фраза для жизни:\n\"{phrase}\"",
+        
+        # Progress 2.0
+        "progress_route_today": "📍 Маршрут сегодня: {done}/3 шага\n",
+        "progress_due_cards": "🎴 Карточек на повторение: {count}\n",
+        "progress_recommendation": "\n💡 {recommendation}",
+        "progress_rec_cards": "Сейчас лучше всего: повторить {count} карточек",
+        "progress_rec_express": "Следующий шаг: 1 экспресс-задание",
+        "progress_rec_streak": "Чтобы сохранить серию, выполните 1 короткое задание сегодня",
+        "progress_rec_route": "Начните с маршрута на сегодня!",
+        "progress_strong_topic": "💪 Сильная тема: {topic}\n",
+        "progress_weak_topic": "📖 Стоит подтянуть: {topic}\n",
+        
+        # Comeback flow
+        "comeback_welcome": "👋 Мы скучали! Вас не было {days} дней.\n\n🔥 Вернёмся с короткой сессии на 2 минуты?",
+        "comeback_tip_1": "Сегодня можно просто сделать 1 полезную фразу",
+        "comeback_tip_2": "Чтобы вернуть ритм, начните с экспресс-тренажёра",
+        "comeback_tip_3": "Даже 1 карточка в день — это прогресс!",
+        "daily_tip": "💡 Совет дня: {tip}",
     }
 }
 

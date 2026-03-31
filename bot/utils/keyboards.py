@@ -19,6 +19,8 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     lang = user.interface_language.value
     builder = ReplyKeyboardBuilder()
     
+    # Daily route — primary CTA at the top
+    builder.button(text=get_text(lang, "btn_daily_route"))
     builder.button(text=get_text(lang, "btn_translator"))
     builder.button(text=get_text(lang, "btn_daily_trainer"))
     builder.button(text=get_text(lang, "btn_express_trainer"))
@@ -34,8 +36,8 @@ def get_main_menu_keyboard(user: Any) -> ReplyKeyboardMarkup:
     if getattr(user, "telegram_id", None) in settings.admin_id_list:
         builder.button(text=get_text(lang, "btn_admin"))
 
-    # Layout: 2 columns for main feature buttons, then 1 column for support (and admin if applicable)
-    builder.adjust(2, 2, 2, 2, 2, 1, 1, 1)
+    # Layout: daily route full-width, then 2 columns, then 1 column for settings/support
+    builder.adjust(1, 2, 2, 2, 2, 2, 1, 1)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -429,6 +431,29 @@ def get_delete_set_confirm_keyboard(set_id: str, lang: str) -> InlineKeyboardMar
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text(lang, "btn_confirm_delete"), callback_data=f"flashcards_confirm_delete_{set_id}")
     builder.button(text=get_text(lang, "btn_back"), callback_data=f"flashcards_view_set_{set_id}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def get_daily_route_keyboard(lang: str, total_cards: int, due_cards: int, completion: dict) -> InlineKeyboardMarkup:
+    """Keyboard for daily route with 3 step buttons"""
+    builder = InlineKeyboardBuilder()
+
+    # Step 1: Express Trainer
+    if not completion.get("step1"):
+        builder.button(text=get_text(lang, "btn_route_step1"), callback_data="route_step1")
+
+    # Step 2: Flashcards
+    if not completion.get("step2"):
+        if total_cards == 0:
+            builder.button(text=get_text(lang, "btn_route_step2_create"), callback_data="route_step2_create")
+        else:
+            builder.button(text=get_text(lang, "btn_route_step2"), callback_data="route_step2_cards")
+
+    # Step 3: Subtitle Trainer or fallback
+    if not completion.get("step3"):
+        builder.button(text=get_text(lang, "btn_route_step3"), callback_data="route_step3_subtitle")
+
     builder.adjust(1)
     return builder.as_markup()
 

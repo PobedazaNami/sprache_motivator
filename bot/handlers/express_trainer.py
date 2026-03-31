@@ -252,7 +252,7 @@ async def show_hint(callback: CallbackQuery):
         )
         
         # Track hint activation in daily stats
-        # await mongo_service.track_hint_activation(user.id)  # TODO: implement this function
+        await mongo_service.track_hint_activation(user.id)
         
         # Clear training state - this task won't count towards daily stats
         await redis_service.clear_user_state(callback.from_user.id)
@@ -450,15 +450,20 @@ async def check_express_answer(message: Message, state: FSMContext):
         # Build feedback message with streak info
         feedback_parts = []
         
+        # Use practical feedback: show the correct phrase as a ready-to-use expression
+        phrase = correct_translation or training.get("expected_translation", "")
+        
         if is_correct:
-            feedback_parts.append(get_text(lang, "correct_answer_with_quality", quality=quality_percentage))
+            feedback_parts.append(get_text(lang, "feedback_correct_practical", quality=quality_percentage, phrase=phrase))
         else:
+            errors_text = explanation or ""
             feedback_parts.append(get_text(
                 lang,
-                "incorrect_answer",
-                explanation=explanation or "",
+                "feedback_incorrect_practical",
                 quality=quality_percentage,
-                correct=correct_translation or ""
+                errors=errors_text,
+                correct=correct_translation or "",
+                phrase=phrase,
             ))
         
         # Add streak message if active

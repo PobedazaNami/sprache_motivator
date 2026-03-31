@@ -70,12 +70,12 @@ class SchedulerService:
             # Get all users with enabled trainer
             users = await UserService.get_users_with_trainer_enabled(session)
             
-            now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
-            current_time = now_kyiv.time()
-            current_date = now_kyiv.date()
-            
             for user in users:
                 try:
+                    user_tz = ZoneInfo(getattr(user, 'trainer_timezone', None) or 'Europe/Berlin')
+                    now_user = datetime.now(user_tz)
+                    current_time = now_user.time()
+                    current_date = now_user.date()
                     # Check if user should receive task now
                     if await self._should_send_task(user, current_time, current_date):
                         await trainer.send_training_task(self.bot, user.telegram_id)
@@ -143,8 +143,9 @@ class SchedulerService:
         """
         from bot.services.redis_service import redis_service
         
-        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
-        current_date = now_kyiv.date()
+        user_tz = ZoneInfo(getattr(user, 'trainer_timezone', None) or 'Europe/Berlin')
+        now_user = datetime.now(user_tz)
+        current_date = now_user.date()
         
         tasks_today_key = f"tasks_today:{user.id}:{current_date}"
         tasks_sent = await redis_service.get(tasks_today_key)
@@ -162,9 +163,10 @@ class SchedulerService:
         """
         from bot.services.redis_service import redis_service
         
-        now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
-        current_time = now_kyiv.time()
-        current_date = now_kyiv.date()
+        user_tz = ZoneInfo(getattr(user, 'trainer_timezone', None) or 'Europe/Berlin')
+        now_user = datetime.now(user_tz)
+        current_time = now_user.time()
+        current_date = now_user.date()
         
         # Get user settings
         start_time = time.fromisoformat(user.trainer_start_time or "09:00")
@@ -181,9 +183,9 @@ class SchedulerService:
         # Check if all tasks for today are complete
         if tasks_sent >= messages_per_day:
             # Next task is tomorrow at start time
-            tomorrow = now_kyiv + timedelta(days=1)
-            next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
-            time_diff = next_task_dt - now_kyiv
+            tomorrow = now_user + timedelta(days=1)
+            next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=user_tz)
+            time_diff = next_task_dt - now_user
             hours = int(time_diff.total_seconds() // 3600)
             minutes = int((time_diff.total_seconds() % 3600) // 60)
             return next_task_dt, f"{hours}ч {minutes}мин"
@@ -201,10 +203,10 @@ class SchedulerService:
         if not last_task_time_str:
             if current_time < start_time:
                 # Next task is at start time
-                next_task_dt = datetime.combine(current_date, start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                next_task_dt = datetime.combine(current_date, start_time, tzinfo=user_tz)
             else:
                 # We're in the window but haven't sent first task yet - send soon
-                next_task_dt = now_kyiv + timedelta(minutes=5)
+                next_task_dt = now_user + timedelta(minutes=5)
         else:
             # Calculate when next task should be sent based on last task time
             last_task_time = time.fromisoformat(last_task_time_str)
@@ -213,21 +215,21 @@ class SchedulerService:
             
             if next_task_minutes >= 24 * 60:
                 # Next task is tomorrow
-                tomorrow = now_kyiv + timedelta(days=1)
-                next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                tomorrow = now_user + timedelta(days=1)
+                next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=user_tz)
             else:
                 next_task_hour = next_task_minutes // 60
                 next_task_minute = next_task_minutes % 60
                 next_task_time = time(hour=next_task_hour, minute=next_task_minute)
-                next_task_dt = datetime.combine(current_date, next_task_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                next_task_dt = datetime.combine(current_date, next_task_time, tzinfo=user_tz)
                 
                 # If next task time is beyond end time or already passed, schedule for tomorrow
-                if next_task_time > end_time or next_task_dt <= now_kyiv:
-                    tomorrow = now_kyiv + timedelta(days=1)
-                    next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=ZoneInfo('Europe/Kyiv'))
+                if next_task_time > end_time or next_task_dt <= now_user:
+                    tomorrow = now_user + timedelta(days=1)
+                    next_task_dt = datetime.combine(tomorrow.date(), start_time, tzinfo=user_tz)
         
         # Calculate time difference
-        time_diff = next_task_dt - now_kyiv
+        time_diff = next_task_dt - now_user
         hours = int(time_diff.total_seconds() // 3600)
         minutes = int((time_diff.total_seconds() % 3600) // 60)
         

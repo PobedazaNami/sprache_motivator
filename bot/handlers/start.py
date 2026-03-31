@@ -65,6 +65,29 @@ async def cmd_start(message: Message, state: FSMContext):
             lang = user.interface_language.value
             user_name = f"@{message.from_user.username}" if message.from_user.username else message.from_user.first_name or "друже"
             
+            # Check comeback flow (2+ days inactive)
+            from bot.services import mongo_service
+            try:
+                if mongo_service.is_ready():
+                    inactive_days = await mongo_service.get_inactive_days(user.id)
+                    if inactive_days >= 2:
+                        import random
+                        tips = [
+                            get_text(lang, "comeback_tip_1"),
+                            get_text(lang, "comeback_tip_2"),
+                            get_text(lang, "comeback_tip_3"),
+                        ]
+                        comeback_text = get_text(lang, "comeback_welcome", days=inactive_days)
+                        comeback_text += "\n\n" + get_text(lang, "daily_tip", tip=random.choice(tips))
+                        await message.answer(comeback_text)
+                        await message.answer(
+                            get_text(lang, "main_menu"),
+                            reply_markup=get_main_menu_keyboard(user)
+                        )
+                        return
+            except Exception:
+                pass
+            
             await message.answer(
                 get_text(lang, "welcome_approved", name=user_name)
             )

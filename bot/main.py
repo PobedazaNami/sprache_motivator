@@ -11,7 +11,7 @@ from bot.models.database import init_db, async_session_maker
 from bot.services.redis_service import redis_service
 from bot.services.database_service import UserService
 from bot.services.scheduler_service import scheduler_service
-from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends, express_trainer, flashcards, subtitle_trainer
+from bot.handlers import start, translator, trainer, settings as settings_handler, admin, friends, express_trainer, flashcards, subtitle_trainer, daily_route
 from bot.models.database import UserStatus
 from bot.services import mongo_service, cloudinary_service
 
@@ -89,6 +89,7 @@ async def main():
     
     # Register handlers (order matters - more specific handlers first)
     dp.include_router(start.router)
+    dp.include_router(daily_route.router)
     dp.include_router(translator.router)
     dp.include_router(settings_handler.router)
     dp.include_router(friends.router)

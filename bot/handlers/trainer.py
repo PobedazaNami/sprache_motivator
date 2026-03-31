@@ -94,18 +94,50 @@ async def my_progress(message: Message, state: FSMContext):
         streak_info = {}
         mastered_count = 0
         today_stats = None
+        due_cards = 0
+        strong_topic = None
+        weak_topic = None
+        route_completion = {"step1": False, "step2": False, "step3": False}
         try:
             if mongo_service.is_ready():
                 streak_info = await mongo_service.get_streak(user.id)
                 mastered_count = await mongo_service.get_mastered_count(user.id)
                 today_stats = await mongo_service.get_today_stats(user.id)
+                strong_topic, weak_topic = await mongo_service.get_topic_performance(user.id)
+                # Due flashcards
+                from datetime import datetime as dt, timezone as tz
+                now = dt.now(tz.utc)
+                due_cards = await mongo_service.db().flashcards.count_documents({
+                    "user_id": user.id,
+                    "$or": [
+                        {"srs_status": {"$exists": False}},
+                        {"srs_status": "new"},
+                        {"srs_next_review": {"$exists": False}},
+                        {"srs_next_review": {"$lte": now}},
+                    ],
+                })
         except Exception:
             streak_info = {}
             mastered_count = 0
             today_stats = None
         
+        # Route completion for today
+        try:
+            from bot.handlers.daily_route import _get_route_completion
+            route_completion = await _get_route_completion(user.id)
+        except Exception:
+            pass
+        
         # Build progress message
         text_parts = [get_text(lang, "my_progress_title")]
+        
+        # Daily route progress
+        route_done = sum(1 for k in ["step1", "step2", "step3"] if route_completion.get(k))
+        text_parts.append(get_text(lang, "progress_route_today", done=route_done))
+        
+        # Due flashcards
+        if due_cards > 0:
+            text_parts.append(get_text(lang, "progress_due_cards", count=due_cards))
         
         # Streak section
         if streak_info.get("current", 0) > 0 or streak_info.get("longest", 0) > 0:
@@ -131,6 +163,18 @@ async def my_progress(message: Message, state: FSMContext):
                                        total=user.total_answers,
                                        accuracy=accuracy))
         
+        # Strong/weak topics
+        if strong_topic:
+            topic_meta = TOPIC_METADATA.get(TrainerTopic(strong_topic)) if strong_topic else None
+            if topic_meta:
+                topic_name = topic_meta.get("de", strong_topic)
+                text_parts.append(get_text(lang, "progress_strong_topic", topic=topic_name))
+        if weak_topic:
+            topic_meta = TOPIC_METADATA.get(TrainerTopic(weak_topic)) if weak_topic else None
+            if topic_meta:
+                topic_name = topic_meta.get("de", weak_topic)
+                text_parts.append(get_text(lang, "progress_weak_topic", topic=topic_name))
+        
         # Milestones achieved
         milestones = streak_info.get("milestones", [])
         if milestones:
@@ -138,9 +182,21 @@ async def my_progress(message: Message, state: FSMContext):
             milestone_text = " ".join([f"{milestone_emojis.get(m, '🏅')}{m}" for m in sorted(milestones)])
             text_parts.append(get_text(lang, "progress_milestones", milestones=milestone_text))
         
-        # If no data at all
-        if len(text_parts) == 1:
-            text_parts.append(get_text(lang, "progress_no_data"))
+        # Recommendation: next step
+        recommendation = ""
+        if route_done < 3:
+            recommendation = get_text(lang, "progress_rec_route")
+        elif due_cards > 0:
+            recommendation = get_text(lang, "progress_rec_cards", count=due_cards)
+        elif streak_info.get("current", 0) == 0:
+            recommendation = get_text(lang, "progress_rec_streak")
+        else:
+            recommendation = get_text(lang, "progress_rec_express")
+        text_parts.append(get_text(lang, "progress_recommendation", recommendation=recommendation))
+        
+        # If no data at all (only title + route + recommendation)
+        if len(text_parts) <= 3 and not today_stats and mastered_count == 0 and user.total_answers == 0:
+            text_parts.insert(1, get_text(lang, "progress_no_data"))
         
         await message.answer("\n".join(text_parts))
 
@@ -806,16 +862,20 @@ async def check_training_answer(message: Message, state: FSMContext):
         # Build feedback message with streak info
         feedback_parts = []
         
-        # Send feedback with quality percentage
+        # Use practical feedback: show the correct phrase as a ready-to-use expression
+        phrase = correct_translation or training.get("expected_translation", "")
+        
         if is_correct:
-            feedback_parts.append(get_text(lang, "correct_answer_with_quality", quality=quality_percentage))
+            feedback_parts.append(get_text(lang, "feedback_correct_practical", quality=quality_percentage, phrase=phrase))
         else:
+            errors_text = explanation or ""
             feedback_parts.append(get_text(
                 lang,
-                "incorrect_answer",
-                explanation=explanation or "",
+                "feedback_incorrect_practical",
                 quality=quality_percentage,
-                correct=correct_translation or ""
+                errors=errors_text,
+                correct=correct_translation or "",
+                phrase=phrase,
             ))
         
         # Add streak message if active

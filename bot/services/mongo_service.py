@@ -622,3 +622,58 @@ async def check_comeback_needed(user_id: int) -> bool:
     days_inactive = (today - last_activity).days
     
     return days_inactive >= 2
+
+
+async def get_inactive_days(user_id: int) -> int:
+    """Return number of days since user's last activity. 0 if active today."""
+    if not is_ready():
+        return 0
+    streak_doc = await db().user_streaks.find_one({"user_id": user_id})
+    if not streak_doc:
+        return 0
+    last_activity = _ensure_utc_datetime(streak_doc.get("last_activity_date"))
+    if not last_activity:
+        return 0
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(0, (today - last_activity).days)
+
+
+async def track_hint_activation(user_id: int) -> None:
+    """Track hint activation in daily stats."""
+    if not is_ready():
+        return
+    today = _today_midnight_utc()
+    now = datetime.now(timezone.utc)
+    await db().daily_stats.update_one(
+        {"user_id": user_id, "date": today},
+        {
+            "$inc": {"hint_activations": 1},
+            "$set": {"updated_at": now},
+            "$setOnInsert": {"created_at": now, "expected_tasks": 0},
+        },
+        upsert=True,
+    )
+
+
+async def get_topic_performance(user_id: int) -> Tuple[Optional[str], Optional[str]]:
+    """Get user's strongest and weakest topics based on training session quality.
+    Returns: (strong_topic_value, weak_topic_value) or (None, None)."""
+    if not is_ready():
+        return None, None
+    pipeline = [
+        {"$match": {"user_id": user_id, "topic": {"$exists": True, "$ne": None}}},
+        {"$group": {
+            "_id": "$topic",
+            "avg_quality": {"$avg": "$quality_percentage"},
+            "count": {"$sum": 1},
+        }},
+        {"$match": {"count": {"$gte": 3}}},
+    ]
+    results = await db().training_sessions.aggregate(pipeline).to_list(length=100)
+    if not results:
+        return None, None
+    best = max(results, key=lambda x: x["avg_quality"])
+    worst = min(results, key=lambda x: x["avg_quality"])
+    if best["_id"] == worst["_id"]:
+        return best["_id"], None
+    return best["_id"], worst["_id"]

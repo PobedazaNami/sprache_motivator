@@ -161,6 +161,32 @@ class TranslationService:
             TrainerTopic.FUTURE_WORK: "work of the future (automation, remote work, work-life balance)",
         }
         
+        # Scenario labels for A2-B1 life situations
+        scenario_labels = {
+            TrainerTopic.SHOPPING_MONEY: "in a store / shopping",
+            TrainerTopic.HEALTH_DOCTOR: "at the doctor / pharmacy",
+            TrainerTopic.WORK_CAREER: "at work / with colleagues",
+            TrainerTopic.PERSONAL_INFO: "meeting someone / small talk",
+            TrainerTopic.LEISURE_MEDIA: "texting / messaging a friend",
+            TrainerTopic.TRANSPORT: "on public transport / asking for directions",
+            TrainerTopic.RESIDENCE_NEIGHBORHOOD: "renting an apartment / talking to neighbors",
+            TrainerTopic.JOB_APPLICATION: "documents / bureaucracy / filling forms",
+            TrainerTopic.FOOD_DRINK: "ordering food / at a restaurant",
+            TrainerTopic.HOME_DAILY: "everyday problem at home",
+            TrainerTopic.TRAVEL_VACATION: "at the hotel / checking in",
+            TrainerTopic.SCHOOL_LEARNING: "at a language course / asking the teacher",
+            TrainerTopic.FAMILY_FRIENDS: "talking about family / introducing someone",
+            TrainerTopic.LEISURE_HOBBIES: "making plans with friends",
+            TrainerTopic.WEATHER_SEASONS: "small talk about weather",
+            TrainerTopic.CELEBRATIONS: "congratulating someone / party",
+            TrainerTopic.FOOD_NUTRITION: "discussing diet / healthy eating",
+            TrainerTopic.TRAVEL_TRAFFIC: "at a train station / booking tickets",
+            TrainerTopic.HEALTH_LIFESTYLE: "at the gym / talking about fitness",
+            TrainerTopic.FASHION_CLOTHING: "shopping for clothes",
+            TrainerTopic.SOCIETY_COEXISTENCE: "asking a neighbor for help",
+            TrainerTopic.ENVIRONMENT_NATURE: "discussing recycling / parks",
+        }
+        
         interface_lang_name = lang_names.get(interface_lang, interface_lang)
         
         # Get mastered sentence hashes if user_id provided
@@ -176,15 +202,23 @@ class TranslationService:
         
         # Handle topic selection
         topic_instruction = ""
+        scenario_context = ""
+        actual_topic = topic
         if topic and topic != TrainerTopic.RANDOM:
             topic_desc = topic_descriptions.get(topic, "general topic")
             topic_instruction = f" about the topic: {topic_desc}"
+            scenario = scenario_labels.get(topic)
+            if scenario:
+                scenario_context = f"\nReal-life scenario: {scenario}. The sentence should sound like something a person would actually say in this situation."
         elif not topic or topic == TrainerTopic.RANDOM:
             # Select random topic
             available_topics = [t for t in TrainerTopic if t != TrainerTopic.RANDOM]
-            random_topic = random.choice(available_topics)
-            topic_desc = topic_descriptions.get(random_topic, "general topic")
+            actual_topic = random.choice(available_topics)
+            topic_desc = topic_descriptions.get(actual_topic, "general topic")
             topic_instruction = f" about the topic: {topic_desc}"
+            scenario = scenario_labels.get(actual_topic)
+            if scenario:
+                scenario_context = f"\nReal-life scenario: {scenario}. The sentence should sound like something a person would actually say in this situation."
         
         # Sentence style variations for more engaging content
         style_variations = [
@@ -214,16 +248,15 @@ class TranslationService:
             
             prompt = f"""Generate a lively, natural sentence in {interface_lang_name} at {difficulty_descriptions.get(difficulty, 'A2')} difficulty level{topic_instruction}.
 
-Style: {selected_style}
+Style: {selected_style}{scenario_context}
 
 Requirements:
 - CRITICAL: The sentence MUST be grammatically perfect in {interface_lang_name}. Double-check verb conjugations, cases, and word endings.
 - IMPORTANT: Keep the sentence SHORT - exactly {length_limit}. No longer!
-- Make it feel like something a real person would actually say
+- Focus on practical, real-life language that A2-B1 learners can actually use
+- The sentence should be something you'd hear in everyday conversation in Germany
 - Include concrete details, names, or specific situations when appropriate
-- Avoid generic or textbook-style sentences
-- The sentence should evoke emotion, curiosity, or a smile
-- Keep it natural and conversational
+- Avoid textbook-style sentences — prefer spoken, natural phrasing
 - ONE simple idea per sentence, no compound sentences with multiple clauses{uniqueness_hint}
 
 Provide only the sentence without any explanations."""

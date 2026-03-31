@@ -355,6 +355,15 @@ async def subtitle_lookup(request: web.Request) -> web.Response:
     if not payload.get("surfaceForm"):
         raise web.HTTPBadRequest(text="'surfaceForm' is required")
 
+    # If targetLang not provided by frontend, use user's interface language
+    if not payload.get("targetLang"):
+        try:
+            async with async_session_maker() as session:
+                user = await UserService.get_or_create_user(session, user_id)
+                payload["targetLang"] = user.interface_language.value
+        except Exception:
+            pass  # Falls back to "uk" default in subtitle_service
+
     try:
         card = await subtitle_service.lookup_word(payload)
     except Exception as exc:
