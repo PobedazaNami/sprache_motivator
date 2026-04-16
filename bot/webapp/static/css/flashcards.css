@@ -550,6 +550,12 @@ button {
     margin-bottom: 8px;
 }
 
+.set-today-line {
+    font-size: 14px;
+    color: rgba(255,255,255,0.82);
+    margin-bottom: 10px;
+}
+
 .set-metrics {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

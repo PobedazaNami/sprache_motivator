@@ -141,43 +141,61 @@ const TEXTS = {
 const EXTRA_TEXTS = {
     uk: {
         todayTitle: '\u0429\u043e \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u0432\u0447\u0438\u0442\u0438',
-        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u043a\u043e\u043b\u043e\u0434\u0430',
-        nextDeckLabel: '\u041d\u0430\u0441\u0442\u0443\u043f\u043d\u0430 \u043a\u043e\u043b\u043e\u0434\u0430',
+        activeDeckLabel: '\u0421\u043f\u043e\u0447\u0430\u0442\u043a\u0443',
+        nextDeckLabel: '\u041f\u043e\u0442\u0456\u043c',
         noActiveDeck: '\u041f\u043e\u043a\u0438 \u043d\u0435\u043c\u0430\u0454',
         noNextDeck: '\u2014',
         todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0438 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
         todayNewLabel: '\u041d\u043e\u0432\u0456 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+        activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439 \u0437\u0430\u043b\u0438\u0448\u0438\u043b\u043e\u0441\u044c',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430 \u043a\u043e\u043b\u043e\u0434\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
         deckQueued: '\u0423 \u0447\u0435\u0440\u0437\u0456',
         deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430',
         deckCompleted: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         queueLabel: '\u0427\u0435\u0440\u0433\u0430',
         dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
+        newShort: '\u041d\u043e\u0432\u0456',
         problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u0456',
         knownShort: '\u0417\u043d\u0430\u044e',
         lastStudiedLabel: '\u041e\u0441\u0442\u0430\u043d\u043d\u0454 \u0432\u0438\u0432\u0447\u0435\u043d\u043d\u044f',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0417\u0430\u0440\u0430\u0437 \u043d\u0435\u043c\u0430\u0454 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0456\u0437 \u0443\u0441\u0456\u0445 \u043a\u043e\u043b\u043e\u0434',
+        planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u0456\u0432 \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
+        planNewValue: '{count} \u043d\u043e\u0432\u0456 \u043a\u0430\u0440\u0442\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
+        planNoNew: '\u041d\u043e\u0432\u0438\u0445 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
+        planNextDeckValue: '\u0414\u0430\u043b\u0456 \u0431\u0443\u0434\u0435 \u00ab{deck}\u00bb',
+        planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u00ab{deck}\u00bb',
+        inDeckNowValue: '\u0423 \u0446\u0456\u0439 \u043a\u043e\u043b\u043e\u0434\u0456 \u0437\u0430\u0440\u0430\u0437: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0456 \u00b7 {new} \u043d\u043e\u0432\u0438\u0445',
     },
     ru: {
         todayTitle: '\u0427\u0442\u043e \u0443\u0447\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
-        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430',
-        nextDeckLabel: '\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430',
+        activeDeckLabel: '\u0421\u043d\u0430\u0447\u0430\u043b\u0430',
+        nextDeckLabel: '\u041f\u043e\u0442\u043e\u043c',
         noActiveDeck: '\u041f\u043e\u043a\u0430 \u043d\u0435\u0442',
         noNextDeck: '\u2014',
         todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
         todayNewLabel: '\u041d\u043e\u0432\u044b\u0435 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 \u043e\u0441\u0442\u0430\u043b\u043e\u0441\u044c',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
         deckQueued: '\u0412 \u043e\u0447\u0435\u0440\u0435\u0434\u0438',
         deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f',
         deckCompleted: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         queueLabel: '\u041e\u0447\u0435\u0440\u0435\u0434\u044c',
         dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
+        newShort: '\u041d\u043e\u0432\u044b\u0435',
         problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u044b\u0435',
         knownShort: '\u0417\u043d\u0430\u044e',
         lastStudiedLabel: '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0440\u0430\u0437 \u0443\u0447\u0438\u043b',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0438\u0437 \u0432\u0441\u0435\u0445 \u043a\u043e\u043b\u043e\u0434',
+        planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u043e\u0432 \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
+        planNewValue: '{count} \u043d\u043e\u0432\u044b\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
+        planNoNew: '\u041d\u043e\u0432\u044b\u0445 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
+        planNextDeckValue: '\u0414\u0430\u043b\u044c\u0448\u0435 \u0431\u0443\u0434\u0435\u0442 \u00ab{deck}\u00bb',
+        planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u00ab{deck}\u00bb',
+        inDeckNowValue: '\u0412 \u044d\u0442\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u0435 \u0441\u0435\u0439\u0447\u0430\u0441: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0435 \u00b7 {new} \u043d\u043e\u0432\u044b\u0445',
     },
 };
 
@@ -411,21 +429,33 @@ function getDeckStatusClass(status) {
 
 function renderDashboard() {
     const dashboard = state.dashboard || {};
+    const activeSet = dashboard.active_set || null;
+    const todayDueCount = dashboard.today_due_count || 0;
+    const todayNewCount = dashboard.today_new_count || 0;
+    const activeRemaining = activeSet ? ((activeSet.new_count || 0) + (activeSet.learning_count || 0)) : 0;
+
     document.getElementById('stat-new-label').textContent = t('todayNewLabel');
     document.getElementById('stat-learning-label').textContent = t('todayDueLabel');
-    document.getElementById('stat-known-label').textContent = t('knownStat');
-    document.getElementById('stat-new-value').textContent = dashboard.today_new_count || 0;
-    document.getElementById('stat-learning-value').textContent = dashboard.today_due_count || 0;
-    document.getElementById('stat-known-value').textContent = dashboard.known || 0;
+    document.getElementById('stat-known-label').textContent = t('activeRemainingLabel');
+    document.getElementById('stat-new-value').textContent = todayNewCount;
+    document.getElementById('stat-learning-value').textContent = todayDueCount;
+    document.getElementById('stat-known-value').textContent = activeRemaining;
     document.getElementById('dashboard-plan-title').textContent = t('todayTitle');
     document.getElementById('dashboard-active-label').textContent = t('activeDeckLabel');
     document.getElementById('dashboard-next-label').textContent = t('nextDeckLabel');
-    document.getElementById('dashboard-active-value').textContent = dashboard.active_set?.name || t('noActiveDeck');
-    document.getElementById('dashboard-next-value').textContent = dashboard.next_set?.name || t('noNextDeck');
+    document.getElementById('dashboard-active-value').textContent =
+        todayDueCount > 0 ? t('planReviewsValue', { count: todayDueCount }) : t('planNoReviews');
+    document.getElementById('dashboard-next-value').textContent =
+        activeSet && todayNewCount > 0
+            ? t('planNewValue', { count: todayNewCount, deck: activeSet.name || t('noActiveDeck') })
+            : t('planNoNew');
 
     const note = document.getElementById('dashboard-plan-note');
-    if (dashboard.activation_blocked_today) {
-        note.textContent = t('blockedUntilTomorrow');
+    if (dashboard.next_set?.name && dashboard.activation_blocked_today) {
+        note.textContent = t('planNextDeckTomorrow', { deck: dashboard.next_set.name });
+        note.style.display = 'block';
+    } else if (dashboard.next_set?.name) {
+        note.textContent = t('planNextDeckValue', { deck: dashboard.next_set.name });
         note.style.display = 'block';
     } else {
         note.textContent = '';
@@ -489,10 +519,11 @@ function renderSets() {
                     ${set.last_studied_at ? ` · ${t('lastStudiedLabel')}: ${escapeHtml(formatDateTime(set.last_studied_at))}` : ''}
                     ${!set.last_studied_at && set.completed_at ? ` · ${t('completedLabel')}: ${escapeHtml(formatDateTime(set.completed_at))}` : ''}
                 </p>
+                <p class="set-today-line">${t('inDeckNowValue', { due: set.due_count || 0, new: set.new_count || 0 })}</p>
                 <div class="set-metrics">
                     <div class="set-metric">
-                        <span class="set-metric-label">${t('dueShort')}</span>
-                        <span class="set-metric-value">${set.due_count || 0}</span>
+                        <span class="set-metric-label">${t('newShort')}</span>
+                        <span class="set-metric-value">${set.new_count || 0}</span>
                     </div>
                     <div class="set-metric">
                         <span class="set-metric-label">${t('problemsShort')}</span>
