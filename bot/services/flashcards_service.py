@@ -386,14 +386,19 @@ def prepare_autopilot_state(
             None,
         )
 
-    today_due_count = sum(item["due_count"] for item in prepared_sets)
+    today_total_due_count = sum(item["due_count"] for item in prepared_sets)
+    today_active_due_count = active_set["due_count"] if active_set else 0
+    today_backlog_due_count = max(today_total_due_count - today_active_due_count, 0)
     today_new_count = min(active_set["new_count"], daily_new_limit) if active_set else 0
 
     return {
         "sets": prepared_sets,
         "active_set": active_set,
         "next_set": next_set,
-        "today_due_count": today_due_count,
+        "today_due_count": today_total_due_count,
+        "today_total_due_count": today_total_due_count,
+        "today_active_due_count": today_active_due_count,
+        "today_backlog_due_count": today_backlog_due_count,
         "today_new_count": today_new_count,
         "daily_new_limit": daily_new_limit,
         "can_activate_next_today": False,
@@ -529,6 +534,9 @@ def serialize_flashcard_overview(overview: dict[str, Any]) -> dict[str, Any]:
         "known": overview["totals"]["known"],
         "due": overview["totals"]["due"],
         "today_due_count": overview["today_due_count"],
+        "today_total_due_count": overview["today_total_due_count"],
+        "today_active_due_count": overview["today_active_due_count"],
+        "today_backlog_due_count": overview["today_backlog_due_count"],
         "today_new_count": overview["today_new_count"],
         "daily_new_limit": overview["daily_new_limit"],
         "can_activate_next_today": overview["can_activate_next_today"],

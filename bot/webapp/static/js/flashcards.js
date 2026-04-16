@@ -145,7 +145,7 @@ const EXTRA_TEXTS = {
         nextDeckLabel: '\u041f\u043e\u0442\u0456\u043c',
         noActiveDeck: '\u041f\u043e\u043a\u0438 \u043d\u0435\u043c\u0430\u0454',
         noNextDeck: '\u2014',
-        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0438 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438 \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439',
         todayNewLabel: '\u041d\u043e\u0432\u0456 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
         activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439 \u0437\u0430\u043b\u0438\u0448\u0438\u043b\u043e\u0441\u044c',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430 \u043a\u043e\u043b\u043e\u0434\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
@@ -160,10 +160,11 @@ const EXTRA_TEXTS = {
         lastStudiedLabel: '\u041e\u0441\u0442\u0430\u043d\u043d\u0454 \u0432\u0438\u0432\u0447\u0435\u043d\u043d\u044f',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0417\u0430\u0440\u0430\u0437 \u043d\u0435\u043c\u0430\u0454 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
-        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0456\u0437 \u0443\u0441\u0456\u0445 \u043a\u043e\u043b\u043e\u0434',
+        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439 \u043a\u043e\u043b\u043e\u0434\u0456',
         planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u0456\u0432 \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
         planNewValue: '{count} \u043d\u043e\u0432\u0456 \u043a\u0430\u0440\u0442\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
         planNoNew: '\u041d\u043e\u0432\u0438\u0445 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
+        planBacklogValue: '\u0429\u0435 {count} \u0441\u0442\u0430\u0440\u0438\u0445 \u043f\u043e\u0432\u0442\u043e\u0440\u0456\u0432 \u0437 \u043f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0445 \u043a\u043e\u043b\u043e\u0434 \u043f\u0456\u0434\u0442\u044f\u0433\u043d\u0443\u0442\u044c\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e.',
         planNextDeckValue: '\u0414\u0430\u043b\u0456 \u0431\u0443\u0434\u0435 \u00ab{deck}\u00bb',
         planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u00ab{deck}\u00bb',
         inDeckNowValue: '\u0423 \u0446\u0456\u0439 \u043a\u043e\u043b\u043e\u0434\u0456 \u0437\u0430\u0440\u0430\u0437: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0456 \u00b7 {new} \u043d\u043e\u0432\u0438\u0445',
@@ -174,7 +175,7 @@ const EXTRA_TEXTS = {
         nextDeckLabel: '\u041f\u043e\u0442\u043e\u043c',
         noActiveDeck: '\u041f\u043e\u043a\u0430 \u043d\u0435\u0442',
         noNextDeck: '\u2014',
-        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u044b \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439',
         todayNewLabel: '\u041d\u043e\u0432\u044b\u0435 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
         activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 \u043e\u0441\u0442\u0430\u043b\u043e\u0441\u044c',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
@@ -189,10 +190,11 @@ const EXTRA_TEXTS = {
         lastStudiedLabel: '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0440\u0430\u0437 \u0443\u0447\u0438\u043b',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
-        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0438\u0437 \u0432\u0441\u0435\u0445 \u043a\u043e\u043b\u043e\u0434',
+        planReviewsValue: '{count} \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440 \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u0435',
         planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u043e\u0432 \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
         planNewValue: '{count} \u043d\u043e\u0432\u044b\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
         planNoNew: '\u041d\u043e\u0432\u044b\u0445 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
+        planBacklogValue: '\u0415\u0449\u0435 {count} \u0441\u0442\u0430\u0440\u044b\u0445 \u043f\u043e\u0432\u0442\u043e\u0440\u043e\u0432 \u0438\u0437 \u043f\u0440\u043e\u0448\u043b\u044b\u0445 \u043a\u043e\u043b\u043e\u0434 \u043f\u043e\u0434\u0442\u044f\u043d\u0443\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.',
         planNextDeckValue: '\u0414\u0430\u043b\u044c\u0448\u0435 \u0431\u0443\u0434\u0435\u0442 \u00ab{deck}\u00bb',
         planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u00ab{deck}\u00bb',
         inDeckNowValue: '\u0412 \u044d\u0442\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u0435 \u0441\u0435\u0439\u0447\u0430\u0441: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0435 \u00b7 {new} \u043d\u043e\u0432\u044b\u0445',
@@ -215,6 +217,9 @@ let state = {
         known: 0,
         due: 0,
         today_due_count: 0,
+        today_total_due_count: 0,
+        today_active_due_count: 0,
+        today_backlog_due_count: 0,
         today_new_count: 0,
         daily_new_limit: 10,
         can_activate_next_today: false,
@@ -430,7 +435,9 @@ function getDeckStatusClass(status) {
 function renderDashboard() {
     const dashboard = state.dashboard || {};
     const activeSet = dashboard.active_set || null;
-    const todayDueCount = dashboard.today_due_count || 0;
+    const todayDueCount = dashboard.today_active_due_count ?? dashboard.today_due_count ?? 0;
+    const totalDueCount = dashboard.today_total_due_count ?? dashboard.today_due_count ?? 0;
+    const backlogDueCount = dashboard.today_backlog_due_count || 0;
     const todayNewCount = dashboard.today_new_count || 0;
     const activeRemaining = activeSet ? ((activeSet.new_count || 0) + (activeSet.learning_count || 0)) : 0;
 
@@ -451,11 +458,18 @@ function renderDashboard() {
             : t('planNoNew');
 
     const note = document.getElementById('dashboard-plan-note');
+    const notes = [];
+    if (backlogDueCount > 0) {
+        notes.push(t('planBacklogValue', { count: backlogDueCount }));
+    }
     if (dashboard.next_set?.name && dashboard.activation_blocked_today) {
-        note.textContent = t('planNextDeckTomorrow', { deck: dashboard.next_set.name });
-        note.style.display = 'block';
+        notes.push(t('planNextDeckTomorrow', { deck: dashboard.next_set.name }));
     } else if (dashboard.next_set?.name) {
-        note.textContent = t('planNextDeckValue', { deck: dashboard.next_set.name });
+        notes.push(t('planNextDeckValue', { deck: dashboard.next_set.name }));
+    }
+
+    if (notes.length > 0) {
+        note.textContent = notes.join(' ');
         note.style.display = 'block';
     } else {
         note.textContent = '';
@@ -463,7 +477,7 @@ function renderDashboard() {
     }
 
     document.getElementById('start-global-study-btn').disabled =
-        (dashboard.today_due_count || 0) + (dashboard.today_new_count || 0) === 0;
+        totalDueCount + (dashboard.today_new_count || 0) === 0;
 }
 
 function hideSessionSummary() {
@@ -706,6 +720,9 @@ async function loadDashboard() {
             known: data.known || 0,
             due: data.due || 0,
             today_due_count: data.today_due_count || 0,
+            today_total_due_count: data.today_total_due_count ?? data.today_due_count ?? 0,
+            today_active_due_count: data.today_active_due_count || 0,
+            today_backlog_due_count: data.today_backlog_due_count || 0,
             today_new_count: data.today_new_count || 0,
             daily_new_limit: data.daily_new_limit || 10,
             can_activate_next_today: Boolean(data.can_activate_next_today),
@@ -839,6 +856,12 @@ function applyGlobalReviewToDashboard(card) {
         state.dashboard.new = Math.max(0, (state.dashboard.new || 0) - 1);
     } else {
         state.dashboard.today_due_count = Math.max(0, (state.dashboard.today_due_count || 0) - 1);
+        state.dashboard.today_total_due_count = Math.max(0, (state.dashboard.today_total_due_count || state.dashboard.today_due_count || 0) - 1);
+        if (card.set_id && state.dashboard.active_set?._id === card.set_id) {
+            state.dashboard.today_active_due_count = Math.max(0, (state.dashboard.today_active_due_count || 0) - 1);
+        } else {
+            state.dashboard.today_backlog_due_count = Math.max(0, (state.dashboard.today_backlog_due_count || 0) - 1);
+        }
         state.dashboard.due = Math.max(0, (state.dashboard.due || 0) - 1);
     }
 

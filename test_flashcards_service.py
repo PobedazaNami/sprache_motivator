@@ -83,6 +83,8 @@ def test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_c
     assert overview["sets"][0]["deck_status"] == "completed"
     assert overview["sets"][1]["deck_status"] == "active"
     assert overview["today_due_count"] == 1
+    assert overview["today_active_due_count"] == 0
+    assert overview["today_backlog_due_count"] == 1
     assert overview["today_new_count"] == 1
 
     overview["cards_by_set"] = build_cards_by_set(cards)
@@ -90,6 +92,43 @@ def test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_c
     session_cards = build_today_session_cards(overview)
     assert [item["set_name"] for item in session_cards] == ["Deck 1", "Deck 2"]
     assert [item["session_type"] for item in session_cards] == ["due", "new"]
+
+
+def test_overview_splits_active_due_from_backlog_due():
+    now = datetime(2026, 4, 16, 12, 0, tzinfo=timezone.utc)
+    completed_set = make_set("Deck 1", now - timedelta(days=3))
+    active_set = make_set("Deck 2", now - timedelta(days=2))
+
+    cards = [
+        make_card(
+            str(completed_set["_id"]),
+            now - timedelta(days=3),
+            srs_status="known",
+            srs_interval=7,
+            srs_next_review=now - timedelta(hours=1),
+        ),
+        make_card(
+            str(active_set["_id"]),
+            now - timedelta(days=2),
+            srs_status="learning",
+            srs_interval=1,
+            srs_next_review=now - timedelta(minutes=5),
+        ),
+        make_card(str(active_set["_id"]), now - timedelta(days=2), srs_status="new"),
+    ]
+
+    overview = prepare_autopilot_state(
+        [completed_set, active_set],
+        build_cards_by_set(cards),
+        user_doc={"trainer_timezone": "Europe/Berlin", "flashcards_daily_new_limit": 10},
+        now=now,
+    )
+
+    assert overview["today_due_count"] == 2
+    assert overview["today_total_due_count"] == 2
+    assert overview["today_active_due_count"] == 1
+    assert overview["today_backlog_due_count"] == 1
+    assert overview["today_new_count"] == 1
 
 
 def test_next_deck_is_blocked_until_tomorrow_after_completion_today():
@@ -174,6 +213,7 @@ def test_srs_interval_progression_is_preserved():
 if __name__ == "__main__":
     test_first_non_empty_unresolved_set_becomes_active()
     test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_cards()
+    test_overview_splits_active_due_from_backlog_due()
     test_next_deck_is_blocked_until_tomorrow_after_completion_today()
     test_session_limits_new_cards_to_daily_budget()
     test_srs_interval_progression_is_preserved()
