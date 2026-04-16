@@ -37,6 +37,36 @@ STATIC_DIR = WEBAPP_DIR / "static"
 TEMPLATES_DIR = WEBAPP_DIR / "templates"
 
 
+def build_no_cache_headers() -> dict[str, str]:
+    return {
+        "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
+
+def get_asset_version(path: Path) -> str:
+    try:
+        return str(int(path.stat().st_mtime))
+    except FileNotFoundError:
+        return str(int(datetime.now(timezone.utc).timestamp()))
+
+
+def render_template_response(template_path: Path, replacements: dict[str, str] | None = None) -> web.Response:
+    if not template_path.exists():
+        raise web.HTTPNotFound(text="App not found")
+
+    html = template_path.read_text(encoding="utf-8")
+    for placeholder, value in (replacements or {}).items():
+        html = html.replace(placeholder, value)
+
+    return web.Response(
+        text=html,
+        content_type="text/html",
+        headers=build_no_cache_headers(),
+    )
+
+
 def validate_telegram_data(init_data: str) -> dict | None:
     """
     Validate Telegram WebApp init data and extract user info.
@@ -202,35 +232,19 @@ async def get_due_session_cards(user_id: int) -> list[dict]:
 async def serve_flashcards_app(request: web.Request) -> web.Response:
     """Serve the flashcards Mini App HTML."""
     html_path = TEMPLATES_DIR / "flashcards.html"
-    
-    if not html_path.exists():
-        raise web.HTTPNotFound(text="App not found")
-
-    return web.FileResponse(
+    return render_template_response(
         html_path,
-        headers={
-            "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        }
+        replacements={
+            "__FLASHCARDS_CSS_VERSION__": get_asset_version(STATIC_DIR / "css" / "flashcards.css"),
+            "__FLASHCARDS_JS_VERSION__": get_asset_version(STATIC_DIR / "js" / "flashcards.js"),
+        },
     )
 
 
 async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
     """Serve the Subtitle Trainer Mini App HTML."""
     html_path = TEMPLATES_DIR / "subtitle_trainer.html"
-
-    if not html_path.exists():
-        raise web.HTTPNotFound(text="App not found")
-
-    return web.FileResponse(
-        html_path,
-        headers={
-            "Cache-Control": "no-store, no-cache, max-age=0, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
-    )
+    return render_template_response(html_path)
 
 
 async def subtitle_videos(request: web.Request) -> web.Response:
