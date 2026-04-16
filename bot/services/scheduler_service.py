@@ -3,7 +3,7 @@ Scheduler service for managing individual user training schedules
 """
 import asyncio
 import random
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import List
 from zoneinfo import ZoneInfo
 
@@ -15,6 +15,9 @@ from bot.models.database import async_session_maker
 from bot.services.database_service import UserService
 from bot.handlers import trainer
 from bot.services import mongo_service
+from bot.config import settings
+from bot.utils.keyboards import get_flashcards_menu_keyboard
+import bot.services.flashcards_service as flashcards_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -67,21 +70,22 @@ class SchedulerService:
             return
         
         async with async_session_maker() as session:
-            # Get all users with enabled trainer
-            users = await UserService.get_users_with_trainer_enabled(session)
-            
+            users = await UserService.get_approved_users(session)
             now_kyiv = datetime.now(ZoneInfo('Europe/Kyiv'))
-            current_time = now_kyiv.time()
-            current_date = now_kyiv.date()
+            kyiv_time = now_kyiv.time()
+            kyiv_date = now_kyiv.date()
             
             for user in users:
                 try:
-                    # Check if user should receive task now
-                    if await self._should_send_task(user, current_time, current_date):
+                    if user.daily_trainer_enabled and await self._should_send_task(user, kyiv_time, kyiv_date):
                         await trainer.send_training_task(self.bot, user.telegram_id)
                         await asyncio.sleep(0.1)  # Rate limiting
                 except Exception as e:
                     logger.error(f"Failed to send task to user {user.telegram_id}: {e}")
+                try:
+                    await self._maybe_send_flashcards_reminder(session, user)
+                except Exception as e:
+                    logger.error(f"Failed to send flashcards reminder to user {user.telegram_id}: {e}")
     
     async def _should_send_task(self, user, current_time: time, current_date) -> bool:
         """
@@ -135,6 +139,85 @@ class SchedulerService:
         start_minutes = start.hour * 60 + start.minute
         end_minutes = end.hour * 60 + end.minute
         return end_minutes - start_minutes
+
+    def _get_user_now(self, user) -> datetime:
+        tz_name = user.trainer_timezone or flashcards_service.DEFAULT_FLASHCARDS_TIMEZONE
+        try:
+            zone = ZoneInfo(tz_name)
+        except Exception:
+            try:
+                zone = ZoneInfo(flashcards_service.DEFAULT_FLASHCARDS_TIMEZONE)
+            except Exception:
+                zone = timezone.utc
+        return datetime.now(zone)
+
+    def _is_within_user_window(self, user, current_time: time) -> bool:
+        start_time = time.fromisoformat(user.trainer_start_time or "09:00")
+        end_time = time.fromisoformat(user.trainer_end_time or "21:00")
+        return start_time <= current_time <= end_time
+
+    def _build_flashcards_reminder_text(self, lang: str, overview: dict) -> str:
+        active_set = overview.get("active_set")
+        next_set = overview.get("next_set")
+        if lang == "uk":
+            active_label = "Активна колода"
+            next_label = "Наступна колода"
+            due_label = "Повторити сьогодні"
+            new_label = "Нові сьогодні"
+            title = "🎴 Картки на сьогодні"
+            no_active = "поки немає"
+            blocked_line = "Нова колода відкриється завтра."
+        else:
+            active_label = "Активная колода"
+            next_label = "Следующая колода"
+            due_label = "Повторить сегодня"
+            new_label = "Новые сегодня"
+            title = "🎴 Карточки на сегодня"
+            no_active = "пока нет"
+            blocked_line = "Новая колода откроется завтра."
+
+        lines = [
+            title,
+            "",
+            f"{active_label}: {active_set['name'] if active_set else no_active}",
+            f"{next_label}: {next_set['name'] if next_set else '—'}",
+            f"🔁 {due_label}: {overview.get('today_due_count', 0)}",
+            f"🆕 {new_label}: {overview.get('today_new_count', 0)}",
+        ]
+        if overview.get("activation_blocked_today"):
+            lines.extend(["", blocked_line])
+        return "\n".join(lines)
+
+    async def _maybe_send_flashcards_reminder(self, session, user) -> None:
+        if not self.bot or not mongo_service.is_ready():
+            return
+        if not getattr(user, "flashcards_reminder_enabled", True):
+            return
+
+        now_local = self._get_user_now(user)
+        local_date = now_local.date().isoformat()
+        if getattr(user, "flashcards_last_reminder_local_date", None) == local_date:
+            return
+        if not self._is_within_user_window(user, now_local.time()):
+            return
+
+        overview = await flashcards_service.get_user_flashcards_overview(
+            user.telegram_id,
+            user_doc=user._doc,
+        )
+        if overview["today_due_count"] <= 0 and overview["today_new_count"] <= 0:
+            return
+
+        lang = user.interface_language.value
+        text = self._build_flashcards_reminder_text(lang, overview)
+        reply_markup = get_flashcards_menu_keyboard(lang, settings.WEBAPP_URL) if settings.WEBAPP_URL else None
+        await self.bot.send_message(user.telegram_id, text, reply_markup=reply_markup)
+        await UserService.update_user(
+            session,
+            user,
+            flashcards_last_reminder_local_date=local_date,
+        )
+        await asyncio.sleep(0.1)
     
     async def get_daily_progress(self, user) -> tuple[int, int]:
         """

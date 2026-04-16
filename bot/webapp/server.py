@@ -12,7 +12,6 @@ import base64
 from urllib.parse import parse_qsl
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import random
 
 from aiohttp import web
 from bson import ObjectId
@@ -22,6 +21,7 @@ from bot.services import mongo_service, cloudinary_service
 from bot.services.database_service import UserService
 from bot.models.database import async_session_maker
 import bot.services.subtitle_service as subtitle_service
+import bot.services.flashcards_service as flashcards_service
 
 logger = logging.getLogger(__name__)
 
@@ -184,66 +184,17 @@ def build_srs_review_update(card: dict, result: str) -> dict:
 
 async def get_dashboard_payload(user_id: int) -> dict:
     """Return aggregate flashcard stats for the mini app dashboard."""
-    now = datetime.now(timezone.utc)
-    collection = mongo_service.db().flashcards
-
-    new_count = await collection.count_documents(
-        {
-            "user_id": user_id,
-            "$or": [
-                {"srs_status": {"$exists": False}},
-                {"srs_status": "new"},
-            ],
-        }
-    )
-    learning_count = await collection.count_documents({"user_id": user_id, "srs_status": "learning"})
-    known_count = await collection.count_documents({"user_id": user_id, "srs_status": "known"})
-    due_count = await collection.count_documents(
-        {
-            "user_id": user_id,
-            "$or": [
-                {"srs_status": {"$exists": False}},
-                {"srs_status": "new"},
-                {"srs_next_review": {"$exists": False}},
-                {"srs_next_review": {"$lte": now}},
-            ],
-        }
-    )
-
-    return {
-        "new": new_count,
-        "learning": learning_count,
-        "known": known_count,
-        "due": due_count,
-    }
+    overview = await flashcards_service.get_user_flashcards_overview(user_id)
+    return flashcards_service.serialize_flashcard_overview(overview)
 
 
-async def get_due_session_cards(user_id: int, limit: int = 50) -> list[dict]:
+async def get_due_session_cards(user_id: int) -> list[dict]:
     """Return due/new cards from all sets for a mini app study session."""
-    now = datetime.now(timezone.utc)
-    cards = await mongo_service.db().flashcards.find({"user_id": user_id}).to_list(length=5000)
-    user_sets = await mongo_service.db().flashcard_sets.find({"user_id": user_id}).to_list(length=500)
-    set_names = {str(item["_id"]): item.get("name", "") for item in user_sets}
-
-    due_cards = []
+    overview = await flashcards_service.get_user_flashcards_overview(user_id)
+    cards = flashcards_service.build_today_session_cards(overview)
     for card in cards:
-        if not is_due_flashcard(card, now):
-            continue
-        due_cards.append(
-            {
-                "_id": str(card["_id"]),
-                "set_id": card.get("set_id"),
-                "set_name": set_names.get(card.get("set_id"), ""),
-                "front": card.get("front", ""),
-                "back": card.get("back", ""),
-                "example": card.get("example", ""),
-                "has_image": bool(card.get("image_url")),
-                "srs_status": get_srs_status(card),
-            }
-        )
-
-    random.shuffle(due_cards)
-    return due_cards[:limit]
+        card["last_reviewed_at"] = serialize_mongo_value(card.get("last_reviewed_at"))
+    return cards
 
 
 # Routes
@@ -483,18 +434,10 @@ async def review_global_session_card(request: web.Request) -> web.Response:
 
         if not card_id or result not in {"know", "dontknow"}:
             raise web.HTTPBadRequest(text="card_id and valid result are required")
-
-        card = await mongo_service.db().flashcards.find_one({
-            "_id": ObjectId(card_id),
-            "user_id": user_id,
-        })
-
-        if not card:
-            raise web.HTTPNotFound(text="Card not found")
-
-        update_doc = build_srs_review_update(card, result)
-        await mongo_service.db().flashcards.update_one({"_id": ObjectId(card_id)}, update_doc)
-        await mongo_service.update_flashcard_daily_stats(user_id, result)
+        try:
+            await flashcards_service.review_session_card(user_id, card_id, result)
+        except LookupError as exc:
+            raise web.HTTPNotFound(text=str(exc)) from exc
 
         return web.json_response({"success": True})
 
@@ -516,21 +459,26 @@ async def get_sets(request: web.Request) -> web.Response:
         raise web.HTTPServiceUnavailable(text="Database unavailable")
     
     try:
-        # Get user's flashcard sets
-        sets = await mongo_service.db().flashcard_sets.find(
-            {"user_id": user_id}
-        ).sort("created_at", -1).to_list(length=100)
-        
-        # Add card count to each set
-        for s in sets:
-            card_count = await mongo_service.db().flashcards.count_documents(
-                {"set_id": str(s["_id"])}
-            )
-            s["card_count"] = card_count
-            s["_id"] = str(s["_id"])
-            s["created_at"] = s["created_at"].isoformat() if s.get("created_at") else None
-            s["updated_at"] = s["updated_at"].isoformat() if s.get("updated_at") else None
-        
+        overview = await flashcards_service.get_user_flashcards_overview(user_id)
+        sets = []
+        for item in overview["sets"]:
+            sets.append({
+                "_id": item["_id"],
+                "name": item["name"],
+                "card_count": item["card_count"],
+                "new_count": item["new_count"],
+                "learning_count": item["learning_count"],
+                "known_count": item["known_count"],
+                "due_count": item["due_count"],
+                "problem_count": item["problem_count"],
+                "deck_status": item["deck_status"],
+                "queue_position": item["queue_position"],
+                "created_at": item["created_at"].isoformat() if item["created_at"] else None,
+                "updated_at": item["updated_at"].isoformat() if item["updated_at"] else None,
+                "activated_at": item["activated_at"].isoformat() if item["activated_at"] else None,
+                "completed_at": item["completed_at"].isoformat() if item["completed_at"] else None,
+                "last_studied_at": item["last_studied_at"].isoformat() if item["last_studied_at"] else None,
+            })
         return web.json_response({"sets": sets})
         
     except Exception as e:
@@ -761,7 +709,11 @@ async def add_card(request: web.Request) -> web.Response:
             "front": front,
             "back": back,
             "example": example,
-            "created_at": datetime.now(timezone.utc)
+            "created_at": datetime.now(timezone.utc),
+            "srs_status": "new",
+            "srs_interval": 0,
+            "srs_correct": 0,
+            "srs_incorrect": 0,
         }
         
         result = await mongo_service.db().flashcards.insert_one(card_doc)

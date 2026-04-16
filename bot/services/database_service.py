@@ -43,7 +43,10 @@ class UserModel:
         self.trainer_start_time = doc.get("trainer_start_time", "09:00")
         self.trainer_end_time = doc.get("trainer_end_time", "21:00")
         self.trainer_messages_per_day = doc.get("trainer_messages_per_day", 3)
-        self.trainer_timezone = doc.get("trainer_timezone", "Europe/Kiev")
+        self.trainer_timezone = doc.get("trainer_timezone", "Europe/Berlin")
+        self.flashcards_daily_new_limit = doc.get("flashcards_daily_new_limit", 10)
+        self.flashcards_reminder_enabled = doc.get("flashcards_reminder_enabled", True)
+        self.flashcards_last_reminder_local_date = doc.get("flashcards_last_reminder_local_date")
         self.trainer_topic = TrainerTopic(doc.get("trainer_topic", TrainerTopic.RANDOM.value))
         self.express_trainer_topic = TrainerTopic(doc.get("express_trainer_topic", TrainerTopic.RANDOM.value))
         self.activity_score = doc.get("activity_score", 0)
@@ -72,6 +75,9 @@ class UserModel:
             "trainer_end_time": self.trainer_end_time,
             "trainer_messages_per_day": self.trainer_messages_per_day,
             "trainer_timezone": self.trainer_timezone,
+            "flashcards_daily_new_limit": self.flashcards_daily_new_limit,
+            "flashcards_reminder_enabled": self.flashcards_reminder_enabled,
+            "flashcards_last_reminder_local_date": self.flashcards_last_reminder_local_date,
             "trainer_topic": self.trainer_topic.value,
             "express_trainer_topic": self.express_trainer_topic.value,
             "activity_score": self.activity_score,
@@ -122,9 +128,11 @@ class UserService:
                 "trainer_start_time": "09:00",
                 "trainer_end_time": "21:00",
                 "trainer_messages_per_day": 3,
-                "trainer_timezone": "Europe/Kiev",
-                "trainer_topic": TrainerTopic.RANDOM.value,
                 "trainer_timezone": "Europe/Berlin",
+                "flashcards_daily_new_limit": 10,
+                "flashcards_reminder_enabled": True,
+                "flashcards_last_reminder_local_date": None,
+                "trainer_topic": TrainerTopic.RANDOM.value,
                 "activity_score": 0,
                 "translations_count": 0,
                 "correct_answers": 0,

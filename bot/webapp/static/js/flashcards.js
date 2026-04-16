@@ -138,13 +138,72 @@ const TEXTS = {
     }
 };
 
+const EXTRA_TEXTS = {
+    uk: {
+        todayTitle: '\u0429\u043e \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u0432\u0447\u0438\u0442\u0438',
+        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u043a\u043e\u043b\u043e\u0434\u0430',
+        nextDeckLabel: '\u041d\u0430\u0441\u0442\u0443\u043f\u043d\u0430 \u043a\u043e\u043b\u043e\u0434\u0430',
+        noActiveDeck: '\u041f\u043e\u043a\u0438 \u043d\u0435\u043c\u0430\u0454',
+        noNextDeck: '\u2014',
+        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0438 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+        todayNewLabel: '\u041d\u043e\u0432\u0456 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+        blockedUntilTomorrow: '\u041d\u043e\u0432\u0430 \u043a\u043e\u043b\u043e\u0434\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
+        deckQueued: '\u0423 \u0447\u0435\u0440\u0437\u0456',
+        deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430',
+        deckCompleted: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
+        queueLabel: '\u0427\u0435\u0440\u0433\u0430',
+        dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
+        problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u0456',
+        knownShort: '\u0417\u043d\u0430\u044e',
+        lastStudiedLabel: '\u041e\u0441\u0442\u0430\u043d\u043d\u0454 \u0432\u0438\u0432\u0447\u0435\u043d\u043d\u044f',
+        completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
+        noDueCards: '\u0417\u0430\u0440\u0430\u0437 \u043d\u0435\u043c\u0430\u0454 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
+    },
+    ru: {
+        todayTitle: '\u0427\u0442\u043e \u0443\u0447\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430',
+        nextDeckLabel: '\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430',
+        noActiveDeck: '\u041f\u043e\u043a\u0430 \u043d\u0435\u0442',
+        noNextDeck: '\u2014',
+        todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        todayNewLabel: '\u041d\u043e\u0432\u044b\u0435 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+        blockedUntilTomorrow: '\u041d\u043e\u0432\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
+        deckQueued: '\u0412 \u043e\u0447\u0435\u0440\u0435\u0434\u0438',
+        deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f',
+        deckCompleted: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
+        queueLabel: '\u041e\u0447\u0435\u0440\u0435\u0434\u044c',
+        dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
+        problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u044b\u0435',
+        knownShort: '\u0417\u043d\u0430\u044e',
+        lastStudiedLabel: '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0440\u0430\u0437 \u0443\u0447\u0438\u043b',
+        completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
+        noDueCards: '\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
+    },
+};
+
+Object.entries(EXTRA_TEXTS).forEach(([lang, values]) => {
+    Object.assign(TEXTS[lang], values);
+});
+
 // App state
 let state = {
     userId: null,
     lang: 'ru',
     pendingDelete: null,
     sets: [],
-    dashboard: { new: 0, learning: 0, known: 0, due: 0 },
+    dashboard: {
+        new: 0,
+        learning: 0,
+        known: 0,
+        due: 0,
+        today_due_count: 0,
+        today_new_count: 0,
+        daily_new_limit: 10,
+        can_activate_next_today: false,
+        activation_blocked_today: false,
+        active_set: null,
+        next_set: null,
+    },
     currentSet: null,
     currentCards: [],
     currentCardIndex: 0,
@@ -323,10 +382,58 @@ function showScreen(screenId) {
 function showModal(modalId) { document.getElementById(modalId).classList.add('active'); }
 function hideModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
 
+function formatDateTime(value) {
+    if (!value) return t('noNextDeck');
+    try {
+        const locale = state.lang === 'uk' ? 'uk-UA' : 'ru-RU';
+        return new Date(value).toLocaleString(locale, {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return String(value);
+    }
+}
+
+function getDeckStatusLabel(status) {
+    if (status === 'active') return t('deckActive');
+    if (status === 'completed') return t('deckCompleted');
+    return t('deckQueued');
+}
+
+function getDeckStatusClass(status) {
+    if (status === 'active') return 'is-active';
+    if (status === 'completed') return 'is-completed';
+    return 'is-queued';
+}
+
 function renderDashboard() {
-    document.getElementById('stat-new-value').textContent = state.dashboard.due || 0;
-    document.getElementById('stat-learning-value').textContent = state.dashboard.learning || 0;
-    document.getElementById('stat-known-value').textContent = state.dashboard.known || 0;
+    const dashboard = state.dashboard || {};
+    document.getElementById('stat-new-label').textContent = t('todayNewLabel');
+    document.getElementById('stat-learning-label').textContent = t('todayDueLabel');
+    document.getElementById('stat-known-label').textContent = t('knownStat');
+    document.getElementById('stat-new-value').textContent = dashboard.today_new_count || 0;
+    document.getElementById('stat-learning-value').textContent = dashboard.today_due_count || 0;
+    document.getElementById('stat-known-value').textContent = dashboard.known || 0;
+    document.getElementById('dashboard-plan-title').textContent = t('todayTitle');
+    document.getElementById('dashboard-active-label').textContent = t('activeDeckLabel');
+    document.getElementById('dashboard-next-label').textContent = t('nextDeckLabel');
+    document.getElementById('dashboard-active-value').textContent = dashboard.active_set?.name || t('noActiveDeck');
+    document.getElementById('dashboard-next-value').textContent = dashboard.next_set?.name || t('noNextDeck');
+
+    const note = document.getElementById('dashboard-plan-note');
+    if (dashboard.activation_blocked_today) {
+        note.textContent = t('blockedUntilTomorrow');
+        note.style.display = 'block';
+    } else {
+        note.textContent = '';
+        note.style.display = 'none';
+    }
+
+    document.getElementById('start-global-study-btn').disabled =
+        (dashboard.today_due_count || 0) + (dashboard.today_new_count || 0) === 0;
 }
 
 function hideSessionSummary() {
@@ -372,9 +479,30 @@ function renderSets() {
     noSets.style.display = 'none';
     setsList.innerHTML = state.sets.map(set => `
         <div class="set-item" data-set-id="${set._id}">
-            <div class="set-info">
-                <h3>${escapeHtml(set.name)}</h3>
-                <p>${set.card_count || 0} ${t('cards')}</p>
+            <div class="set-item-main set-info">
+                <div class="set-title-row">
+                    <h3>${escapeHtml(set.name)}</h3>
+                    <span class="set-status-chip ${getDeckStatusClass(set.deck_status)}">${getDeckStatusLabel(set.deck_status)}</span>
+                </div>
+                <p class="set-meta-line">
+                    ${t('queueLabel')} #${set.queue_position || '—'} · ${set.card_count || 0} ${t('cards')}
+                    ${set.last_studied_at ? ` · ${t('lastStudiedLabel')}: ${escapeHtml(formatDateTime(set.last_studied_at))}` : ''}
+                    ${!set.last_studied_at && set.completed_at ? ` · ${t('completedLabel')}: ${escapeHtml(formatDateTime(set.completed_at))}` : ''}
+                </p>
+                <div class="set-metrics">
+                    <div class="set-metric">
+                        <span class="set-metric-label">${t('dueShort')}</span>
+                        <span class="set-metric-value">${set.due_count || 0}</span>
+                    </div>
+                    <div class="set-metric">
+                        <span class="set-metric-label">${t('problemsShort')}</span>
+                        <span class="set-metric-value">${set.problem_count || set.learning_count || 0}</span>
+                    </div>
+                    <div class="set-metric">
+                        <span class="set-metric-label">${t('knownShort')}</span>
+                        <span class="set-metric-value">${set.known_count || 0}</span>
+                    </div>
+                </div>
             </div>
             <span class="set-arrow"><i class="ph ph-caret-right"></i></span>
         </div>
@@ -546,6 +674,13 @@ async function loadDashboard() {
             learning: data.learning || 0,
             known: data.known || 0,
             due: data.due || 0,
+            today_due_count: data.today_due_count || 0,
+            today_new_count: data.today_new_count || 0,
+            daily_new_limit: data.daily_new_limit || 10,
+            can_activate_next_today: Boolean(data.can_activate_next_today),
+            activation_blocked_today: Boolean(data.activation_blocked_today),
+            active_set: data.active_set || null,
+            next_set: data.next_set || null,
         };
         renderDashboard();
     } catch (error) {
@@ -666,9 +801,14 @@ function getGlobalRequeueIndex(queueLength) {
     return Math.min(offset, queueLength);
 }
 
-function applyGlobalReviewToDashboard(result) {
-    if (state.dashboard.due > 0) {
-        state.dashboard.due -= 1;
+function applyGlobalReviewToDashboard(card) {
+    if (!card) return;
+    if (card.session_type === 'new') {
+        state.dashboard.today_new_count = Math.max(0, (state.dashboard.today_new_count || 0) - 1);
+        state.dashboard.new = Math.max(0, (state.dashboard.new || 0) - 1);
+    } else {
+        state.dashboard.today_due_count = Math.max(0, (state.dashboard.today_due_count || 0) - 1);
+        state.dashboard.due = Math.max(0, (state.dashboard.due || 0) - 1);
     }
 
     renderDashboard();
@@ -680,7 +820,7 @@ async function handleGlobalSessionReview(result) {
 
     try {
         await reviewGlobalSessionCard(card._id, result);
-        applyGlobalReviewToDashboard(result);
+        applyGlobalReviewToDashboard(card);
 
         if (result === 'know') {
             state.sessionStats.correct += 1;
