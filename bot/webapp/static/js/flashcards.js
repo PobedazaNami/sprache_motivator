@@ -155,8 +155,9 @@ const EXTRA_TEXTS = {
         queueLabel: '\u0427\u0435\u0440\u0433\u0430',
         dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
         newShort: '\u041d\u043e\u0432\u0456',
-        problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u0456',
+        problemsShort: '\u0423 \u043d\u0430\u0432\u0447\u0430\u043d\u043d\u0456',
         knownShort: '\u0417\u043d\u0430\u044e',
+        dueHint: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438 = \u043a\u0430\u0440\u0442\u043a\u0438, \u044f\u043a\u0438\u043c \u0443\u0436\u0435 \u043d\u0430\u0441\u0442\u0430\u0432 \u0447\u0430\u0441.',
         lastStudiedLabel: '\u041e\u0441\u0442\u0430\u043d\u043d\u0454 \u0432\u0438\u0432\u0447\u0435\u043d\u043d\u044f',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0417\u0430\u0440\u0430\u0437 \u043d\u0435\u043c\u0430\u0454 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
@@ -187,8 +188,9 @@ const EXTRA_TEXTS = {
         queueLabel: '\u041e\u0447\u0435\u0440\u0435\u0434\u044c',
         dueShort: '\u041f\u043e\u0432\u0442\u043e\u0440',
         newShort: '\u041d\u043e\u0432\u044b\u0435',
-        problemsShort: '\u041f\u0440\u043e\u0431\u043b\u0435\u043c\u043d\u044b\u0435',
+        problemsShort: '\u0412 \u043e\u0431\u0443\u0447\u0435\u043d\u0438\u0438',
         knownShort: '\u0417\u043d\u0430\u044e',
+        dueHint: '\u041f\u043e\u0432\u0442\u043e\u0440\u044b = \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438, \u043a\u043e\u0442\u043e\u0440\u044b\u043c \u0443\u0436\u0435 \u043f\u043e\u0440\u0430.',
         lastStudiedLabel: '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0440\u0430\u0437 \u0443\u0447\u0438\u043b',
         completedLabel: '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0430',
         noDueCards: '\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
@@ -472,6 +474,15 @@ function renderDashboard() {
     } else {
         note.textContent = '';
         note.style.display = 'none';
+    }
+
+    const explainer = document.getElementById('dashboard-explainer');
+    if (activeSet) {
+        explainer.textContent = t('dueHint');
+        explainer.style.display = 'block';
+    } else {
+        explainer.textContent = '';
+        explainer.style.display = 'none';
     }
 
     document.getElementById('start-global-study-btn').disabled =
