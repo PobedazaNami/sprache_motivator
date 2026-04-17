@@ -436,8 +436,6 @@ function renderDashboard() {
     const dashboard = state.dashboard || {};
     const activeSet = dashboard.active_set || null;
     const todayDueCount = dashboard.today_active_due_count ?? dashboard.today_due_count ?? 0;
-    const totalDueCount = dashboard.today_total_due_count ?? dashboard.today_due_count ?? 0;
-    const backlogDueCount = dashboard.today_backlog_due_count || 0;
     const todayNewCount = dashboard.today_new_count || 0;
     const activeRemaining = activeSet ? ((activeSet.new_count || 0) + (activeSet.learning_count || 0)) : 0;
 
@@ -459,9 +457,6 @@ function renderDashboard() {
 
     const note = document.getElementById('dashboard-plan-note');
     const notes = [];
-    if (backlogDueCount > 0) {
-        notes.push(t('planBacklogValue', { count: backlogDueCount }));
-    }
     if (dashboard.next_set?.name && dashboard.activation_blocked_today) {
         notes.push(t('planNextDeckTomorrow', { deck: dashboard.next_set.name }));
     } else if (dashboard.next_set?.name) {
@@ -477,7 +472,7 @@ function renderDashboard() {
     }
 
     document.getElementById('start-global-study-btn').disabled =
-        totalDueCount + (dashboard.today_new_count || 0) === 0;
+        todayDueCount + (dashboard.today_new_count || 0) === 0;
 }
 
 function hideSessionSummary() {
@@ -849,20 +844,33 @@ function getGlobalRequeueIndex(queueLength) {
     return Math.min(offset, queueLength);
 }
 
-function applyGlobalReviewToDashboard(card) {
+function applyGlobalReviewToDashboard(card, result) {
     if (!card) return;
+    const activeSet = state.dashboard.active_set;
+
     if (card.session_type === 'new') {
         state.dashboard.today_new_count = Math.max(0, (state.dashboard.today_new_count || 0) - 1);
         state.dashboard.new = Math.max(0, (state.dashboard.new || 0) - 1);
+        if (activeSet && card.set_id === activeSet._id) {
+            activeSet.new_count = Math.max(0, (activeSet.new_count || 0) - 1);
+            if (result === 'dontknow') {
+                activeSet.learning_count = (activeSet.learning_count || 0) + 1;
+            }
+        }
     } else {
         state.dashboard.today_due_count = Math.max(0, (state.dashboard.today_due_count || 0) - 1);
         state.dashboard.today_total_due_count = Math.max(0, (state.dashboard.today_total_due_count || state.dashboard.today_due_count || 0) - 1);
-        if (card.set_id && state.dashboard.active_set?._id === card.set_id) {
-            state.dashboard.today_active_due_count = Math.max(0, (state.dashboard.today_active_due_count || 0) - 1);
-        } else {
-            state.dashboard.today_backlog_due_count = Math.max(0, (state.dashboard.today_backlog_due_count || 0) - 1);
-        }
+        state.dashboard.today_active_due_count = Math.max(0, (state.dashboard.today_active_due_count || state.dashboard.today_due_count || 0) - 1);
+        state.dashboard.today_backlog_due_count = 0;
         state.dashboard.due = Math.max(0, (state.dashboard.due || 0) - 1);
+        if (activeSet && card.set_id === activeSet._id) {
+            if (card.srs_status === 'learning' && result === 'know') {
+                activeSet.learning_count = Math.max(0, (activeSet.learning_count || 0) - 1);
+            } else if (card.srs_status === 'known' && result === 'dontknow') {
+                activeSet.learning_count = (activeSet.learning_count || 0) + 1;
+                activeSet.known_count = Math.max(0, (activeSet.known_count || 0) - 1);
+            }
+        }
     }
 
     renderDashboard();
@@ -874,7 +882,7 @@ async function handleGlobalSessionReview(result) {
 
     try {
         await reviewGlobalSessionCard(card._id, result);
-        applyGlobalReviewToDashboard(card);
+        applyGlobalReviewToDashboard(card, result);
 
         if (result === 'know') {
             state.sessionStats.correct += 1;

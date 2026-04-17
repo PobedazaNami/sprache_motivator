@@ -386,19 +386,17 @@ def prepare_autopilot_state(
             None,
         )
 
-    today_total_due_count = sum(item["due_count"] for item in prepared_sets)
     today_active_due_count = active_set["due_count"] if active_set else 0
-    today_backlog_due_count = max(today_total_due_count - today_active_due_count, 0)
     today_new_count = min(active_set["new_count"], daily_new_limit) if active_set else 0
 
     return {
         "sets": prepared_sets,
         "active_set": active_set,
         "next_set": next_set,
-        "today_due_count": today_total_due_count,
-        "today_total_due_count": today_total_due_count,
+        "today_due_count": today_active_due_count,
+        "today_total_due_count": today_active_due_count,
         "today_active_due_count": today_active_due_count,
-        "today_backlog_due_count": today_backlog_due_count,
+        "today_backlog_due_count": 0,
         "today_new_count": today_new_count,
         "daily_new_limit": daily_new_limit,
         "can_activate_next_today": False,
@@ -460,27 +458,28 @@ def build_today_session_cards(overview: dict[str, Any]) -> list[dict[str, Any]]:
     active_set_id = overview["active_set"]["_id"] if overview["active_set"] else None
     daily_new_limit = overview["daily_new_limit"]
 
-    review_cards: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
     active_due_cards: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
     active_new_cards: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
 
+    if active_set_id is None:
+        return []
+
     for set_summary in overview["sets"]:
+        if set_summary["_id"] != active_set_id:
+            continue
+
         queue_position = int(set_summary["queue_position"])
         for card in cards_by_set.get(set_summary["_id"], []):
             status = get_srs_status(card)
-            if set_summary["_id"] == active_set_id:
-                if status == "new":
-                    active_new_cards.append((queue_position, set_summary, card))
-                elif is_review_due_flashcard(card, now):
-                    active_due_cards.append((queue_position, set_summary, card))
+            if status == "new":
+                active_new_cards.append((queue_position, set_summary, card))
             elif is_review_due_flashcard(card, now):
-                review_cards.append((queue_position, set_summary, card))
+                active_due_cards.append((queue_position, set_summary, card))
 
-    review_cards.sort(key=lambda item: (item[0],) + _card_sort_key(item[2]))
     active_due_cards.sort(key=lambda item: (item[0],) + _card_sort_key(item[2]))
     active_new_cards.sort(key=lambda item: (item[0],) + _card_sort_key(item[2]))
 
-    session_cards = review_cards + active_due_cards + active_new_cards[:daily_new_limit]
+    session_cards = active_due_cards + active_new_cards[:daily_new_limit]
     payload: list[dict[str, Any]] = []
 
     for _, set_summary, card in session_cards:

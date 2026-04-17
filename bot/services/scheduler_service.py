@@ -22,6 +22,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+FLASHCARDS_REMINDER_HOURS = (12, 18)
+FLASHCARDS_REMINDER_MINUTE_WINDOW = 10
+
 
 class SchedulerService:
     """Service for managing training schedules"""
@@ -36,11 +39,10 @@ class SchedulerService:
     
     async def start(self):
         """Start scheduler"""
-        # Check every 5 minutes for users who need tasks
+        # Check every 5 minutes on aligned clock boundaries.
         self.scheduler.add_job(
             self._check_and_send_tasks,
-            'interval',
-            minutes=5,
+            CronTrigger(minute='*/5', timezone='Europe/Kiev'),
             id='check_tasks',
             replace_existing=True
         )
@@ -156,6 +158,13 @@ class SchedulerService:
         end_time = time.fromisoformat(user.trainer_end_time or "21:00")
         return start_time <= current_time <= end_time
 
+    def _get_flashcards_reminder_slot_key(self, now_local: datetime) -> str | None:
+        if now_local.minute >= FLASHCARDS_REMINDER_MINUTE_WINDOW:
+            return None
+        if now_local.hour not in FLASHCARDS_REMINDER_HOURS:
+            return None
+        return f"{now_local.date().isoformat()}@{now_local.hour:02d}"
+
     def _build_flashcards_reminder_text(self, lang: str, overview: dict) -> str:
         active_set = overview.get("active_set")
         next_set = overview.get("next_set")
@@ -188,6 +197,38 @@ class SchedulerService:
             lines.extend(["", blocked_line])
         return "\n".join(lines)
 
+    def _build_flashcards_reminder_text_active_only(self, lang: str, overview: dict) -> str:
+        active_set = overview.get("active_set")
+        next_set = overview.get("next_set")
+        if lang == "uk":
+            active_label = "Активна колода"
+            next_label = "Наступна колода"
+            due_label = "Повтори в активній"
+            new_label = "Нові сьогодні"
+            title = "🗂 Картки на сьогодні"
+            no_active = "поки немає"
+            blocked_line = "Нова колода відкриється завтра."
+        else:
+            active_label = "Активная колода"
+            next_label = "Следующая колода"
+            due_label = "Повторы в активной"
+            new_label = "Новые сегодня"
+            title = "🗂 Карточки на сегодня"
+            no_active = "пока нет"
+            blocked_line = "Новая колода откроется завтра."
+
+        lines = [
+            title,
+            "",
+            f"{active_label}: {active_set['name'] if active_set else no_active}",
+            f"{next_label}: {next_set['name'] if next_set else '—'}",
+            f"🔁 {due_label}: {overview.get('today_due_count', 0)}",
+            f"🆕 {new_label}: {overview.get('today_new_count', 0)}",
+        ]
+        if overview.get("activation_blocked_today"):
+            lines.extend(["", blocked_line])
+        return "\n".join(lines)
+
     async def _maybe_send_flashcards_reminder(self, session, user) -> None:
         if not self.bot or not mongo_service.is_ready():
             return
@@ -195,10 +236,10 @@ class SchedulerService:
             return
 
         now_local = self._get_user_now(user)
-        local_date = now_local.date().isoformat()
-        if getattr(user, "flashcards_last_reminder_local_date", None) == local_date:
+        slot_key = self._get_flashcards_reminder_slot_key(now_local)
+        if slot_key is None:
             return
-        if not self._is_within_user_window(user, now_local.time()):
+        if getattr(user, "flashcards_last_reminder_local_date", None) == slot_key:
             return
 
         overview = await flashcards_service.get_user_flashcards_overview(
@@ -209,13 +250,13 @@ class SchedulerService:
             return
 
         lang = user.interface_language.value
-        text = self._build_flashcards_reminder_text(lang, overview)
+        text = self._build_flashcards_reminder_text_active_only(lang, overview)
         reply_markup = get_flashcards_menu_keyboard(lang, settings.WEBAPP_URL) if settings.WEBAPP_URL else None
         await self.bot.send_message(user.telegram_id, text, reply_markup=reply_markup)
         await UserService.update_user(
             session,
             user,
-            flashcards_last_reminder_local_date=local_date,
+            flashcards_last_reminder_local_date=slot_key,
         )
         await asyncio.sleep(0.1)
     

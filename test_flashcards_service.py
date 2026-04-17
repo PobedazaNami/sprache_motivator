@@ -58,7 +58,7 @@ def test_first_non_empty_unresolved_set_becomes_active():
     assert overview["today_new_count"] == 2
 
 
-def test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_cards():
+def test_previous_deck_due_cards_do_not_enter_active_today_session():
     now = datetime(2026, 4, 16, 12, 0, tzinfo=timezone.utc)
     completed_set = make_set("Deck 1", now - timedelta(days=3))
     active_set = make_set("Deck 2", now - timedelta(days=2))
@@ -82,19 +82,21 @@ def test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_c
 
     assert overview["sets"][0]["deck_status"] == "completed"
     assert overview["sets"][1]["deck_status"] == "active"
-    assert overview["today_due_count"] == 1
+    assert overview["sets"][0]["due_count"] == 1
+    assert overview["today_due_count"] == 0
+    assert overview["today_total_due_count"] == 0
     assert overview["today_active_due_count"] == 0
-    assert overview["today_backlog_due_count"] == 1
+    assert overview["today_backlog_due_count"] == 0
     assert overview["today_new_count"] == 1
 
     overview["cards_by_set"] = build_cards_by_set(cards)
     overview["now"] = now
     session_cards = build_today_session_cards(overview)
-    assert [item["set_name"] for item in session_cards] == ["Deck 1", "Deck 2"]
-    assert [item["session_type"] for item in session_cards] == ["due", "new"]
+    assert [item["set_name"] for item in session_cards] == ["Deck 2"]
+    assert [item["session_type"] for item in session_cards] == ["new"]
 
 
-def test_overview_splits_active_due_from_backlog_due():
+def test_dashboard_due_count_uses_only_active_deck():
     now = datetime(2026, 4, 16, 12, 0, tzinfo=timezone.utc)
     completed_set = make_set("Deck 1", now - timedelta(days=3))
     active_set = make_set("Deck 2", now - timedelta(days=2))
@@ -124,10 +126,11 @@ def test_overview_splits_active_due_from_backlog_due():
         now=now,
     )
 
-    assert overview["today_due_count"] == 2
-    assert overview["today_total_due_count"] == 2
+    assert overview["sets"][0]["due_count"] == 1
+    assert overview["today_due_count"] == 1
+    assert overview["today_total_due_count"] == 1
     assert overview["today_active_due_count"] == 1
-    assert overview["today_backlog_due_count"] == 1
+    assert overview["today_backlog_due_count"] == 0
     assert overview["today_new_count"] == 1
 
 
@@ -174,6 +177,15 @@ def test_session_limits_new_cards_to_daily_budget():
     ]
     cards.append(
         make_card(
+            str(active_set["_id"]),
+            now - timedelta(days=2),
+            srs_status="learning",
+            srs_next_review=now - timedelta(minutes=5),
+            front="active-due-card",
+        )
+    )
+    cards.append(
+        make_card(
             str(queued_set["_id"]),
             now - timedelta(days=1),
             srs_status="learning",
@@ -194,6 +206,7 @@ def test_session_limits_new_cards_to_daily_budget():
     session_cards = build_today_session_cards(overview)
     assert len(session_cards) == 11
     assert session_cards[0]["session_type"] == "due"
+    assert all(item["set_name"] == "Deck A" for item in session_cards)
     assert sum(1 for item in session_cards if item["session_type"] == "new") == 10
 
 
@@ -212,8 +225,8 @@ def test_srs_interval_progression_is_preserved():
 
 if __name__ == "__main__":
     test_first_non_empty_unresolved_set_becomes_active()
-    test_due_cards_from_completed_deck_stay_in_today_session_before_active_new_cards()
-    test_overview_splits_active_due_from_backlog_due()
+    test_previous_deck_due_cards_do_not_enter_active_today_session()
+    test_dashboard_due_count_uses_only_active_deck()
     test_next_deck_is_blocked_until_tomorrow_after_completion_today()
     test_session_limits_new_cards_to_daily_budget()
     test_srs_interval_progression_is_preserved()
