@@ -141,13 +141,13 @@ const TEXTS = {
 const EXTRA_TEXTS = {
     uk: {
         todayTitle: '\u0429\u043e \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u0432\u0447\u0438\u0442\u0438',
-        activeDeckLabel: '\u0421\u043f\u043e\u0447\u0430\u0442\u043a\u0443',
-        nextDeckLabel: '\u041f\u043e\u0442\u0456\u043c',
+        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u043a\u043e\u043b\u043e\u0434\u0430',
+        todayInDeckLabel: '\u0421\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u0432 \u043d\u0456\u0439',
         noActiveDeck: '\u041f\u043e\u043a\u0438 \u043d\u0435\u043c\u0430\u0454',
         noNextDeck: '\u2014',
         todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u0438 \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439',
         todayNewLabel: '\u041d\u043e\u0432\u0456 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
-        activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u0456\u0439 \u0437\u0430\u043b\u0438\u0448\u0438\u043b\u043e\u0441\u044c',
+        todayTotalLabel: '\u0423\u0441\u044c\u043e\u0433\u043e \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430 \u043a\u043e\u043b\u043e\u0434\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
         deckQueued: '\u0423 \u0447\u0435\u0440\u0437\u0456',
         deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430',
@@ -164,20 +164,22 @@ const EXTRA_TEXTS = {
         planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u0456\u0432 \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
         planNewValue: '{count} \u043d\u043e\u0432\u0456 \u043a\u0430\u0440\u0442\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
         planNoNew: '\u041d\u043e\u0432\u0438\u0445 \u043a\u0430\u0440\u0442\u043e\u043a \u043d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u043d\u0435\u043c\u0430\u0454',
+        planTodayInDeckValue: '{due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0456 \u00b7 {new} \u043d\u043e\u0432\u0438\u0445',
+        planNoActiveDeckWork: '\u041d\u0430 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0457 \u043a\u043e\u043b\u043e\u0434\u0438 \u043d\u0435\u043c\u0430\u0454',
         planBacklogValue: '\u0429\u0435 {count} \u0441\u0442\u0430\u0440\u0438\u0445 \u043f\u043e\u0432\u0442\u043e\u0440\u0456\u0432 \u0437 \u043f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u0456\u0445 \u043a\u043e\u043b\u043e\u0434 \u043f\u0456\u0434\u0442\u044f\u0433\u043d\u0443\u0442\u044c\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e.',
-        planNextDeckValue: '\u0414\u0430\u043b\u0456 \u0431\u0443\u0434\u0435 \u00ab{deck}\u00bb',
+        planNextDeckValue: '\u041f\u0456\u0441\u043b\u044f \u0446\u0456\u0454\u0457 \u043a\u043e\u043b\u043e\u0434\u0438 \u0431\u0443\u0434\u0435 \u00ab{deck}\u00bb',
         planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u0432\u0456\u0434\u043a\u0440\u0438\u0454\u0442\u044c\u0441\u044f \u00ab{deck}\u00bb',
         inDeckNowValue: '\u0423 \u0446\u0456\u0439 \u043a\u043e\u043b\u043e\u0434\u0456 \u0437\u0430\u0440\u0430\u0437: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0456 \u00b7 {new} \u043d\u043e\u0432\u0438\u0445',
     },
     ru: {
         todayTitle: '\u0427\u0442\u043e \u0443\u0447\u0438\u0442\u044c \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
-        activeDeckLabel: '\u0421\u043d\u0430\u0447\u0430\u043b\u0430',
-        nextDeckLabel: '\u041f\u043e\u0442\u043e\u043c',
+        activeDeckLabel: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430',
+        todayInDeckLabel: '\u0421\u0435\u0433\u043e\u0434\u043d\u044f \u0432 \u043d\u0435\u0439',
         noActiveDeck: '\u041f\u043e\u043a\u0430 \u043d\u0435\u0442',
         noNextDeck: '\u2014',
         todayDueLabel: '\u041f\u043e\u0432\u0442\u043e\u0440\u044b \u0432 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439',
         todayNewLabel: '\u041d\u043e\u0432\u044b\u0435 \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
-        activeRemainingLabel: '\u0412 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 \u043e\u0441\u0442\u0430\u043b\u043e\u0441\u044c',
+        todayTotalLabel: '\u0412\u0441\u0435\u0433\u043e \u0441\u0435\u0433\u043e\u0434\u043d\u044f',
         blockedUntilTomorrow: '\u041d\u043e\u0432\u0430\u044f \u043a\u043e\u043b\u043e\u0434\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u0437\u0430\u0432\u0442\u0440\u0430.',
         deckQueued: '\u0412 \u043e\u0447\u0435\u0440\u0435\u0434\u0438',
         deckActive: '\u0410\u043a\u0442\u0438\u0432\u043d\u0430\u044f',
@@ -194,8 +196,10 @@ const EXTRA_TEXTS = {
         planNoReviews: '\u041f\u043e\u0432\u0442\u043e\u0440\u043e\u0432 \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
         planNewValue: '{count} \u043d\u043e\u0432\u044b\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0432 \u00ab{deck}\u00bb',
         planNoNew: '\u041d\u043e\u0432\u044b\u0445 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442',
+        planTodayInDeckValue: '{due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0435 \u00b7 {new} \u043d\u043e\u0432\u044b\u0445',
+        planNoActiveDeckWork: '\u041d\u0430 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u044b',
         planBacklogValue: '\u0415\u0449\u0435 {count} \u0441\u0442\u0430\u0440\u044b\u0445 \u043f\u043e\u0432\u0442\u043e\u0440\u043e\u0432 \u0438\u0437 \u043f\u0440\u043e\u0448\u043b\u044b\u0445 \u043a\u043e\u043b\u043e\u0434 \u043f\u043e\u0434\u0442\u044f\u043d\u0443\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438.',
-        planNextDeckValue: '\u0414\u0430\u043b\u044c\u0448\u0435 \u0431\u0443\u0434\u0435\u0442 \u00ab{deck}\u00bb',
+        planNextDeckValue: '\u041f\u043e\u0441\u043b\u0435 \u044d\u0442\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u044b \u0431\u0443\u0434\u0435\u0442 \u00ab{deck}\u00bb',
         planNextDeckTomorrow: '\u0417\u0430\u0432\u0442\u0440\u0430 \u043e\u0442\u043a\u0440\u043e\u0435\u0442\u0441\u044f \u00ab{deck}\u00bb',
         inDeckNowValue: '\u0412 \u044d\u0442\u043e\u0439 \u043a\u043e\u043b\u043e\u0434\u0435 \u0441\u0435\u0439\u0447\u0430\u0441: {due} \u043d\u0430 \u043f\u043e\u0432\u0442\u043e\u0440\u0435 \u00b7 {new} \u043d\u043e\u0432\u044b\u0445',
     },
@@ -437,23 +441,22 @@ function renderDashboard() {
     const activeSet = dashboard.active_set || null;
     const todayDueCount = dashboard.today_active_due_count ?? dashboard.today_due_count ?? 0;
     const todayNewCount = dashboard.today_new_count || 0;
-    const activeRemaining = activeSet ? ((activeSet.new_count || 0) + (activeSet.learning_count || 0)) : 0;
+    const todayTotalCount = todayDueCount + todayNewCount;
 
     document.getElementById('stat-new-label').textContent = t('todayNewLabel');
     document.getElementById('stat-learning-label').textContent = t('todayDueLabel');
-    document.getElementById('stat-known-label').textContent = t('activeRemainingLabel');
+    document.getElementById('stat-known-label').textContent = t('todayTotalLabel');
     document.getElementById('stat-new-value').textContent = todayNewCount;
     document.getElementById('stat-learning-value').textContent = todayDueCount;
-    document.getElementById('stat-known-value').textContent = activeRemaining;
+    document.getElementById('stat-known-value').textContent = todayTotalCount;
     document.getElementById('dashboard-plan-title').textContent = t('todayTitle');
     document.getElementById('dashboard-active-label').textContent = t('activeDeckLabel');
-    document.getElementById('dashboard-next-label').textContent = t('nextDeckLabel');
-    document.getElementById('dashboard-active-value').textContent =
-        todayDueCount > 0 ? t('planReviewsValue', { count: todayDueCount }) : t('planNoReviews');
+    document.getElementById('dashboard-next-label').textContent = t('todayInDeckLabel');
+    document.getElementById('dashboard-active-value').textContent = activeSet?.name || t('noActiveDeck');
     document.getElementById('dashboard-next-value').textContent =
-        activeSet && todayNewCount > 0
-            ? t('planNewValue', { count: todayNewCount, deck: activeSet.name || t('noActiveDeck') })
-            : t('planNoNew');
+        activeSet
+            ? t('planTodayInDeckValue', { due: todayDueCount, new: todayNewCount })
+            : t('planNoActiveDeckWork');
 
     const note = document.getElementById('dashboard-plan-note');
     const notes = [];
