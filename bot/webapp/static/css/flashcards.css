@@ -255,6 +255,15 @@ button {
     transform: translateY(-1px);
 }
 
+.btn-primary:disabled {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.35);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+    pointer-events: none;
+}
+
 .btn-secondary {
     background-color: var(--secondary-bg);
     color: var(--text-color);
