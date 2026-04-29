@@ -244,7 +244,13 @@ async def serve_flashcards_app(request: web.Request) -> web.Response:
 async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
     """Serve the Subtitle Trainer Mini App HTML."""
     html_path = TEMPLATES_DIR / "subtitle_trainer.html"
-    return render_template_response(html_path)
+    return render_template_response(
+        html_path,
+        replacements={
+            "__SUBTITLE_TRAINER_CSS_VERSION__": get_asset_version(STATIC_DIR / "css" / "subtitle_trainer.css"),
+            "__SUBTITLE_TRAINER_JS_VERSION__": get_asset_version(STATIC_DIR / "js" / "subtitle_trainer.js"),
+        },
+    )
 
 
 async def subtitle_videos(request: web.Request) -> web.Response:

@@ -33,7 +33,12 @@ const state = {
     lookingUpWord: null,    // surface form being queried
     popup: null,            // current word card
     player: null,           // YT.Player instance
+    playerReady: false,
+    playerError: null,
     intervalId: null,
+    autoplayPromptTimerId: null,
+    manualPlayTimerId: null,
+    ytApiTimerId: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -79,6 +84,7 @@ const backBtn         = $('back-btn');
 const playerTitle     = $('player-title');
 const ytContainer     = $('yt-container');
 const pauseOverlay    = $('pause-overlay');
+const playerStatus    = $('player-status');
 const subtitleOverlay = $('subtitle-overlay');
 const subtitleLine    = $('subtitle-line');
 const wordPopup       = $('word-popup');
@@ -149,9 +155,13 @@ async function loadSession(input, preferredTitle = '') {
         state.activeCueIndex = -1;
         state.loadingVideoId = null;
         playerTitle.textContent = data.title || preferredTitle || videoId;
+        renderSubtitles(0);
     } catch (err) {
         state.loadingVideoId = null;
         state.selectedVideoId = null;
+        state.player?.pauseVideo?.();
+        clearPlaybackTimers();
+        setPauseOverlayVisible(false);
         setStatus(err.message, true);
         showScreen('screen-catalog');
     }
@@ -215,22 +225,117 @@ function renderVideos(videos) {
 // ---------------------------------------------------------------------------
 let ytApiReady = false;
 let pendingVideoId = null;
+const YT_STATES = {
+    UNSTARTED: -1,
+    ENDED: 0,
+    PLAYING: 1,
+    PAUSED: 2,
+    BUFFERING: 3,
+    CUED: 5,
+};
+
+function isPlayerActive(playerState) {
+    return playerState === YT_STATES.PLAYING || playerState === YT_STATES.BUFFERING;
+}
+
+function getCurrentPlayerState() {
+    try {
+        return state.player?.getPlayerState?.();
+    } catch (err) {
+        return null;
+    }
+}
+
+function clearPlaybackTimers() {
+    if (state.autoplayPromptTimerId) {
+        clearTimeout(state.autoplayPromptTimerId);
+        state.autoplayPromptTimerId = null;
+    }
+    if (state.manualPlayTimerId) {
+        clearTimeout(state.manualPlayTimerId);
+        state.manualPlayTimerId = null;
+    }
+    if (state.ytApiTimerId) {
+        clearTimeout(state.ytApiTimerId);
+        state.ytApiTimerId = null;
+    }
+}
+
+function setPauseOverlayVisible(isVisible) {
+    if (!pauseOverlay) return;
+    pauseOverlay.style.display = isVisible ? 'flex' : 'none';
+    pauseOverlay.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+}
+
+function setPlayerStatus(message = '', isError = false) {
+    if (!playerStatus) return;
+
+    if (!message) {
+        playerStatus.style.display = 'none';
+        playerStatus.textContent = '';
+        playerStatus.classList.remove('player-status--error');
+        return;
+    }
+
+    const videoId = state.selectedVideoId || state.session?.videoId || '';
+    const youtubeLink = videoId
+        ? ` <a href="https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}" target="_blank" rel="noopener">YouTube</a>`
+        : '';
+    playerStatus.innerHTML = `${esc(message)}${youtubeLink}`;
+    playerStatus.classList.toggle('player-status--error', isError);
+    playerStatus.style.display = 'block';
+}
+
+function scheduleAutoplayPrompt(delayMs = 1600) {
+    if (state.autoplayPromptTimerId) clearTimeout(state.autoplayPromptTimerId);
+    state.autoplayPromptTimerId = setTimeout(() => {
+        state.autoplayPromptTimerId = null;
+        const playerState = getCurrentPlayerState();
+        if (state.pendingAutoplay && !isPlayerActive(playerState)) {
+            setPauseOverlayVisible(true);
+        }
+    }, delayMs);
+}
+
+function confirmManualPlayStarted() {
+    if (state.manualPlayTimerId) clearTimeout(state.manualPlayTimerId);
+    state.manualPlayTimerId = setTimeout(() => {
+        state.manualPlayTimerId = null;
+        const playerState = getCurrentPlayerState();
+        if (!isPlayerActive(playerState)) {
+            setPauseOverlayVisible(true);
+        }
+    }, 1400);
+}
 
 window.onYouTubeIframeAPIReady = function () {
+    if (ytApiReady) return;
     ytApiReady = true;
+    if (state.ytApiTimerId) {
+        clearTimeout(state.ytApiTimerId);
+        state.ytApiTimerId = null;
+    }
     if (pendingVideoId) {
         createPlayer(pendingVideoId);
         pendingVideoId = null;
     }
 };
 
+if (window.YT?.Player) {
+    window.onYouTubeIframeAPIReady();
+}
+
 function mountPlayer(videoId) {
-    pauseOverlay.style.display = 'none';
+    clearPlaybackTimers();
+    setPauseOverlayVisible(false);
+    setPlayerStatus('');
     state.pendingAutoplay = true;
+    state.playerError = null;
 
     if (state.player) {
         state.player.loadVideoById(videoId);
         startCueInterval();
+        scheduleAutoplayPrompt();
         return;
     }
 
@@ -238,6 +343,14 @@ function mountPlayer(videoId) {
         createPlayer(videoId);
     } else {
         pendingVideoId = videoId;
+        scheduleAutoplayPrompt(2800);
+        state.ytApiTimerId = setTimeout(() => {
+            state.ytApiTimerId = null;
+            if (!ytApiReady && pendingVideoId === videoId) {
+                setPauseOverlayVisible(false);
+                setPlayerStatus('YouTube-плеєр не завантажився.', true);
+            }
+        }, 7000);
     }
 }
 
@@ -253,34 +366,51 @@ function createPlayer(videoId) {
             modestbranding: 1,
             playsinline: 1,
             rel: 0,
+            origin: window.location.origin,
         },
         events: {
             onReady: () => {
+                state.playerReady = true;
                 if (state.pendingAutoplay) {
                     state.player?.playVideo?.();
+                    scheduleAutoplayPrompt();
                 }
                 startCueInterval();
             },
             onStateChange: onPlayerStateChange,
+            onError: onPlayerError,
         },
     });
 }
 
 function onPlayerStateChange(event) {
-    const PLAYING = 1;
-    const BUFFERING = 3;
-    const PAUSED = 2;
-    const ENDED = 0;
-
-    if (event.data === PLAYING || event.data === BUFFERING) {
+    if (isPlayerActive(event.data)) {
         state.isPlaying = true;
         state.pendingAutoplay = false;
-        pauseOverlay.style.display = 'none';
+        clearPlaybackTimers();
+        setPauseOverlayVisible(false);
+        setPlayerStatus('');
         closePopup();
-    } else if (event.data === PAUSED || event.data === ENDED) {
+    } else if (event.data === YT_STATES.PAUSED || event.data === YT_STATES.ENDED) {
         state.isPlaying = false;
-        pauseOverlay.style.display = 'flex';
+        state.pendingAutoplay = false;
+        clearPlaybackTimers();
+        setPauseOverlayVisible(true);
+    } else if (event.data === YT_STATES.UNSTARTED || event.data === YT_STATES.CUED) {
+        state.isPlaying = false;
+        if (state.pendingAutoplay) {
+            scheduleAutoplayPrompt();
+        }
     }
+}
+
+function onPlayerError(event) {
+    state.isPlaying = false;
+    state.pendingAutoplay = false;
+    state.playerError = event.data;
+    clearPlaybackTimers();
+    setPauseOverlayVisible(false);
+    setPlayerStatus('Не вдалося відтворити відео в цьому вікні.', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +428,7 @@ function startCueInterval() {
     state.intervalId = setInterval(() => {
         if (!state.player || !state.session) return;
         const playerState = state.player.getPlayerState?.();
-        if (playerState !== 1) return; // only when playing
+        if (playerState !== YT_STATES.PLAYING) return; // only when playing
         const seconds = state.player.getCurrentTime?.();
         if (typeof seconds !== 'number') return;
         const ms = seconds * 1000;
@@ -323,10 +453,11 @@ function buildSubtitleTokenWindow(cues, startIdx, maxCues = 8) {
         const cue = cues[cueIdx];
         const tokens = tokenize(cue.text);
         tokens.forEach((token, tokenIdx) => {
+            const nextToken = tokens[tokenIdx + 1];
             items.push({
                 token,
                 cueIdx,
-                trailingSpace: shouldAppendSpace(token, tokens[tokenIdx + 1]),
+                trailingSpace: nextToken ? shouldAppendSpace(token, nextToken) : cueIdx < endIdx - 1,
             });
         });
     }
@@ -477,15 +608,16 @@ function esc(str) {
 // ---------------------------------------------------------------------------
 async function handleTokenClick(el) {
     if (state.isLookingUp) return;
-    if (!state.session || state.activeCueIndex < 0) return;
-
-    // Pause video
-    state.player?.pauseVideo?.();
+    if (!state.session) return;
 
     const value = el.dataset.value;
     const normalized = el.dataset.norm;
     const cues = state.session.cues;
     const idx = el.dataset.cue != null ? parseInt(el.dataset.cue, 10) : state.activeCueIndex;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= cues.length) return;
+
+    // Pause video
+    state.player?.pauseVideo?.();
 
     const cueText = cues[idx]?.text ?? '';
     const prev2  = cues[idx - 2]?.text ?? '';
@@ -611,12 +743,21 @@ reloadVideosBtn?.addEventListener('click', () => {
 backBtn?.addEventListener('click', () => {
     // Pause video when going back to catalog
     state.player?.pauseVideo?.();
+    state.pendingAutoplay = false;
+    clearPlaybackTimers();
+    setPauseOverlayVisible(false);
+    setPlayerStatus('');
     closePopup();
     showScreen('screen-catalog');
 });
 
 pauseOverlay.addEventListener('click', () => {
+    setPlayerStatus('');
+    state.pendingAutoplay = false;
+    setPauseOverlayVisible(false);
+    state.player?.unMute?.();
     state.player?.playVideo?.();
+    confirmManualPlayStarted();
 });
 
 // Close popup when tapping outside it
@@ -625,6 +766,12 @@ document.addEventListener('click', (e) => {
         !wordPopup.contains(e.target) &&
         !e.target.classList.contains('st-token--clk')) {
         closePopup();
+    }
+});
+
+window.addEventListener('resize', () => {
+    if (state.session && state.windowStartIndex >= 0) {
+        renderSubtitles(state.windowStartIndex);
     }
 });
 
