@@ -136,15 +136,6 @@ html, body {
     color: var(--accent);
 }
 
-.video-card.not-cached {
-    border-color: rgba(255,255,255,.14);
-}
-
-.video-card.not-cached .video-card-meta::after {
-    content: ' • підготуємо';
-    color: var(--accent);
-}
-
 .video-thumb {
     width: 100%;
     aspect-ratio: 16 / 9;

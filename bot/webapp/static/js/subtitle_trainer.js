@@ -195,26 +195,26 @@ function formatPublishedDate(value) {
 
 function formatSessionError(err) {
     const message = String(err?.message || err || '');
-    if (message.includes('Субтитри порожні') || message.includes('субтитри')) {
-        return 'Для цього відео субтитри ще готуються. Оновіть список трохи пізніше або оберіть інше відео.';
+    if (message.includes('ще не підготовлене') || message.includes('Субтитри порожні') || message.includes('субтитри')) {
+        return 'Це відео ще не готове. Оновіть список або оберіть інше готове відео.';
     }
     return message;
 }
 
 function renderVideos(videos) {
     if (!videosList) return;
-    if (!videos.length) {
-        videosList.innerHTML = '<p class="videos-empty">Список відео порожній.</p>';
+    const readyVideos = videos.filter((video) => video.cached !== false);
+    if (!readyVideos.length) {
+        videosList.innerHTML = '<p class="videos-empty">Бібліотека відео готується. Натисніть оновити трохи пізніше.</p>';
         return;
     }
 
-    videosList.innerHTML = videos.map((video) => {
+    videosList.innerHTML = readyVideos.map((video) => {
         const selected = video.videoId === state.selectedVideoId ? ' is-selected' : '';
         const loading = video.videoId === state.loadingVideoId ? ' is-loading' : '';
-        const notCached = !video.cached ? ' not-cached' : '';
         const dateLabel = formatPublishedDate(video.publishedAt);
         return `
-            <button type="button" class="video-card${selected}${loading}${notCached}" data-video-id="${esc(video.videoId)}">
+            <button type="button" class="video-card${selected}${loading}" data-video-id="${esc(video.videoId)}">
                 <img class="video-thumb" src="${esc(video.thumbnailUrl || '')}" alt="${esc(video.title)}" loading="lazy" />
                 <span class="video-card-body">
                     <span class="video-card-title">${esc(video.title)}</span>
@@ -225,7 +225,7 @@ function renderVideos(videos) {
 
     videosList.querySelectorAll('[data-video-id]').forEach((el) => {
         el.addEventListener('click', () => {
-            const video = videos.find((item) => item.videoId === el.dataset.videoId);
+            const video = readyVideos.find((item) => item.videoId === el.dataset.videoId);
             loadSession(el.dataset.videoId, video?.title || '');
         });
     });

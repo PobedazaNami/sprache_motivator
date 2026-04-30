@@ -22,11 +22,13 @@ import re
 import shutil
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiohttp
 
 from bot.config import settings
+from bot.services import mongo_service
 from bot.services.redis_service import redis_service
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,7 @@ _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
 _WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
 _warmer_running = False
+_warm_task: asyncio.Task | None = None
 _COOKIE_PATH = os.environ.get("YOUTUBE_COOKIE_PATH", "/app/cookies/youtube_cookies.txt")
 
 # Per-video locks: prevents thundering herd (60 users click same video →
@@ -189,11 +192,14 @@ def _extract_video_id(input_str: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
+async def _fetch_and_cache_one(video: dict) -> bool:
     """
-    Try to fetch subtitles for one video and store in Redis.
+    Try to fetch subtitles for one video and store in the prepared-video caches.
     Returns True if cached successfully, False if blocked/failed.
     """
+    video_id = video["videoId"]
+    await _mark_video_status(video, "processing")
+
     try:
         loop = asyncio.get_event_loop()
         cues, selected_lang, all_langs = await loop.run_in_executor(
@@ -201,27 +207,22 @@ async def _fetch_and_cache_one(video_id: str, title: str) -> bool:
         )
     except Exception as exc:
         logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc)
+        await _mark_video_status(video, "failed", str(exc))
         return False
 
     if not cues:
+        await _mark_video_status(video, "failed", "empty subtitle cues")
         return False
 
     result = {
         "videoId": video_id,
-        "title": title,
+        "title": video.get("title", video_id),
         "cues": cues,
         "selectedLanguage": selected_lang,
         "availableLanguages": all_langs,
     }
 
-    _session_cache[video_id] = (result, time.time())
-    try:
-        if redis_service.redis:
-            redis_key = f"subtitle:session:{video_id}"
-            await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
-    except Exception:
-        pass
-
+    await _store_prepared_session(result, video)
     return True
 
 
@@ -243,21 +244,15 @@ async def warm_subtitle_cache() -> None:
 
         for video in videos:
             vid = video["videoId"]
-            # Check if already in Redis
-            try:
-                if redis_service.redis:
-                    existing = await redis_service.get(f"subtitle:session:{vid}")
-                    if existing:
-                        cached_count += 1
-                        continue
-            except Exception:
-                pass
+            if await _load_session_from_fast_cache(vid):
+                cached_count += 1
+                continue
 
-            # Not cached — try to fetch
+            # Not prepared yet — fetch slowly in the background.
             if fetched_count > 0:
                 await asyncio.sleep(_WARM_DELAY)
 
-            ok = await _fetch_and_cache_one(vid, video.get("title", vid))
+            ok = await _fetch_and_cache_one(video)
             if ok:
                 fetched_count += 1
                 logger.info("Cache warmer: cached subtitles for %s", vid)
@@ -272,20 +267,38 @@ async def warm_subtitle_cache() -> None:
         _warmer_running = False
 
 
+def schedule_subtitle_cache_warm() -> None:
+    """Start a background warmup if one is not already running."""
+    global _warm_task
+    if _warm_task and not _warm_task.done():
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    _warm_task = loop.create_task(warm_subtitle_cache())
+
+
 async def get_cached_video_ids() -> set[str]:
-    """Return set of video IDs that have subtitles in Redis."""
+    """Return set of video IDs that already have prepared subtitles."""
     result: set[str] = set()
     try:
         videos = await list_channel_videos(limit=15)
         for video in videos:
             vid = video["videoId"]
-            if vid in _session_cache:
+            if await _load_session_from_fast_cache(vid):
                 result.add(vid)
-                continue
-            if redis_service.redis:
-                existing = await redis_service.get(f"subtitle:session:{vid}")
-                if existing:
-                    result.add(vid)
+
+        if mongo_service.is_ready():
+            cursor = mongo_service.db().subtitle_video_sessions.find(
+                {"status": "ready"},
+                {"videoId": 1},
+            )
+            async for doc in cursor:
+                if doc.get("videoId"):
+                    result.add(doc["videoId"])
     except Exception:
         pass
     return result
@@ -319,6 +332,146 @@ def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
         )
 
     return items
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _public_session_fields(document: dict) -> dict:
+    return {
+        "videoId": document["videoId"],
+        "title": document.get("title") or document["videoId"],
+        "cues": document.get("cues", []),
+        "selectedLanguage": document.get("selectedLanguage", ""),
+        "availableLanguages": document.get("availableLanguages", []),
+    }
+
+
+def _video_card_from_session_doc(document: dict) -> dict:
+    return {
+        "videoId": document["videoId"],
+        "title": document.get("title") or document["videoId"],
+        "publishedAt": document.get("publishedAt", ""),
+        "thumbnailUrl": document.get("thumbnailUrl", ""),
+        "videoUrl": document.get("videoUrl") or f"https://www.youtube.com/watch?v={document['videoId']}",
+        "cached": True,
+    }
+
+
+async def _load_session_from_mongo(video_id: str) -> dict | None:
+    if not mongo_service.is_ready():
+        return None
+
+    document = await mongo_service.db().subtitle_video_sessions.find_one(
+        {"videoId": video_id, "status": "ready"}
+    )
+    if not document:
+        return None
+
+    result = _public_session_fields(document)
+    if not result["cues"]:
+        return None
+    return result
+
+
+async def _store_prepared_session(result: dict, video_meta: dict | None = None) -> None:
+    video_id = result["videoId"]
+    _session_cache[video_id] = (result, time.time())
+
+    try:
+        if redis_service.redis:
+            await redis_service.set(
+                f"subtitle:session:{video_id}",
+                json.dumps(result),
+                ex=_REDIS_SUBTITLE_TTL,
+            )
+    except Exception as exc:
+        logger.debug("Redis subtitle cache write failed: %s", exc)
+
+    if not mongo_service.is_ready():
+        return
+
+    video_meta = video_meta or {}
+    now = _now_utc()
+    update_doc = {
+        "videoId": video_id,
+        "title": result.get("title") or video_meta.get("title") or video_id,
+        "cues": result.get("cues", []),
+        "selectedLanguage": result.get("selectedLanguage", ""),
+        "availableLanguages": result.get("availableLanguages", []),
+        "status": "ready",
+        "fetchedAt": now,
+        "updatedAt": now,
+        "lastError": "",
+    }
+    for key in ("publishedAt", "thumbnailUrl", "videoUrl"):
+        if video_meta.get(key):
+            update_doc[key] = video_meta[key]
+
+    await mongo_service.db().subtitle_video_sessions.update_one(
+        {"videoId": video_id},
+        {"$set": update_doc, "$setOnInsert": {"createdAt": now}},
+        upsert=True,
+    )
+
+
+async def _mark_video_status(video: dict, status: str, error: str = "") -> None:
+    if not mongo_service.is_ready():
+        return
+
+    now = _now_utc()
+    update_doc = {
+        "videoId": video["videoId"],
+        "title": video.get("title") or video["videoId"],
+        "publishedAt": video.get("publishedAt", ""),
+        "thumbnailUrl": video.get("thumbnailUrl", ""),
+        "videoUrl": video.get("videoUrl") or f"https://www.youtube.com/watch?v={video['videoId']}",
+        "status": status,
+        "lastAttemptAt": now,
+        "updatedAt": now,
+        "lastError": error,
+    }
+    await mongo_service.db().subtitle_video_sessions.update_one(
+        {"videoId": video["videoId"]},
+        {"$set": update_doc, "$setOnInsert": {"createdAt": now}},
+        upsert=True,
+    )
+
+
+async def _load_session_from_fast_cache(video_id: str) -> dict | None:
+    cached = _session_cache.get(video_id)
+    if cached:
+        result, ts = cached
+        if time.time() - ts < _CACHE_TTL and result.get("cues"):
+            return result
+        del _session_cache[video_id]
+
+    try:
+        if redis_service.redis:
+            cached_json = await redis_service.get(f"subtitle:session:{video_id}")
+            if cached_json:
+                result = json.loads(cached_json)
+                if result.get("cues"):
+                    _session_cache[video_id] = (result, time.time())
+                    return result
+    except Exception as exc:
+        logger.debug("Redis subtitle cache read failed: %s", exc)
+
+    result = await _load_session_from_mongo(video_id)
+    if result:
+        _session_cache[video_id] = (result, time.time())
+        try:
+            if redis_service.redis:
+                await redis_service.set(
+                    f"subtitle:session:{video_id}",
+                    json.dumps(result),
+                    ex=_REDIS_SUBTITLE_TTL,
+                )
+        except Exception as exc:
+            logger.debug("Redis subtitle cache backfill failed: %s", exc)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -369,15 +522,74 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
     return videos[:limit]
 
 
+async def list_prepared_videos(limit: int = 12) -> list[dict]:
+    """
+    Return only videos whose subtitle sessions are already prepared.
+
+    New channel videos are queued for background preparation, but they are not
+    shown to learners until their cues are stored in MongoDB/Redis.
+    """
+    schedule_subtitle_cache_warm()
+
+    try:
+        channel_videos = await list_channel_videos(limit=max(limit, 15))
+    except Exception:
+        channel_videos = []
+
+    items: list[dict] = []
+    seen: set[str] = set()
+    for video in channel_videos:
+        if await _load_session_from_fast_cache(video["videoId"]):
+            prepared = dict(video)
+            prepared["cached"] = True
+            items.append(prepared)
+            seen.add(video["videoId"])
+            if len(items) >= limit:
+                return items
+
+    if mongo_service.is_ready() and len(items) < limit:
+        cursor = (
+            mongo_service.db()
+            .subtitle_video_sessions.find({"status": "ready"})
+            .sort([("publishedAt", -1), ("fetchedAt", -1)])
+            .limit(limit * 2)
+        )
+        async for document in cursor:
+            video_id = document.get("videoId")
+            if not video_id or video_id in seen:
+                continue
+            if not document.get("cues"):
+                continue
+            items.append(_video_card_from_session_doc(document))
+            seen.add(video_id)
+            if len(items) >= limit:
+                break
+
+    return items
+
+
+async def get_prepared_video_session(input_str: str) -> dict:
+    """Return a prepared subtitle session without doing live YouTube work."""
+    video_id = _extract_video_id(input_str)
+    if not video_id:
+        raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
+
+    result = await _load_session_from_fast_cache(video_id)
+    if result:
+        return result
+
+    schedule_subtitle_cache_warm()
+    raise RuntimeError("Це відео ще не підготовлене. Спробуйте інше готове відео.")
+
+
 async def load_video_session(input_str: str, preferred_title: Optional[str] = None) -> dict:
     """
-    Download subtitle metadata for a YouTube video.
+    Download and persist subtitle metadata for a YouTube video.
 
     Strategy:
-      1. Return from in-memory cache if fresh (10 min TTL).
-      2. Return from Redis L2 cache (7-day TTL).
-      3. Fetch via youtube-transcript-api with cookie authentication.
-      4. Cache result in L1 + L2.
+      1. Return a prepared session from memory/Redis/MongoDB.
+      2. If missing, fetch via yt-dlp.
+      3. Store the prepared result in MongoDB + Redis before returning.
 
     Returns:
         {videoId, title, cues, selectedLanguage, availableLanguages}
@@ -386,40 +598,20 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
 
-    # --- Fast path: L1 in-memory cache (no lock needed) ---
-    cached = _session_cache.get(video_id)
-    if cached:
-        result, ts = cached
-        if time.time() - ts < _CACHE_TTL:
-            logger.info("Subtitle L1 cache hit for %s", video_id)
-            return result
-        del _session_cache[video_id]
+    prepared = await _load_session_from_fast_cache(video_id)
+    if prepared:
+        logger.info("Prepared subtitle cache hit for %s", video_id)
+        return prepared
 
     # --- Lock per video: thundering herd protection ---
     # If 60 users click the same video, only 1 goes to YouTube.
     # The other 59 wait here and get the result from cache.
     lock = _get_video_lock(video_id)
     async with lock:
-        # Re-check caches after acquiring lock (another coroutine may have filled them)
-        cached = _session_cache.get(video_id)
-        if cached:
-            result, ts = cached
-            if time.time() - ts < _CACHE_TTL:
-                logger.info("Subtitle L1 cache hit (post-lock) for %s", video_id)
-                return result
-
-        # L2: Redis — shared across all users
-        try:
-            if redis_service.redis:
-                redis_key = f"subtitle:session:{video_id}"
-                cached_json = await redis_service.get(redis_key)
-                if cached_json:
-                    result = json.loads(cached_json)
-                    _session_cache[video_id] = (result, time.time())
-                    logger.info("Subtitle L2 (Redis) cache hit for %s", video_id)
-                    return result
-        except Exception as exc:
-            logger.debug("Redis subtitle cache read failed: %s", exc)
+        prepared = await _load_session_from_fast_cache(video_id)
+        if prepared:
+            logger.info("Prepared subtitle cache hit (post-lock) for %s", video_id)
+            return prepared
 
         # --- Fetch subtitles (only 1 coroutine reaches here per video) ---
         cues: list[dict]
@@ -462,14 +654,14 @@ async def load_video_session(input_str: str, preferred_title: Optional[str] = No
             "availableLanguages": all_langs,
         }
 
-        # Store in both caches
-        _session_cache[video_id] = (result, time.time())
-        try:
-            if redis_service.redis:
-                redis_key = f"subtitle:session:{video_id}"
-                await redis_service.set(redis_key, json.dumps(result), ex=_REDIS_SUBTITLE_TTL)
-        except Exception as exc:
-            logger.debug("Redis subtitle cache write failed: %s", exc)
+        await _store_prepared_session(
+            result,
+            {
+                "videoId": video_id,
+                "title": title,
+                "videoUrl": f"https://www.youtube.com/watch?v={video_id}",
+            },
+        )
 
         return result
 

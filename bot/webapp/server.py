@@ -256,18 +256,14 @@ async def serve_subtitle_trainer_app(request: web.Request) -> web.Response:
 async def subtitle_videos(request: web.Request) -> web.Response:
     """
     GET /api/subtitle/videos
-    Returns the latest channel videos for the subtitle trainer.
-    Includes a 'cached' flag per video so the UI can show availability.
+    Returns prepared channel videos for the subtitle trainer.
     """
     user_id = get_user_id_from_request(request)
     if not user_id:
         raise web.HTTPUnauthorized(text="Invalid authentication")
 
     try:
-        videos = await subtitle_service.list_channel_videos(limit=12)
-        cached_ids = await subtitle_service.get_cached_video_ids()
-        for v in videos:
-            v["cached"] = v["videoId"] in cached_ids
+        videos = await subtitle_service.list_prepared_videos(limit=12)
     except RuntimeError as exc:
         raise web.HTTPInternalServerError(text=str(exc))
     except Exception as exc:
@@ -292,11 +288,10 @@ async def subtitle_session(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid JSON body")
 
     input_str: str = (body.get("input") or "").strip()
-    preferred_title: str = (body.get("title") or "").strip()
     if not input_str:
         raise web.HTTPBadRequest(text="'input' field is required")
     try:
-        result = await subtitle_service.load_video_session(input_str, preferred_title=preferred_title or None)
+        result = await subtitle_service.get_prepared_video_session(input_str)
     except ValueError as exc:
         raise web.HTTPBadRequest(text=str(exc))
     except RuntimeError as exc:

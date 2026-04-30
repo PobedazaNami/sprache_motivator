@@ -38,6 +38,10 @@ async def init() -> bool:
     # Index for flashcards
     await _db.flashcards.create_index([("set_id", 1), ("created_at", 1)])
     await _db.flashcards.create_index([("user_id", 1)])
+    # Indexes for prepared subtitle trainer videos
+    await _db.subtitle_video_sessions.create_index([("videoId", 1)], unique=True)
+    await _db.subtitle_video_sessions.create_index([("status", 1), ("publishedAt", -1)])
+    await _db.subtitle_video_sessions.create_index([("status", 1), ("fetchedAt", -1)])
     return True
 
 
