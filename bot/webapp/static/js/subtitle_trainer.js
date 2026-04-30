@@ -144,6 +144,7 @@ async function loadSession(input, preferredTitle = '') {
     playerTitle.textContent = preferredTitle || videoId;
     showScreen('screen-player');
     mountPlayer(videoId);
+    setPlayerStatus('Готуємо субтитри…');
 
     try {
         const data = await apiFetch('/api/subtitle/session', {
@@ -155,6 +156,7 @@ async function loadSession(input, preferredTitle = '') {
         state.activeCueIndex = -1;
         state.loadingVideoId = null;
         playerTitle.textContent = data.title || preferredTitle || videoId;
+        setPlayerStatus('');
         renderSubtitles(0);
     } catch (err) {
         state.loadingVideoId = null;
@@ -162,7 +164,8 @@ async function loadSession(input, preferredTitle = '') {
         state.player?.pauseVideo?.();
         clearPlaybackTimers();
         setPauseOverlayVisible(false);
-        setStatus(err.message, true);
+        setPlayerStatus('');
+        setStatus(formatSessionError(err), true);
         showScreen('screen-catalog');
     }
 }
@@ -188,6 +191,14 @@ function formatPublishedDate(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatSessionError(err) {
+    const message = String(err?.message || err || '');
+    if (message.includes('Субтитри порожні') || message.includes('субтитри')) {
+        return 'Для цього відео субтитри ще готуються. Оновіть список трохи пізніше або оберіть інше відео.';
+    }
+    return message;
 }
 
 function renderVideos(videos) {

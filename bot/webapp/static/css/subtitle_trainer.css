@@ -137,12 +137,12 @@ html, body {
 }
 
 .video-card.not-cached {
-    opacity: 0.55;
+    border-color: rgba(255,255,255,.14);
 }
 
 .video-card.not-cached .video-card-meta::after {
-    content: ' • скоро';
-    color: var(--text-muted);
+    content: ' • підготуємо';
+    color: var(--accent);
 }
 
 .video-thumb {

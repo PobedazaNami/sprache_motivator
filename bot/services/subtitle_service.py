@@ -107,29 +107,43 @@ def _fetch_subtitles_ytdlp(video_id: str) -> tuple[list[dict], str, list[str]]:
             f"https://www.youtube.com/watch?v={video_id}", download=False
         )
 
-    subs = info.get("subtitles", {})
-    auto_subs = info.get("automatic_captions", {})
-    all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
+        subs = info.get("subtitles", {})
+        auto_subs = info.get("automatic_captions", {})
+        all_langs = list(dict.fromkeys(list(subs.keys()) + list(auto_subs.keys())))
 
-    # Try languages in priority order
-    import requests as _requests  # noqa: PLC0415
+        seen_langs = set()
+        for lang in _LANG_PRIORITY + all_langs:
+            if lang in seen_langs:
+                continue
+            seen_langs.add(lang)
+            sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
+            if not sub_list:
+                continue
+            json3_entries = [s for s in sub_list if s.get("ext") == "json3"]
+            if not json3_entries:
+                continue
+            url = json3_entries[0]["url"]
+            try:
+                # Use yt-dlp's opener so the timedtext request keeps the same
+                # client headers/cookie handling that produced the subtitle URL.
+                resp = ydl.urlopen(url)
+                if getattr(resp, "status", 200) != 200:
+                    logger.warning(
+                        "Subtitle URL returned HTTP %s for %s (%s)",
+                        getattr(resp, "status", "unknown"),
+                        video_id,
+                        lang,
+                    )
+                    continue
+                data = json.loads(resp.read().decode("utf-8"))
+            except Exception as exc:
+                logger.warning("Subtitle URL fetch failed for %s (%s): %s", video_id, lang, exc)
+                continue
 
-    for lang in _LANG_PRIORITY + all_langs:
-        sub_list = subs.get(lang, []) or auto_subs.get(lang, [])
-        if not sub_list:
-            continue
-        json3_entries = [s for s in sub_list if s.get("ext") == "json3"]
-        if not json3_entries:
-            continue
-        url = json3_entries[0]["url"]
-        resp = _requests.get(url, timeout=15)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-        events = data.get("events", [])
-        cues = _cues_from_json3_events(events)
-        if cues:
-            return cues, lang, all_langs
+            events = data.get("events", [])
+            cues = _cues_from_json3_events(events)
+            if cues:
+                return cues, lang, all_langs
 
     return [], "", all_langs
 
