@@ -8,8 +8,8 @@ Fetch strategy:
      (cookies loaded from /app/cookies/youtube_cookies.txt)
 
 Background cache warmer:
-  - Runs at startup
-  - Fetches subtitles for channel videos one at a time with delays
+  - Pins 20 Kurzgesagt DE videos into a shared catalog
+  - Prepares subtitles for that fixed catalog in MongoDB/Redis
 
 Translates with Google Translate (gtx endpoint), optionally explains with OpenAI.
 """
@@ -40,6 +40,11 @@ _TRANSLATE_URL = (
 
 _LANG_PRIORITY = ["de", "de-DE", "en", "fr", "es", "it", "pt"]
 _CHANNEL_FEED_URL = "https://www.youtube.com/feeds/videos.xml?user=KurzgesagtDE"
+_CHANNEL_VIDEOS_URL = "https://www.youtube.com/user/KurzgesagtDE/videos"
+_FIXED_LIBRARY_SIZE = 20
+_FIXED_LIBRARY_DOC_ID = "kurzgesagt_de_fixed_v1"
+_REDIS_FIXED_LIBRARY_KEY = "subtitle:fixed_library:kurzgesagt_de:v1"
+_REDIS_FIXED_LIBRARY_TTL = 604800  # 7 days
 
 # Simple in-memory cache: video_id -> (result_dict, timestamp)
 _session_cache: dict[str, tuple[dict, float]] = {}
@@ -49,9 +54,11 @@ _REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
 _WARM_DELAY = 20  # seconds between slow background fetches
-_MIN_READY_LIBRARY_SIZE = 6
+_MIN_READY_LIBRARY_SIZE = _FIXED_LIBRARY_SIZE
+_fixed_library_cache: list[dict] | None = None
 _warmer_running = False
 _warm_task: asyncio.Task | None = None
+_bootstrap_task: asyncio.Task | None = None
 _COOKIE_PATH = os.environ.get("YOUTUBE_COOKIE_PATH", "/app/cookies/youtube_cookies.txt")
 
 # Per-video locks: prevents thundering herd (60 users click same video →
@@ -234,7 +241,7 @@ async def _fetch_and_cache_one(video: dict) -> bool:
 
 async def warm_subtitle_cache(
     *,
-    limit: int = 15,
+    limit: int = _FIXED_LIBRARY_SIZE,
     delay_seconds: int = _WARM_DELAY,
 ) -> None:
     """
@@ -248,7 +255,8 @@ async def warm_subtitle_cache(
     _warmer_running = True
 
     try:
-        videos = await list_channel_videos(limit=limit)
+        videos = await get_fixed_library_videos(limit=_FIXED_LIBRARY_SIZE)
+        videos = videos[: max(1, min(limit, _FIXED_LIBRARY_SIZE))]
         cached_count = 0
         fetched_count = 0
 
@@ -295,7 +303,7 @@ async def get_cached_video_ids() -> set[str]:
     """Return set of video IDs that already have prepared subtitles."""
     result: set[str] = set()
     try:
-        videos = await list_channel_videos(limit=15)
+        videos = await get_fixed_library_videos(limit=_FIXED_LIBRARY_SIZE)
         for video in videos:
             vid = video["videoId"]
             if await _load_session_from_fast_cache(vid):
@@ -303,7 +311,10 @@ async def get_cached_video_ids() -> set[str]:
 
         if mongo_service.is_ready():
             cursor = mongo_service.db().subtitle_video_sessions.find(
-                {"status": "ready"},
+                {
+                    "status": "ready",
+                    "videoId": {"$in": [video["videoId"] for video in videos]},
+                },
                 {"videoId": 1},
             )
             async for doc in cursor:
@@ -342,6 +353,126 @@ def _parse_channel_feed(xml_text: str, limit: int) -> list[dict]:
         )
 
     return items
+
+
+def _published_at_from_ytdlp(entry: dict) -> str:
+    upload_date = entry.get("upload_date")
+    if upload_date and re.fullmatch(r"\d{8}", str(upload_date)):
+        upload_date = str(upload_date)
+        return f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}T00:00:00Z"
+
+    timestamp = entry.get("timestamp") or entry.get("release_timestamp")
+    if timestamp:
+        try:
+            return datetime.fromtimestamp(int(timestamp), tz=timezone.utc).isoformat()
+        except Exception:
+            return ""
+
+    return ""
+
+
+def _thumbnail_from_ytdlp(entry: dict) -> str:
+    if entry.get("thumbnail"):
+        return entry["thumbnail"]
+
+    thumbnails = entry.get("thumbnails") or []
+    for thumbnail in reversed(thumbnails):
+        if thumbnail.get("url"):
+            return thumbnail["url"]
+    return ""
+
+
+def _video_from_ytdlp_entry(entry: dict) -> dict | None:
+    video_id = entry.get("id") or entry.get("url")
+    if not video_id or not re.fullmatch(r"[\w-]{11}", str(video_id)):
+        return None
+
+    return {
+        "videoId": str(video_id),
+        "title": entry.get("title") or str(video_id),
+        "publishedAt": _published_at_from_ytdlp(entry),
+        "thumbnailUrl": _thumbnail_from_ytdlp(entry),
+        "videoUrl": f"https://www.youtube.com/watch?v={video_id}",
+    }
+
+
+def _merge_channel_videos(*sources: list[dict], limit: int) -> list[dict]:
+    merged: list[dict] = []
+    seen: set[str] = set()
+
+    for source in sources:
+        for video in source:
+            video_id = video.get("videoId")
+            if not video_id or video_id in seen:
+                continue
+            merged.append(video)
+            seen.add(video_id)
+            if len(merged) >= limit:
+                return merged
+
+    return merged
+
+
+async def _fetch_channel_feed_videos(limit: int) -> list[dict]:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(_CHANNEL_FEED_URL, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                raise RuntimeError("Не вдалося завантажити список відео каналу.")
+            xml_text = await resp.text()
+
+    return _parse_channel_feed(xml_text, limit)
+
+
+def _fetch_channel_videos_ytdlp(limit: int) -> list[dict]:
+    import yt_dlp  # noqa: PLC0415
+
+    ydl_opts = {
+        "extract_flat": "in_playlist",
+        "ignore_no_formats_error": True,
+        "playlistend": limit,
+        "quiet": True,
+        "skip_download": True,
+        "no_warnings": True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(_CHANNEL_VIDEOS_URL, download=False)
+
+    videos: list[dict] = []
+    for entry in info.get("entries") or []:
+        video = _video_from_ytdlp_entry(entry)
+        if video:
+            videos.append(video)
+            if len(videos) >= limit:
+                break
+    return videos
+
+
+async def _fetch_channel_videos(limit: int) -> list[dict]:
+    rss_videos: list[dict] = []
+    try:
+        rss_videos = await _fetch_channel_feed_videos(limit)
+    except Exception as exc:
+        logger.warning("YouTube RSS video list failed: %s", exc)
+
+    if len(rss_videos) >= limit:
+        return rss_videos[:limit]
+
+    try:
+        loop = asyncio.get_event_loop()
+        ytdlp_videos = await loop.run_in_executor(
+            None,
+            _fetch_channel_videos_ytdlp,
+            limit,
+        )
+    except Exception as exc:
+        logger.warning("yt-dlp channel video list failed: %s", exc)
+        ytdlp_videos = []
+
+    videos = _merge_channel_videos(rss_videos, ytdlp_videos, limit=limit)
+    if not videos:
+        raise RuntimeError("Канал не повернув жодного відео.")
+    return videos
 
 
 def _now_utc() -> datetime:
@@ -484,36 +615,197 @@ async def _load_session_from_fast_cache(video_id: str) -> dict | None:
     return result
 
 
+def _cache_fixed_library(videos: list[dict]) -> None:
+    global _fixed_library_cache
+    _fixed_library_cache = videos[:_FIXED_LIBRARY_SIZE]
+
+
+async def _load_fixed_library_from_redis() -> list[dict] | None:
+    try:
+        if redis_service.redis:
+            cached_json = await redis_service.get(_REDIS_FIXED_LIBRARY_KEY)
+            if cached_json:
+                videos = json.loads(cached_json)
+                if len(videos) >= _FIXED_LIBRARY_SIZE:
+                    return videos[:_FIXED_LIBRARY_SIZE]
+    except Exception as exc:
+        logger.debug("Redis fixed video library read failed: %s", exc)
+    return None
+
+
+async def _store_fixed_library_in_redis(videos: list[dict]) -> None:
+    try:
+        if redis_service.redis:
+            await redis_service.set(
+                _REDIS_FIXED_LIBRARY_KEY,
+                json.dumps(videos[:_FIXED_LIBRARY_SIZE]),
+                ex=_REDIS_FIXED_LIBRARY_TTL,
+            )
+    except Exception as exc:
+        logger.debug("Redis fixed video library write failed: %s", exc)
+
+
+async def _load_fixed_library_from_mongo() -> list[dict] | None:
+    if not mongo_service.is_ready():
+        return None
+
+    document = await mongo_service.db().subtitle_video_catalogs.find_one(
+        {"_id": _FIXED_LIBRARY_DOC_ID}
+    )
+    if not document:
+        return None
+
+    videos = document.get("videos") or []
+    if len(videos) < _FIXED_LIBRARY_SIZE:
+        return None
+    return videos[:_FIXED_LIBRARY_SIZE]
+
+
+async def _store_fixed_library_in_mongo(seed_videos: list[dict]) -> list[dict]:
+    if not mongo_service.is_ready():
+        return seed_videos[:_FIXED_LIBRARY_SIZE]
+
+    collection = mongo_service.db().subtitle_video_catalogs
+    existing = await collection.find_one({"_id": _FIXED_LIBRARY_DOC_ID})
+    now = _now_utc()
+
+    if existing:
+        existing_videos = existing.get("videos") or []
+        if len(existing_videos) >= _FIXED_LIBRARY_SIZE:
+            return existing_videos[:_FIXED_LIBRARY_SIZE]
+
+        seen = {video.get("videoId") for video in existing_videos}
+        merged = list(existing_videos)
+        for video in seed_videos:
+            if video.get("videoId") not in seen:
+                merged.append(video)
+                seen.add(video.get("videoId"))
+            if len(merged) >= _FIXED_LIBRARY_SIZE:
+                break
+
+        await collection.update_one(
+            {"_id": _FIXED_LIBRARY_DOC_ID},
+            {
+                "$set": {
+                    "videos": merged[:_FIXED_LIBRARY_SIZE],
+                    "size": len(merged[:_FIXED_LIBRARY_SIZE]),
+                    "updatedAt": now,
+                }
+            },
+        )
+        return merged[:_FIXED_LIBRARY_SIZE]
+
+    library_videos = seed_videos[:_FIXED_LIBRARY_SIZE]
+    await collection.update_one(
+        {"_id": _FIXED_LIBRARY_DOC_ID},
+        {
+            "$setOnInsert": {
+                "_id": _FIXED_LIBRARY_DOC_ID,
+                "channel": "KurzgesagtDE",
+                "sourceUrl": _CHANNEL_VIDEOS_URL,
+                "videos": library_videos,
+                "size": len(library_videos),
+                "lockedAt": now,
+                "createdAt": now,
+                "updatedAt": now,
+            }
+        },
+        upsert=True,
+    )
+
+    document = await collection.find_one({"_id": _FIXED_LIBRARY_DOC_ID})
+    return (document or {}).get("videos", library_videos)[:_FIXED_LIBRARY_SIZE]
+
+
+async def get_fixed_library_videos(limit: int = _FIXED_LIBRARY_SIZE) -> list[dict]:
+    """Return the pinned Kurzgesagt DE trainer catalog."""
+    if _fixed_library_cache and len(_fixed_library_cache) >= _FIXED_LIBRARY_SIZE:
+        return _fixed_library_cache[:limit]
+
+    mongo_videos = await _load_fixed_library_from_mongo()
+    if mongo_videos:
+        _cache_fixed_library(mongo_videos)
+        await _store_fixed_library_in_redis(mongo_videos)
+        return mongo_videos[:limit]
+
+    redis_videos = await _load_fixed_library_from_redis()
+    if redis_videos:
+        if mongo_service.is_ready():
+            redis_videos = await _store_fixed_library_in_mongo(redis_videos)
+        _cache_fixed_library(redis_videos)
+        return redis_videos[:limit]
+
+    seed_videos = await _fetch_channel_videos(_FIXED_LIBRARY_SIZE)
+    if len(seed_videos) < _FIXED_LIBRARY_SIZE:
+        raise RuntimeError("Не вдалося отримати 20 відео Kurzgesagt DE.")
+
+    library_videos = await _store_fixed_library_in_mongo(seed_videos)
+    _cache_fixed_library(library_videos)
+    await _store_fixed_library_in_redis(library_videos)
+    return library_videos[:limit]
+
+
+async def _get_ready_video_ids(video_ids: list[str]) -> set[str]:
+    ready: set[str] = set()
+    missing: list[str] = []
+
+    for video_id in video_ids:
+        cached = _session_cache.get(video_id)
+        if cached:
+            result, ts = cached
+            if time.time() - ts < _CACHE_TTL and result.get("cues"):
+                ready.add(video_id)
+                continue
+            _session_cache.pop(video_id, None)
+        missing.append(video_id)
+
+    if missing:
+        try:
+            if redis_service.redis:
+                keys = [f"subtitle:session:{video_id}" for video_id in missing]
+                values = await redis_service.redis.mget(keys)
+                still_missing: list[str] = []
+                for video_id, cached_json in zip(missing, values):
+                    if not cached_json:
+                        still_missing.append(video_id)
+                        continue
+                    result = json.loads(cached_json)
+                    if result.get("cues"):
+                        _session_cache[video_id] = (result, time.time())
+                        ready.add(video_id)
+                    else:
+                        still_missing.append(video_id)
+                missing = still_missing
+        except Exception as exc:
+            logger.debug("Redis ready-video batch read failed: %s", exc)
+
+    if missing and mongo_service.is_ready():
+        cursor = mongo_service.db().subtitle_video_sessions.find(
+            {
+                "videoId": {"$in": missing},
+                "status": "ready",
+                "cues.0": {"$exists": True},
+            },
+            {"videoId": 1},
+        )
+        async for document in cursor:
+            if document.get("videoId"):
+                ready.add(document["videoId"])
+
+    return ready
+
+
 async def _collect_prepared_video_cards(channel_videos: list[dict], limit: int) -> list[dict]:
     items: list[dict] = []
-    seen: set[str] = set()
+    ready_ids = await _get_ready_video_ids([video["videoId"] for video in channel_videos])
 
     for video in channel_videos:
-        if await _load_session_from_fast_cache(video["videoId"]):
+        if video["videoId"] in ready_ids:
             prepared = dict(video)
             prepared["cached"] = True
             items.append(prepared)
-            seen.add(video["videoId"])
             if len(items) >= limit:
                 return items
-
-    if mongo_service.is_ready() and len(items) < limit:
-        cursor = (
-            mongo_service.db()
-            .subtitle_video_sessions.find({"status": "ready"})
-            .sort([("publishedAt", -1), ("fetchedAt", -1)])
-            .limit(limit * 2)
-        )
-        async for document in cursor:
-            video_id = document.get("videoId")
-            if not video_id or video_id in seen:
-                continue
-            if not document.get("cues"):
-                continue
-            items.append(_video_card_from_session_doc(document))
-            seen.add(video_id)
-            if len(items) >= limit:
-                break
 
     return items
 
@@ -523,7 +815,7 @@ async def _collect_prepared_video_cards(channel_videos: list[dict], limit: int) 
 # ---------------------------------------------------------------------------
 
 
-async def list_channel_videos(limit: int = 12) -> list[dict]:
+async def list_channel_videos(limit: int = _FIXED_LIBRARY_SIZE) -> list[dict]:
     global _channel_videos_cache
 
     # L1: in-memory
@@ -538,22 +830,14 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
             cached_json = await redis_service.get("subtitle:channel_videos")
             if cached_json:
                 videos = json.loads(cached_json)
-                _channel_videos_cache = (videos, time.time())
-                logger.info("Channel videos loaded from Redis cache")
-                return videos[:limit]
+                if len(videos) >= limit:
+                    _channel_videos_cache = (videos, time.time())
+                    logger.info("Channel videos loaded from Redis cache")
+                    return videos[:limit]
     except Exception as exc:
         logger.debug("Redis channel cache read failed: %s", exc)
 
-    # Fetch from YouTube RSS
-    async with aiohttp.ClientSession() as session:
-        async with session.get(_CHANNEL_FEED_URL, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            if resp.status != 200:
-                raise RuntimeError("Не вдалося завантажити список відео каналу.")
-            xml_text = await resp.text()
-
-    videos = _parse_channel_feed(xml_text, max(limit, 12))
-    if not videos:
-        raise RuntimeError("Канал не повернув жодного відео.")
+    videos = await _fetch_channel_videos(max(limit, _FIXED_LIBRARY_SIZE))
 
     # Store in both caches
     _channel_videos_cache = (videos, time.time())
@@ -569,7 +853,7 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
 async def ensure_prepared_library(
     *,
     min_ready: int = _MIN_READY_LIBRARY_SIZE,
-    limit: int = 12,
+    limit: int = _FIXED_LIBRARY_SIZE,
 ) -> list[dict]:
     """
     Ensure the learner-facing catalog has a minimum number of ready videos.
@@ -578,14 +862,15 @@ async def ensure_prepared_library(
     the catalog response is sent or from startup jobs. Video clicks still read
     already prepared sessions only.
     """
+    limit = max(1, min(limit, _FIXED_LIBRARY_SIZE))
     min_ready = max(1, min(min_ready, limit))
-    channel_videos = await list_channel_videos(limit=max(limit, 15))
-    items = await _collect_prepared_video_cards(channel_videos, limit)
+    library_videos = await get_fixed_library_videos(limit=_FIXED_LIBRARY_SIZE)
+    items = await _collect_prepared_video_cards(library_videos, limit)
     if len(items) >= min_ready:
         return items
 
     ready_ids = {item["videoId"] for item in items}
-    for video in channel_videos:
+    for video in library_videos:
         if len(items) >= min_ready:
             break
         if video["videoId"] in ready_ids:
@@ -603,38 +888,49 @@ async def ensure_prepared_library(
     return items[:limit]
 
 
+async def _bootstrap_prepared_library() -> None:
+    try:
+        await ensure_prepared_library()
+    except Exception as exc:
+        logger.warning("Prepared fixed video library bootstrap failed: %s", exc)
+
+
 def schedule_prepared_library_bootstrap() -> None:
     """Prepare the first catalog page in the background after app startup."""
+    global _bootstrap_task
+    if _bootstrap_task and not _bootstrap_task.done():
+        return
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
 
-    loop.create_task(ensure_prepared_library())
+    _bootstrap_task = loop.create_task(_bootstrap_prepared_library())
 
 
 async def list_prepared_videos(
-    limit: int = 12,
+    limit: int = _FIXED_LIBRARY_SIZE,
     *,
-    ensure_min_ready: int = _MIN_READY_LIBRARY_SIZE,
+    ensure_min_ready: int = 0,
 ) -> list[dict]:
     """
     Return only videos whose subtitle sessions are already prepared.
 
-    New channel videos are queued for background preparation, but they are not
-    shown to learners until their cues are stored in MongoDB/Redis.
+    The catalog is a fixed 20-video Kurzgesagt DE library. This endpoint does
+    not do slow YouTube subtitle work; it only returns sessions already stored
+    in MongoDB/Redis and starts a background bootstrap when something is missing.
     """
     try:
-        channel_videos = await list_channel_videos(limit=max(limit, 15))
-    except Exception:
-        channel_videos = []
+        library_videos = await get_fixed_library_videos(limit=_FIXED_LIBRARY_SIZE)
+    except Exception as exc:
+        logger.warning("Fixed video library load failed: %s", exc)
+        library_videos = []
 
-    items = await _collect_prepared_video_cards(channel_videos, limit)
+    limit = max(1, min(limit, _FIXED_LIBRARY_SIZE))
+    items = await _collect_prepared_video_cards(library_videos, limit)
     if len(items) < ensure_min_ready:
-        try:
-            items = await ensure_prepared_library(min_ready=ensure_min_ready, limit=limit)
-        except Exception as exc:
-            logger.warning("Prepared library bootstrap failed: %s", exc)
+        schedule_prepared_library_bootstrap()
 
     schedule_subtitle_cache_warm()
     return items
@@ -645,6 +941,10 @@ async def get_prepared_video_session(input_str: str) -> dict:
     video_id = _extract_video_id(input_str)
     if not video_id:
         raise ValueError("Не вдалося розпізнати YouTube URL або ID відео.")
+
+    library_videos = await get_fixed_library_videos(limit=_FIXED_LIBRARY_SIZE)
+    if video_id not in {video["videoId"] for video in library_videos}:
+        raise ValueError("Це відео не входить у фіксовану бібліотеку Kurzgesagt DE.")
 
     result = await _load_session_from_fast_cache(video_id)
     if result:

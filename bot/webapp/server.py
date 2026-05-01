@@ -263,7 +263,7 @@ async def subtitle_videos(request: web.Request) -> web.Response:
         raise web.HTTPUnauthorized(text="Invalid authentication")
 
     try:
-        videos = await subtitle_service.list_prepared_videos(limit=12)
+        videos = await subtitle_service.list_prepared_videos(limit=20)
     except RuntimeError as exc:
         raise web.HTTPInternalServerError(text=str(exc))
     except Exception as exc:

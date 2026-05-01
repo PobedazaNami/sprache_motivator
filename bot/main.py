@@ -105,11 +105,9 @@ async def main():
     scheduler_service.set_bot(bot)
     await scheduler_service.start()
 
-    # Prepare the video-trainer catalog before users need it, then keep warming
-    # the rest of the channel slowly in the background.
-    from bot.services.subtitle_service import schedule_prepared_library_bootstrap, warm_subtitle_cache
+    # Prepare the fixed 20-video trainer catalog before users need it.
+    from bot.services.subtitle_service import schedule_prepared_library_bootstrap
     schedule_prepared_library_bootstrap()
-    asyncio.create_task(warm_subtitle_cache())
     
     try:
         logger.info("Bot started!")

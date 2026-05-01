@@ -42,6 +42,7 @@ async def init() -> bool:
     await _db.subtitle_video_sessions.create_index([("videoId", 1)], unique=True)
     await _db.subtitle_video_sessions.create_index([("status", 1), ("publishedAt", -1)])
     await _db.subtitle_video_sessions.create_index([("status", 1), ("fetchedAt", -1)])
+    await _db.subtitle_video_catalogs.create_index([("channel", 1), ("lockedAt", -1)])
     return True
 
 
