@@ -48,7 +48,8 @@ _REDIS_SUBTITLE_TTL = 604800  # 7 days  (Redis L2, shared across users)
 _REDIS_CHANNEL_TTL = 1800  # 30 minutes (Redis L2)
 _channel_videos_cache: tuple[list[dict], float] | None = None
 _CHANNEL_CACHE_TTL = 1800  # 30 minutes (in-memory L1)
-_WARM_DELAY = 20  # seconds between subtitle fetches during cache warming
+_WARM_DELAY = 20  # seconds between slow background fetches
+_MIN_READY_LIBRARY_SIZE = 6
 _warmer_running = False
 _warm_task: asyncio.Task | None = None
 _COOKIE_PATH = os.environ.get("YOUTUBE_COOKIE_PATH", "/app/cookies/youtube_cookies.txt")
@@ -198,35 +199,44 @@ async def _fetch_and_cache_one(video: dict) -> bool:
     Returns True if cached successfully, False if blocked/failed.
     """
     video_id = video["videoId"]
-    await _mark_video_status(video, "processing")
+    lock = _get_video_lock(video_id)
+    async with lock:
+        if await _load_session_from_fast_cache(video_id):
+            return True
 
-    try:
-        loop = asyncio.get_event_loop()
-        cues, selected_lang, all_langs = await loop.run_in_executor(
-            None, _fetch_subtitles_ytdlp, video_id
-        )
-    except Exception as exc:
-        logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc)
-        await _mark_video_status(video, "failed", str(exc))
-        return False
+        await _mark_video_status(video, "processing")
 
-    if not cues:
-        await _mark_video_status(video, "failed", "empty subtitle cues")
-        return False
+        try:
+            loop = asyncio.get_event_loop()
+            cues, selected_lang, all_langs = await loop.run_in_executor(
+                None, _fetch_subtitles_ytdlp, video_id
+            )
+        except Exception as exc:
+            logger.warning("Cache warmer fetch failed for %s: %s", video_id, exc)
+            await _mark_video_status(video, "failed", str(exc))
+            return False
 
-    result = {
-        "videoId": video_id,
-        "title": video.get("title", video_id),
-        "cues": cues,
-        "selectedLanguage": selected_lang,
-        "availableLanguages": all_langs,
-    }
+        if not cues:
+            await _mark_video_status(video, "failed", "empty subtitle cues")
+            return False
 
-    await _store_prepared_session(result, video)
-    return True
+        result = {
+            "videoId": video_id,
+            "title": video.get("title", video_id),
+            "cues": cues,
+            "selectedLanguage": selected_lang,
+            "availableLanguages": all_langs,
+        }
+
+        await _store_prepared_session(result, video)
+        return True
 
 
-async def warm_subtitle_cache() -> None:
+async def warm_subtitle_cache(
+    *,
+    limit: int = 15,
+    delay_seconds: int = _WARM_DELAY,
+) -> None:
     """
     Background task: fetch subtitles for all channel videos that aren't
     yet in Redis. YouTube allows ~1-2 requests before IP block, so we
@@ -238,7 +248,7 @@ async def warm_subtitle_cache() -> None:
     _warmer_running = True
 
     try:
-        videos = await list_channel_videos(limit=15)
+        videos = await list_channel_videos(limit=limit)
         cached_count = 0
         fetched_count = 0
 
@@ -249,8 +259,8 @@ async def warm_subtitle_cache() -> None:
                 continue
 
             # Not prepared yet — fetch slowly in the background.
-            if fetched_count > 0:
-                await asyncio.sleep(_WARM_DELAY)
+            if fetched_count > 0 and delay_seconds > 0:
+                await asyncio.sleep(delay_seconds)
 
             ok = await _fetch_and_cache_one(video)
             if ok:
@@ -474,6 +484,40 @@ async def _load_session_from_fast_cache(video_id: str) -> dict | None:
     return result
 
 
+async def _collect_prepared_video_cards(channel_videos: list[dict], limit: int) -> list[dict]:
+    items: list[dict] = []
+    seen: set[str] = set()
+
+    for video in channel_videos:
+        if await _load_session_from_fast_cache(video["videoId"]):
+            prepared = dict(video)
+            prepared["cached"] = True
+            items.append(prepared)
+            seen.add(video["videoId"])
+            if len(items) >= limit:
+                return items
+
+    if mongo_service.is_ready() and len(items) < limit:
+        cursor = (
+            mongo_service.db()
+            .subtitle_video_sessions.find({"status": "ready"})
+            .sort([("publishedAt", -1), ("fetchedAt", -1)])
+            .limit(limit * 2)
+        )
+        async for document in cursor:
+            video_id = document.get("videoId")
+            if not video_id or video_id in seen:
+                continue
+            if not document.get("cues"):
+                continue
+            items.append(_video_card_from_session_doc(document))
+            seen.add(video_id)
+            if len(items) >= limit:
+                break
+
+    return items
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -522,49 +566,77 @@ async def list_channel_videos(limit: int = 12) -> list[dict]:
     return videos[:limit]
 
 
-async def list_prepared_videos(limit: int = 12) -> list[dict]:
+async def ensure_prepared_library(
+    *,
+    min_ready: int = _MIN_READY_LIBRARY_SIZE,
+    limit: int = 12,
+) -> list[dict]:
+    """
+    Ensure the learner-facing catalog has a minimum number of ready videos.
+
+    This is the bootstrap path: it may perform YouTube work, but only before
+    the catalog response is sent or from startup jobs. Video clicks still read
+    already prepared sessions only.
+    """
+    min_ready = max(1, min(min_ready, limit))
+    channel_videos = await list_channel_videos(limit=max(limit, 15))
+    items = await _collect_prepared_video_cards(channel_videos, limit)
+    if len(items) >= min_ready:
+        return items
+
+    ready_ids = {item["videoId"] for item in items}
+    for video in channel_videos:
+        if len(items) >= min_ready:
+            break
+        if video["videoId"] in ready_ids:
+            continue
+
+        ok = await _fetch_and_cache_one(video)
+        if not ok:
+            continue
+
+        prepared = dict(video)
+        prepared["cached"] = True
+        items.append(prepared)
+        ready_ids.add(video["videoId"])
+
+    return items[:limit]
+
+
+def schedule_prepared_library_bootstrap() -> None:
+    """Prepare the first catalog page in the background after app startup."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    loop.create_task(ensure_prepared_library())
+
+
+async def list_prepared_videos(
+    limit: int = 12,
+    *,
+    ensure_min_ready: int = _MIN_READY_LIBRARY_SIZE,
+) -> list[dict]:
     """
     Return only videos whose subtitle sessions are already prepared.
 
     New channel videos are queued for background preparation, but they are not
     shown to learners until their cues are stored in MongoDB/Redis.
     """
-    schedule_subtitle_cache_warm()
-
     try:
         channel_videos = await list_channel_videos(limit=max(limit, 15))
     except Exception:
         channel_videos = []
 
-    items: list[dict] = []
-    seen: set[str] = set()
-    for video in channel_videos:
-        if await _load_session_from_fast_cache(video["videoId"]):
-            prepared = dict(video)
-            prepared["cached"] = True
-            items.append(prepared)
-            seen.add(video["videoId"])
-            if len(items) >= limit:
-                return items
+    items = await _collect_prepared_video_cards(channel_videos, limit)
+    if len(items) < ensure_min_ready:
+        try:
+            items = await ensure_prepared_library(min_ready=ensure_min_ready, limit=limit)
+        except Exception as exc:
+            logger.warning("Prepared library bootstrap failed: %s", exc)
 
-    if mongo_service.is_ready() and len(items) < limit:
-        cursor = (
-            mongo_service.db()
-            .subtitle_video_sessions.find({"status": "ready"})
-            .sort([("publishedAt", -1), ("fetchedAt", -1)])
-            .limit(limit * 2)
-        )
-        async for document in cursor:
-            video_id = document.get("videoId")
-            if not video_id or video_id in seen:
-                continue
-            if not document.get("cues"):
-                continue
-            items.append(_video_card_from_session_doc(document))
-            seen.add(video_id)
-            if len(items) >= limit:
-                break
-
+    schedule_subtitle_cache_warm()
     return items
 
 

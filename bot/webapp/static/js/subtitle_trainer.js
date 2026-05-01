@@ -39,6 +39,7 @@ const state = {
     autoplayPromptTimerId: null,
     manualPlayTimerId: null,
     ytApiTimerId: null,
+    catalogRetryTimerId: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -122,9 +123,7 @@ async function apiFetch(path, { method = 'GET', body = null } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Load video session
-// Flow: extract videoId → server fetches subtitles via Invidious API →
-// mount YouTube player in user's browser (plays fine from any IP).
+// Load a prepared video session from the app backend, then mount YouTube.
 // ---------------------------------------------------------------------------
 async function loadSession(input, preferredTitle = '') {
     const videoId = extractVideoId(input);
@@ -144,7 +143,7 @@ async function loadSession(input, preferredTitle = '') {
     playerTitle.textContent = preferredTitle || videoId;
     showScreen('screen-player');
     mountPlayer(videoId);
-    setPlayerStatus('Готуємо субтитри…');
+    setPlayerStatus('Завантажую субтитри…');
 
     try {
         const data = await apiFetch('/api/subtitle/session', {
@@ -171,6 +170,7 @@ async function loadSession(input, preferredTitle = '') {
 }
 
 async function loadVideoCatalog() {
+    clearCatalogRetry();
     setStatus('Завантажую список відео…');
     if (reloadVideosBtn) reloadVideosBtn.disabled = true;
     try {
@@ -201,13 +201,32 @@ function formatSessionError(err) {
     return message;
 }
 
+function clearCatalogRetry() {
+    if (state.catalogRetryTimerId) {
+        clearTimeout(state.catalogRetryTimerId);
+        state.catalogRetryTimerId = null;
+    }
+}
+
+function scheduleCatalogRetry() {
+    clearCatalogRetry();
+    state.catalogRetryTimerId = setTimeout(() => {
+        state.catalogRetryTimerId = null;
+        if (document.querySelector('.screen.active')?.id === 'screen-catalog') {
+            loadVideoCatalog();
+        }
+    }, 15000);
+}
+
 function renderVideos(videos) {
     if (!videosList) return;
     const readyVideos = videos.filter((video) => video.cached !== false);
     if (!readyVideos.length) {
-        videosList.innerHTML = '<p class="videos-empty">Бібліотека відео готується. Натисніть оновити трохи пізніше.</p>';
+        videosList.innerHTML = '<p class="videos-empty">Готових відео поки немає. Натисніть оновити ще раз.</p>';
+        scheduleCatalogRetry();
         return;
     }
+    clearCatalogRetry();
 
     videosList.innerHTML = readyVideos.map((video) => {
         const selected = video.videoId === state.selectedVideoId ? ' is-selected' : '';

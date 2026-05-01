@@ -105,9 +105,10 @@ async def main():
     scheduler_service.set_bot(bot)
     await scheduler_service.start()
 
-    # Pre-warm subtitle cache in background (fetches subtitles for
-    # channel videos slowly to avoid YouTube IP blocks)
-    from bot.services.subtitle_service import warm_subtitle_cache
+    # Prepare the video-trainer catalog before users need it, then keep warming
+    # the rest of the channel slowly in the background.
+    from bot.services.subtitle_service import schedule_prepared_library_bootstrap, warm_subtitle_cache
+    schedule_prepared_library_bootstrap()
     asyncio.create_task(warm_subtitle_cache())
     
     try:
