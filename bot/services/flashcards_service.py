@@ -250,6 +250,13 @@ def prepare_autopilot_state(
         completed_at = ensure_utc_datetime(set_doc.get("completed_at"))
         if completed_at and get_user_local_date(user_doc, completed_at) == today_local:
             activation_blocked_today = True
+        elif (
+            set_doc.get("deck_status") == DECK_STATUS_ACTIVE
+            and has_cards
+            and not unresolved
+            and get_user_local_date(user_doc, _derive_completed_at(set_doc, stats, now)) == today_local
+        ):
+            activation_blocked_today = True
 
         if unresolved and has_cards and first_unresolved_index is None:
             first_unresolved_index = index

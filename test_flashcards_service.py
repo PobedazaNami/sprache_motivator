@@ -167,6 +167,44 @@ def test_next_deck_is_blocked_until_tomorrow_after_completion_today():
     assert overview["today_new_count"] == 0
 
 
+def test_newly_completed_active_deck_does_not_unlock_next_deck_same_day():
+    now = datetime(2026, 5, 11, 12, 6, 55, tzinfo=timezone.utc)
+    active_set = make_set(
+        "Deck 1",
+        now - timedelta(days=4),
+        deck_status="active",
+        activated_at=now - timedelta(days=1),
+        last_studied_at=now,
+        updated_at=now,
+    )
+    queued_next = make_set("Deck 2", now - timedelta(days=2))
+    cards = [
+        make_card(
+            str(active_set["_id"]),
+            now - timedelta(days=4),
+            srs_status="known",
+            srs_interval=14,
+            srs_next_review=now + timedelta(days=14),
+            last_reviewed_at=now,
+        ),
+        make_card(str(queued_next["_id"]), now - timedelta(days=2), srs_status="new"),
+    ]
+
+    overview = prepare_autopilot_state(
+        [active_set, queued_next],
+        build_cards_by_set(cards),
+        user_doc={"trainer_timezone": "Europe/Berlin", "flashcards_daily_new_limit": 10},
+        now=now,
+    )
+
+    assert overview["active_set"] is None
+    assert overview["next_set"]["name"] == "Deck 2"
+    assert overview["sets"][0]["deck_status"] == "completed"
+    assert overview["sets"][1]["deck_status"] == "queued"
+    assert overview["activation_blocked_today"] is True
+    assert overview["today_new_count"] == 0
+
+
 def test_session_limits_new_cards_to_daily_budget():
     now = datetime(2026, 4, 16, 12, 0, tzinfo=timezone.utc)
     active_set = make_set("Deck A", now - timedelta(days=3))
@@ -228,6 +266,7 @@ if __name__ == "__main__":
     test_previous_deck_due_cards_do_not_enter_active_today_session()
     test_dashboard_due_count_uses_only_active_deck()
     test_next_deck_is_blocked_until_tomorrow_after_completion_today()
+    test_newly_completed_active_deck_does_not_unlock_next_deck_same_day()
     test_session_limits_new_cards_to_daily_budget()
     test_srs_interval_progression_is_preserved()
     print("flashcards_service_tests_ok")
