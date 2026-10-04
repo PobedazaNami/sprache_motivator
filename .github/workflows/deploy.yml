@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: deploy-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -103,11 +103,8 @@ jobs:
           git status --short
           echo "==> git head:"
           git rev-parse HEAD
-          echo "==> Stopping containers..."
-          /usr/bin/docker compose down || true
-          echo "==> Pruning images..."
-          /usr/bin/docker image prune -f
           echo "==> Building bot image..."
+          # Keep the running stack and other projects' rollback images on build failure.
           /usr/bin/docker compose build --no-cache --pull bot
           echo "==> Starting containers..."
           /usr/bin/docker compose up -d
